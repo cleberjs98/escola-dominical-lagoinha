@@ -7,6 +7,9 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { useAuth } from "../../hooks/useAuth";
@@ -59,10 +62,9 @@ export default function RegisterScreen() {
 
       Alert.alert(
         "Conta criada",
-        "Sua conta foi criada com sucesso. Agora você pode completar seu perfil."
+        "Sua conta foi criada com sucesso. Agora você pode fazer login e completar seu perfil."
       );
 
-      // Por enquanto voltamos para o login; depois vamos para o fluxo de completar perfil
       router.replace("/auth/login");
     } catch (error: any) {
       console.error("Erro no cadastro:", error);
@@ -76,82 +78,96 @@ export default function RegisterScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Criar conta</Text>
-      <Text style={styles.subtitle}>
-        Preencha os dados abaixo para se cadastrar.
-      </Text>
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: "#020617" }}
+      behavior={Platform.select({ ios: "padding", android: undefined })}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scrollContainer}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.inner}>
+          <Text style={styles.title}>Criar conta</Text>
+          <Text style={styles.subtitle}>
+            Preencha os dados abaixo para se cadastrar.
+          </Text>
 
-      <View style={styles.form}>
-        <Text style={styles.label}>Nome completo</Text>
-        <TextInput
-          placeholder="Seu nome"
-          placeholderTextColor="#6b7280"
-          style={styles.input}
-          value={nome}
-          onChangeText={setNome}
-        />
+          <View style={styles.form}>
+            <Text style={styles.label}>Nome completo</Text>
+            <TextInput
+              placeholder="Seu nome"
+              placeholderTextColor="#6b7280"
+              style={styles.input}
+              value={nome}
+              onChangeText={setNome}
+            />
 
-        <Text style={styles.label}>Email</Text>
-        <TextInput
-          placeholder="seuemail@exemplo.com"
-          placeholderTextColor="#6b7280"
-          style={styles.input}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          value={email}
-          onChangeText={setEmail}
-        />
+            <Text style={styles.label}>Email</Text>
+            <TextInput
+              placeholder="seuemail@exemplo.com"
+              placeholderTextColor="#6b7280"
+              style={styles.input}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              value={email}
+              onChangeText={setEmail}
+            />
 
-        <Text style={styles.label}>Senha</Text>
-        <TextInput
-          placeholder="••••••••"
-          placeholderTextColor="#6b7280"
-          style={styles.input}
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-        />
+            <Text style={styles.label}>Senha</Text>
+            <TextInput
+              placeholder="••••••••"
+              placeholderTextColor="#6b7280"
+              style={styles.input}
+              secureTextEntry
+              value={password}
+              onChangeText={setPassword}
+            />
 
-        <Text style={styles.label}>Confirmar senha</Text>
-        <TextInput
-          placeholder="••••••••"
-          placeholderTextColor="#6b7280"
-          style={styles.input}
-          secureTextEntry
-          value={confirmPassword}
-          onChangeText={setConfirmPassword}
-        />
+            <Text style={styles.label}>Confirmar senha</Text>
+            <TextInput
+              placeholder="••••••••"
+              placeholderTextColor="#6b7280"
+              style={styles.input}
+              secureTextEntry
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+            />
 
-        <Pressable
-          style={[styles.button, isSubmitting && styles.buttonDisabled]}
-          onPress={handleRegister}
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? (
-            <ActivityIndicator color="#111827" />
-          ) : (
-            <Text style={styles.buttonText}>Criar conta</Text>
-          )}
-        </Pressable>
+            <Pressable
+              style={[styles.button, isSubmitting && styles.buttonDisabled]}
+              onPress={handleRegister}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <ActivityIndicator color="#111827" />
+              ) : (
+                <Text style={styles.buttonText}>Criar conta</Text>
+              )}
+            </Pressable>
 
-        <View style={styles.linksRow}>
-          <Text style={styles.smallText}>Já tem conta? </Text>
-          <Link href="/auth/login" style={styles.linkText}>
-            Fazer login
-          </Link>
+            <View style={styles.linksRow}>
+              <Text style={styles.smallText}>Já tem conta? </Text>
+              <Link href={"/auth/login" as any} style={styles.linkText}>
+                Fazer login
+              </Link>
+            </View>
+          </View>
         </View>
-      </View>
-    </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  scrollContainer: {
+    flexGrow: 1,
+  },
+  inner: {
     flex: 1,
-    backgroundColor: "#020617",
     paddingHorizontal: 24,
     paddingTop: 96,
+    paddingBottom: 32,
+    backgroundColor: "#020617",
   },
   title: {
     fontSize: 26,
@@ -166,7 +182,6 @@ const styles = StyleSheet.create({
   },
   form: {
     marginTop: 8,
-    gap: 12,
   },
   label: {
     fontSize: 14,
@@ -201,7 +216,7 @@ const styles = StyleSheet.create({
   },
   linksRow: {
     flexDirection: "row",
-    marginTop: 12,
+    marginTop: 16,
     alignItems: "center",
   },
   linkText: {
