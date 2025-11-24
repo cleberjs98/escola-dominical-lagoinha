@@ -1,7 +1,11 @@
 import { View, Text, StyleSheet } from "react-native";
+import { firebaseDb } from "../lib/firebase";
 
 export default function HomeScreen() {
+  console.log("Firestore conectado:", !!firebaseDb);
+
   return (
+    
     <View style={styles.container}>
       <Text style={styles.title}>Escola Dominical Lagoinha Dublin</Text>
       <Text style={styles.subtitle}>
