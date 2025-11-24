@@ -122,16 +122,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }) => {
     const { nome, email, password } = params;
 
+    console.log("[signUp] Iniciando cadastro...");
+
+    // 1) Criar usuário no Authentication
     const cred = await createUserWithEmailAndPassword(
       firebaseAuth,
       email,
       password
     );
 
+    console.log("[signUp] Usuário criado no Auth:", cred.user.uid);
+
     const uid = cred.user.uid;
-
     const userDocRef = doc(firebaseDb, "users", uid);
-
     const now = serverTimestamp();
 
     const userDoc: User = {
@@ -148,13 +151,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
       alterado_em: null,
       papel_anterior: null,
       motivo_rejeicao: null,
-      // Vamos aceitar o serverTimestamp como any para bater com o tipo
       created_at: now as any,
       updated_at: now as any,
     };
 
+    // 2) Criar documento no Firestore
     await setDoc(userDocRef, userDoc, { merge: true });
-    // O listener onSnapshot vai atualizar o estado `user`
+
+    console.log("[signUp] Documento no Firestore criado/atualizado.");
   };
 
   const signOut = async () => {
