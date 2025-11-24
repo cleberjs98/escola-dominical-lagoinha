@@ -54,11 +54,13 @@ export default function RegisterScreen() {
 
     try {
       setIsSubmitting(true);
+      console.log("[Register] Chamando signUp...");
       await signUp({
         nome: nome.trim(),
         email: email.trim(),
         password,
       });
+      console.log("[Register] signUp finalizado com sucesso.");
 
       Alert.alert(
         "Conta criada",
@@ -67,12 +69,13 @@ export default function RegisterScreen() {
 
       router.replace("/auth/login");
     } catch (error: any) {
-      console.error("Erro no cadastro:", error);
+      console.error("Erro no cadastro (handleRegister):", error);
       Alert.alert(
         "Erro ao criar conta",
         error?.message || "Tente novamente mais tarde."
       );
     } finally {
+      // GARANTIMOS que o loading sempre para
       setIsSubmitting(false);
     }
   }
