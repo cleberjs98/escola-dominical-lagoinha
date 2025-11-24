@@ -1,16 +1,27 @@
-import { View, Text, StyleSheet } from "react-native";
-import { firebaseDb } from "../lib/firebase";
+import { View, Text, StyleSheet, Pressable } from "react-native";
+import { Link } from "expo-router";
 
 export default function HomeScreen() {
-  console.log("Firestore conectado:", !!firebaseDb);
-
   return (
-    
     <View style={styles.container}>
       <Text style={styles.title}>Escola Dominical Lagoinha Dublin</Text>
       <Text style={styles.subtitle}>
-        App em construção 🚧{"\n"}Fase 1.1 - Estrutura inicial
+        App em construção 🚧{"\n"}Fase 2.2 - Telas de autenticação
       </Text>
+
+      <View style={styles.buttonsContainer}>
+        <Link href="/auth/login" asChild>
+          <Pressable style={styles.buttonPrimary}>
+            <Text style={styles.buttonPrimaryText}>Entrar</Text>
+          </Pressable>
+        </Link>
+
+        <Link href="/auth/register" asChild>
+          <Pressable style={styles.buttonSecondary}>
+            <Text style={styles.buttonSecondaryText}>Criar conta</Text>
+          </Pressable>
+        </Link>
+      </View>
     </View>
   );
 }
@@ -35,5 +46,33 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: "center",
     lineHeight: 22,
+    marginBottom: 32,
+  },
+  buttonsContainer: {
+    width: "100%",
+    gap: 12,
+  },
+  buttonPrimary: {
+    backgroundColor: "#facc15",
+    borderRadius: 999,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  buttonPrimaryText: {
+    color: "#111827",
+    fontWeight: "600",
+    fontSize: 16,
+  },
+  buttonSecondary: {
+    borderRadius: 999,
+    paddingVertical: 12,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#4b5563",
+  },
+  buttonSecondaryText: {
+    color: "#e5e7eb",
+    fontWeight: "500",
+    fontSize: 16,
   },
 });
