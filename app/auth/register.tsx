@@ -1,3 +1,4 @@
+// app/auth/register.tsx
 import { useState } from "react";
 import {
   View,
@@ -5,7 +6,6 @@ import {
   TextInput,
   StyleSheet,
   Pressable,
-  ActivityIndicator,
   Alert,
   ScrollView,
   KeyboardAvoidingView,
@@ -22,8 +22,6 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   function validate() {
     if (!nome.trim()) {
@@ -53,7 +51,6 @@ export default function RegisterScreen() {
     if (!validate()) return;
 
     try {
-      setIsSubmitting(true);
       console.log("[Register] Chamando signUp...");
       await signUp({
         nome: nome.trim(),
@@ -74,9 +71,6 @@ export default function RegisterScreen() {
         "Erro ao criar conta",
         error?.message || "Tente novamente mais tarde."
       );
-    } finally {
-      // GARANTIMOS que o loading sempre para
-      setIsSubmitting(false);
     }
   }
 
@@ -136,21 +130,13 @@ export default function RegisterScreen() {
               onChangeText={setConfirmPassword}
             />
 
-            <Pressable
-              style={[styles.button, isSubmitting && styles.buttonDisabled]}
-              onPress={handleRegister}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <ActivityIndicator color="#111827" />
-              ) : (
-                <Text style={styles.buttonText}>Criar conta</Text>
-              )}
+            <Pressable style={styles.button} onPress={handleRegister}>
+              <Text style={styles.buttonText}>Criar conta</Text>
             </Pressable>
 
             <View style={styles.linksRow}>
               <Text style={styles.smallText}>Já tem conta? </Text>
-              <Link href={"/auth/login" as any} style={styles.linkText}>
+              <Link href="/auth/login" style={styles.linkText}>
                 Fazer login
               </Link>
             </View>
@@ -208,9 +194,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginTop: 8,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
   },
   buttonText: {
     color: "#022c22",

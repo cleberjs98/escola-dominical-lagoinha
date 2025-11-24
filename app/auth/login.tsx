@@ -1,3 +1,4 @@
+// app/auth/login.tsx
 import { useState } from "react";
 import {
   View,
@@ -5,7 +6,6 @@ import {
   TextInput,
   StyleSheet,
   Pressable,
-  ActivityIndicator,
   Alert,
 } from "react-native";
 import { Link, useRouter } from "expo-router";
@@ -17,8 +17,6 @@ export default function LoginScreen() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleLogin() {
     if (!email.trim() || !password.trim()) {
@@ -37,15 +35,11 @@ export default function LoginScreen() {
     }
 
     try {
-      setIsSubmitting(true);
       await signIn(email.trim(), password);
-      // Se deu certo, podemos mandar para a home por enquanto
-      router.replace("/");
+      router.replace("/"); // por enquanto manda pra home
     } catch (error: any) {
       console.error("Erro no login:", error);
       Alert.alert("Erro ao entrar", error?.message || "Tente novamente.");
-    } finally {
-      setIsSubmitting(false);
     }
   }
 
@@ -78,16 +72,8 @@ export default function LoginScreen() {
           onChangeText={setPassword}
         />
 
-        <Pressable
-          style={[styles.button, isSubmitting && styles.buttonDisabled]}
-          onPress={handleLogin}
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? (
-            <ActivityIndicator color="#111827" />
-          ) : (
-            <Text style={styles.buttonText}>Entrar</Text>
-          )}
+        <Pressable style={styles.button} onPress={handleLogin}>
+          <Text style={styles.buttonText}>Entrar</Text>
         </Pressable>
 
         <View style={styles.linksRow}>
@@ -151,9 +137,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginTop: 8,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
   },
   buttonText: {
     color: "#111827",

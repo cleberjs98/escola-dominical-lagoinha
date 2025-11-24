@@ -14,12 +14,7 @@ import {
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
 } from "firebase/auth";
-import {
-  doc,
-  onSnapshot,
-  serverTimestamp,
-  setDoc,
-} from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 
 import { firebaseAuth, firebaseDb } from "../lib/firebase";
 import type { User, UserRole, UserStatus } from "../types/user";
@@ -54,7 +49,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
 
-  // Vamos guardar a função de unsubscribe do onSnapshot do usuário
   const userUnsubscribeRef = useRef<(() => void) | null>(null);
 
   // Listener principal de autenticação (Firebase Auth)
@@ -62,8 +56,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const unsubscribeAuth = onAuthStateChanged(firebaseAuth, (current) => {
       setFirebaseUser(current);
 
-      // Se não tem usuário logado, limpamos tudo
       if (!current) {
+        // usuário deslogado
         setUser(null);
         setIsInitializing(false);
 
@@ -75,7 +69,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return;
       }
 
-      // Se tem usuário, escutamos o documento dele no Firestore em tempo real
+      // Se tem usuário logado, escutamos o documento dele no Firestore
       const userDocRef = doc(firebaseDb, "users", current.uid);
 
       const unsubscribeUser = onSnapshot(
@@ -84,7 +78,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           if (snapshot.exists()) {
             setUser(snapshot.data() as User);
           } else {
-            // Se o doc ainda não existe (pode acontecer logo após o signup)
+            // Ainda não existe doc do usuário (vamos criar na Fase 2.3)
             setUser(null);
           }
           setIsInitializing(false);
@@ -98,7 +92,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       userUnsubscribeRef.current = unsubscribeUser;
     });
 
-    // Cleanup geral
     return () => {
       unsubscribeAuth();
       if (userUnsubscribeRef.current) {
@@ -107,14 +100,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, []);
 
-  // Função de login
+  // Login
   const signIn = async (email: string, password: string) => {
     await signInWithEmailAndPassword(firebaseAuth, email, password);
-    // O onAuthStateChanged vai cuidar do resto
   };
 
-  // Função de cadastro (signup)
-  // Aqui criamos o usuário no Auth E o documento na coleção `users`
+  // Cadastro (por enquanto só cria no Auth)
   const signUp = async (params: {
     nome: string;
     email: string;
@@ -124,7 +115,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     console.log("[signUp] Iniciando cadastro...");
 
-    // 1) Criar usuário no Authentication
     const cred = await createUserWithEmailAndPassword(
       firebaseAuth,
       email,
@@ -133,39 +123,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     console.log("[signUp] Usuário criado no Auth:", cred.user.uid);
 
-    const uid = cred.user.uid;
-    const userDocRef = doc(firebaseDb, "users", uid);
-    const now = serverTimestamp();
-
-    const userDoc: User = {
-      id: uid,
-      nome,
-      email,
-      telefone: null,
-      data_nascimento: null,
-      papel: "aluno",
-      status: "vazio",
-      aprovado_por_id: null,
-      aprovado_em: null,
-      alterado_por_id: null,
-      alterado_em: null,
-      papel_anterior: null,
-      motivo_rejeicao: null,
-      created_at: now as any,
-      updated_at: now as any,
-    };
-
-    // 2) Criar documento no Firestore
-    await setDoc(userDocRef, userDoc, { merge: true });
-
-    console.log("[signUp] Documento no Firestore criado/atualizado.");
+    // ⚠️ IMPORTANTE:
+    // Ainda NÃO estamos criando o documento no Firestore aqui.
+    // Vamos fazer isso na Fase 2.3, quando o usuário completar o perfil
+    // (telefone, data de nascimento, status = "pendente", etc.).
+    //
+    // Por isso, o `user` do contexto ainda ficará null logo após o signup.
+    // Isso é esperado neste momento.
   };
 
   const signOut = async () => {
     await firebaseSignOut(firebaseAuth);
   };
 
-  // Derivados para navegação condicional
   const role: UserRole | null = user?.papel ?? null;
   const status: UserStatus | null = user?.status ?? null;
 
@@ -194,7 +164,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-// Hook de conveniência
 export function useAuthContext() {
   const ctx = useContext(AuthContext);
   if (!ctx) {

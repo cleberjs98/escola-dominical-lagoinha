@@ -1,3 +1,4 @@
+// app/auth/forgot-password.tsx
 import { useState } from "react";
 import {
   View,
@@ -5,7 +6,6 @@ import {
   TextInput,
   StyleSheet,
   Pressable,
-  ActivityIndicator,
   Alert,
 } from "react-native";
 import { Link } from "expo-router";
@@ -14,7 +14,6 @@ import { firebaseAuth } from "../../lib/firebase";
 
 export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleResetPassword() {
     if (!email.trim() || !email.includes("@")) {
@@ -23,7 +22,6 @@ export default function ForgotPasswordScreen() {
     }
 
     try {
-      setIsSubmitting(true);
       await sendPasswordResetEmail(firebaseAuth, email.trim());
       Alert.alert(
         "Email enviado",
@@ -35,8 +33,6 @@ export default function ForgotPasswordScreen() {
         "Erro",
         error?.message || "Não foi possível enviar o email. Tente novamente."
       );
-    } finally {
-      setIsSubmitting(false);
     }
   }
 
@@ -59,16 +55,8 @@ export default function ForgotPasswordScreen() {
           onChangeText={setEmail}
         />
 
-        <Pressable
-          style={[styles.button, isSubmitting && styles.buttonDisabled]}
-          onPress={handleResetPassword}
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? (
-            <ActivityIndicator color="#111827" />
-          ) : (
-            <Text style={styles.buttonText}>Enviar email</Text>
-          )}
+        <Pressable style={styles.button} onPress={handleResetPassword}>
+          <Text style={styles.buttonText}>Enviar email</Text>
         </Pressable>
 
         <View style={styles.linksRow}>
@@ -125,9 +113,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginTop: 8,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
   },
   buttonText: {
     color: "#111827",
