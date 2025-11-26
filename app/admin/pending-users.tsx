@@ -18,6 +18,7 @@ import {
   onSnapshot,
   query,
   where,
+  orderBy,
 } from "firebase/firestore";
 
 import { useAuth } from "../../hooks/useAuth";
@@ -25,7 +26,7 @@ import { firebaseDb } from "../../lib/firebase";
 import { approveUser, rejectUser, updateUserRole } from "../../lib/users";
 import type { User, UserRole } from "../../types/user";
 
-type PendingUser = User;
+type PendingUser = User & { docId: string };
 
 const AVAILABLE_ROLES: UserRole[] = [
   "aluno",
@@ -60,12 +61,12 @@ export default function AdminPendingUsersScreen() {
     }
   }, [isAuthenticated, isAdmin, isInitializing, router]);
 
-  // Snapshot em tempo real de todos os pendentes (inclui coordenadores)
+  // Snapshot em tempo real de todos os pendentes (inclui coordenadores/admins)
   useEffect(() => {
     if (!isAdmin) return;
 
     const usersRef = collection(firebaseDb, "users");
-    const q = query(usersRef, where("status", "==", "pendente"));
+    const q = query(usersRef, where("status", "==", "pendente"), orderBy("nome"));
 
     const unsub = onSnapshot(
       q,
@@ -73,7 +74,7 @@ export default function AdminPendingUsersScreen() {
         const list: PendingUser[] = [];
         snapshot.forEach((docSnap) => {
           const data = docSnap.data() as User;
-          list.push(data);
+          list.push({ ...(data as User), docId: docSnap.id });
         });
         setPendingUsers(list);
         setIsLoading(false);
@@ -89,7 +90,7 @@ export default function AdminPendingUsersScreen() {
   }, [isAdmin]);
 
   const openApproveModal = (user: PendingUser, mode: "approve" | "role") => {
-    setSelectedUserId(user.id);
+    setSelectedUserId(user.docId);
     setSelectedRole(user.papel);
     setApproveMode(mode);
     setApproveModalVisible(true);
@@ -189,10 +190,7 @@ export default function AdminPendingUsersScreen() {
           return (
             <Pressable
               key={roleOption}
-              style={[
-                styles.roleChip,
-                isSelected && styles.roleChipSelected,
-              ]}
+              style={[styles.roleChip, isSelected && styles.roleChipSelected]}
               onPress={() => setSelectedRole(roleOption)}
             >
               <Text
@@ -211,7 +209,7 @@ export default function AdminPendingUsersScreen() {
   };
 
   const renderItem = ({ item }: { item: PendingUser }) => {
-    const isActing = actionLoadingId === item.id;
+    const isActing = actionLoadingId === item.docId;
 
     return (
       <View style={styles.card}>
@@ -236,7 +234,7 @@ export default function AdminPendingUsersScreen() {
 
           <Pressable
             style={[styles.button, styles.rejectButton, isActing && styles.disabled]}
-            onPress={() => handleReject(item.id)}
+            onPress={() => handleReject(item.docId)}
             disabled={isActing}
           >
             <Text style={styles.buttonText}>Rejeitar</Text>
@@ -277,7 +275,7 @@ export default function AdminPendingUsersScreen() {
       ) : (
         <FlatList
           data={pendingUsers}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item.docId}
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
         />
