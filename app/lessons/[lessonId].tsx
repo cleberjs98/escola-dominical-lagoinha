@@ -8,6 +8,7 @@ import {
   Alert,
   ScrollView,
   Pressable,
+  Linking,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { doc, getDoc } from "firebase/firestore";
@@ -17,6 +18,9 @@ import { firebaseDb } from "../../lib/firebase";
 import { getLessonById } from "../../lib/lessons";
 import type { Lesson } from "../../types/lesson";
 import type { User } from "../../types/user";
+import { listSupportMaterialsForReference } from "../../lib/materials";
+import type { SupportMaterial } from "../../types/material";
+import { SupportMaterialItem } from "../../components/SupportMaterialItem";
 
 export default function LessonDetailsScreen() {
   const router = useRouter();
@@ -26,6 +30,8 @@ export default function LessonDetailsScreen() {
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [professor, setProfessor] = useState<User | null>(null);
+  const [materials, setMaterials] = useState<SupportMaterial[]>([]);
+  const [isLoadingMaterials, setIsLoadingMaterials] = useState(false);
 
   useEffect(() => {
     if (isInitializing) return;
@@ -55,6 +61,17 @@ export default function LessonDetailsScreen() {
           if (profSnap.exists()) {
             setProfessor(profSnap.data() as User);
           }
+        }
+
+        // materiais da aula
+        try {
+          setIsLoadingMaterials(true);
+          const mats = await listSupportMaterialsForReference("aula", lessonId);
+          setMaterials(mats);
+        } catch (err) {
+          console.error("Erro ao carregar materiais da aula:", err);
+        } finally {
+          setIsLoadingMaterials(false);
         }
       } catch (error) {
         console.error("Erro ao carregar aula:", error);
@@ -90,6 +107,18 @@ export default function LessonDetailsScreen() {
   const professorNome =
     professor?.nome || professor?.email || lesson.professor_reservado_id || "Professor não definido";
 
+  function openMaterial(material: SupportMaterial) {
+    const url = material.url_externa;
+    if (url) {
+      Linking.openURL(url).catch((err) => {
+        console.error("Erro ao abrir link:", err);
+        Alert.alert("Erro", "Não foi possível abrir o material.");
+      });
+      return;
+    }
+    Alert.alert("Material sem link", "Este material não possui URL acessível.");
+  }
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>{lesson.titulo}</Text>
@@ -113,6 +142,27 @@ export default function LessonDetailsScreen() {
           <Text style={styles.cardTextMuted}>
             O professor ainda não adicionou complementos para esta aula.
           </Text>
+        )}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Materiais de apoio</Text>
+        {isLoadingMaterials ? (
+          <View style={styles.inlineCenter}>
+            <ActivityIndicator size="small" color="#facc15" />
+            <Text style={styles.loadingText}>Carregando materiais...</Text>
+          </View>
+        ) : materials.length === 0 ? (
+          <Text style={styles.cardTextMuted}>Nenhum material de apoio disponível para esta aula.</Text>
+        ) : (
+          materials.map((m) => (
+            <SupportMaterialItem
+              key={m.id}
+              material={m}
+              onPress={() => openMaterial(m)}
+              previewImage={true}
+            />
+          ))
         )}
       </View>
     </ScrollView>
@@ -186,5 +236,10 @@ const styles = StyleSheet.create({
   cardTextMuted: {
     color: "#94a3b8",
     fontSize: 13,
+  },
+  inlineCenter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
 });

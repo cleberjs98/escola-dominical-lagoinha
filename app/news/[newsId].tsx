@@ -1,4 +1,4 @@
-// app/devotionals/[devotionalId].tsx
+// app/news/[newsId].tsx
 import { useEffect, useState } from "react";
 import {
   View,
@@ -13,18 +13,18 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { useAuth } from "../../hooks/useAuth";
-import { getDevotionalById } from "../../lib/devotionals";
-import type { Devotional } from "../../types/devotional";
+import { getNewsById } from "../../lib/news";
 import { listSupportMaterialsForReference } from "../../lib/materials";
+import type { News } from "../../types/news";
 import type { SupportMaterial } from "../../types/material";
 import { SupportMaterialItem } from "../../components/SupportMaterialItem";
 
-export default function DevotionalDetailsScreen() {
+export default function NewsDetailScreen() {
   const router = useRouter();
-  const { devotionalId } = useLocalSearchParams<{ devotionalId: string }>();
+  const { newsId } = useLocalSearchParams<{ newsId: string }>();
   const { firebaseUser, user, isInitializing } = useAuth();
 
-  const [devotional, setDevotional] = useState<Devotional | null>(null);
+  const [news, setNews] = useState<News | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [materials, setMaterials] = useState<SupportMaterial[]>([]);
   const [isLoadingMaterials, setIsLoadingMaterials] = useState(false);
@@ -43,53 +43,33 @@ export default function DevotionalDetailsScreen() {
     async function load() {
       try {
         setIsLoading(true);
-        const data = await getDevotionalById(devotionalId);
+        const data = await getNewsById(newsId);
         if (!data) {
-          Alert.alert("Erro", "Devocional não encontrado.");
-          router.replace("/devotionals" as any);
+          Alert.alert("Erro", "Notícia não encontrada.");
+          router.replace("/news/my-news" as any);
           return;
         }
-        setDevotional(data);
+        setNews(data);
 
         try {
           setIsLoadingMaterials(true);
-          const mats = await listSupportMaterialsForReference("devocional", devotionalId);
+          const mats = await listSupportMaterialsForReference("noticia", newsId);
           setMaterials(mats);
         } catch (err) {
-          console.error("Erro ao carregar materiais do devocional:", err);
+          console.error("Erro ao carregar materiais da notícia:", err);
         } finally {
           setIsLoadingMaterials(false);
         }
       } catch (error) {
-        console.error("Erro ao carregar devocional:", error);
-        Alert.alert("Erro", "Não foi possível carregar o devocional.");
+        console.error("Erro ao carregar notícia:", error);
+        Alert.alert("Erro", "Não foi possível carregar a notícia.");
       } finally {
         setIsLoading(false);
       }
     }
 
     load();
-  }, [devotionalId, firebaseUser, isInitializing, router, user?.status]);
-
-  if (isInitializing || isLoading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#facc15" />
-        <Text style={styles.loadingText}>Carregando devocional...</Text>
-      </View>
-    );
-  }
-
-  if (!devotional) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.loadingText}>Devocional não encontrado.</Text>
-        <Pressable style={styles.backButton} onPress={() => router.replace("/devotionals" as any)}>
-          <Text style={styles.backButtonText}>Voltar</Text>
-        </Pressable>
-      </View>
-    );
-  }
+  }, [firebaseUser, isInitializing, newsId, router, user?.status]);
 
   function openMaterial(material: SupportMaterial) {
     const url = material.url_externa;
@@ -103,19 +83,35 @@ export default function DevotionalDetailsScreen() {
     Alert.alert("Material sem link", "Este material não possui URL acessível.");
   }
 
+  if (isInitializing || isLoading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#facc15" />
+        <Text style={styles.loadingText}>Carregando notícia...</Text>
+      </View>
+    );
+  }
+
+  if (!news) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.loadingText}>Notícia não encontrada.</Text>
+        <Pressable style={styles.backButton} onPress={() => router.replace("/news/my-news" as any)}>
+          <Text style={styles.backButtonText}>Voltar</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>{devotional.titulo}</Text>
-      <Text style={styles.subtitle}>Data: {String(devotional.data_devocional)}</Text>
-      <Text style={styles.subtitleSmall}>Status: {devotional.status}</Text>
-
-      {devotional.status === "publicado" && (
-        <Text style={styles.badge}>Publicado</Text>
+      <Text style={styles.title}>{news.titulo}</Text>
+      <Text style={styles.subtitleSmall}>Status: {news.status}</Text>
+      {news.publicado_em && (
+        <Text style={styles.subtitleSmall}>Publicado em: {String(news.publicado_em)}</Text>
       )}
-
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Conteúdo</Text>
-        <Text style={styles.cardText}>{devotional.conteudo_base}</Text>
+        <Text style={styles.cardText}>{news.conteudo}</Text>
       </View>
 
       <View style={styles.card}>
@@ -126,7 +122,7 @@ export default function DevotionalDetailsScreen() {
             <Text style={styles.loadingText}>Carregando materiais...</Text>
           </View>
         ) : materials.length === 0 ? (
-          <Text style={styles.cardTextMuted}>Nenhum material de apoio disponível.</Text>
+          <Text style={styles.cardTextMuted}>Nenhum material de apoio para esta notícia.</Text>
         ) : (
           materials.map((m) => (
             <SupportMaterialItem
@@ -181,17 +177,8 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: "700",
   },
-  subtitle: {
-    color: "#9ca3af",
-    fontSize: 14,
-  },
   subtitleSmall: {
     color: "#9ca3af",
-    fontSize: 13,
-  },
-  badge: {
-    color: "#22c55e",
-    fontWeight: "700",
     fontSize: 13,
   },
   card: {
