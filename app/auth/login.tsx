@@ -36,7 +36,9 @@ export default function LoginScreen() {
 
     try {
       await signIn(email.trim(), password);
-      router.replace("/"); // por enquanto manda pra home
+
+      // 👉 Fase 2.3: após login, vamos para "Completar perfil"
+      router.replace("/auth/complete-profile");
     } catch (error: any) {
       console.error("Erro no login:", error);
       Alert.alert("Erro ao entrar", error?.message || "Tente novamente.");

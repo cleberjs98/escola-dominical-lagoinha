@@ -1,24 +1,65 @@
 // lib/firebase.ts
-// Configuração base do Firebase para o app da Escola Dominical
+import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
+import { getAuth, Auth } from "firebase/auth";
+import {
+  getFirestore,
+  initializeFirestore,
+  Firestore,
+} from "firebase/firestore";
+import { getStorage, FirebaseStorage } from "firebase/storage";
 
-import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
-
-// 🔐 Substitua esses valores pelos que o Firebase Console te deu
+// ⚠️ Substitua pelos valores do seu projeto Firebase
 const firebaseConfig = {
-  apiKey: "AIzaSyBRcBI5WVDH4AUOTEVgJmu2wc4-ULTQ-H4",
-  authDomain: "SEU_AUTH_DOMAIN_AQUI",
-  projectId: "SEU_PROJECT_ID_AQUI",
-  storageBucket: "SEU_STORAGE_BUCKET_AQUI",
-  messagingSenderId: "SEU_MESSAGING_SENDER_ID_AQUI",
-  appId: "SEU_APP_ID_AQUI",
+    apiKey: "AIzaSyBRcBI5WVDH4AUOTEVgJmu2wc4-ULTQ-H4",
+  authDomain: "app-ebd-25695.firebaseapp.com",
+  projectId: "app-ebd-25695",
+  storageBucket: "app-ebd-25695.firebasestorage.app",
+  messagingSenderId: "1033714210310",
+  appId: "1:1033714210310:web:6f01b9f881573f0bb49587",
 };
 
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+// ---------------------------------------------------------------------------
+// Inicialização base do app
+// ---------------------------------------------------------------------------
 
-export const firebaseApp = app;
-export const firebaseAuth = getAuth(app);
-export const firebaseDb = getFirestore(app);
-export const firebaseStorage = getStorage(app);
+let app: FirebaseApp;
+
+if (!getApps().length) {
+  app = initializeApp(firebaseConfig);
+} else {
+  app = getApp();
+}
+
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+
+const firebaseAuth: Auth = getAuth(app);
+
+// ---------------------------------------------------------------------------
+// Firestore - forçando long polling para evitar problemas de rede/WebSocket
+// ---------------------------------------------------------------------------
+
+let firebaseDb: Firestore;
+
+if (typeof window !== "undefined") {
+  // Ambiente web: usamos initializeFirestore com long polling
+  firebaseDb = initializeFirestore(app, {
+    experimentalForceLongPolling: true,
+  });
+} else {
+  // Ambiente nativo: getFirestore normal
+  firebaseDb = getFirestore(app);
+}
+
+// ---------------------------------------------------------------------------
+// Storage
+// ---------------------------------------------------------------------------
+
+const firebaseStorage: FirebaseStorage = getStorage(app);
+
+// ---------------------------------------------------------------------------
+// Exports
+// ---------------------------------------------------------------------------
+
+export { app, firebaseAuth, firebaseDb, firebaseStorage };
