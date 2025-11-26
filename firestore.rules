@@ -1,0 +1,48 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function roleFromToken() {
+      return isAuthenticated() ? (request.auth.token.role != null ? request.auth.token.role : null) : null;
+    }
+
+    function roleFromDoc(uid) {
+      return isAuthenticated()
+        ? get(/databases/$(database)/documents/users/$(uid)).data.papel
+        : null;
+    }
+
+    function isAdmin() {
+      return roleFromToken() == 'administrador' || roleFromDoc(request.auth.uid) == 'administrador';
+    }
+
+    function isCoordinator() {
+      return roleFromToken() == 'coordenador' || roleFromDoc(request.auth.uid) == 'coordenador';
+    }
+
+    match /users/{userId} {
+      function isSelf() {
+        return isAuthenticated() && request.auth.uid == userId;
+      }
+
+      // leitura: proprio usuario ou coord/admin
+      allow get: if isSelf() || isCoordinator() || isAdmin();
+      allow list: if isCoordinator() || isAdmin();
+
+      // criar: proprio usuario ou admin
+      allow create: if isSelf() || isAdmin();
+
+      // atualizar: proprio usuario; admin; coord (coord nao altera admin)
+      allow update: if
+        isSelf() ||
+        isAdmin() ||
+        (isCoordinator() && resource.data.papel != 'administrador');
+
+      // deletar: apenas admin e nao pode se deletar
+      allow delete: if isAdmin() && request.auth.uid != userId;
+    }
+  }
+}
