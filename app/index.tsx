@@ -7,22 +7,37 @@ import {
   ActivityIndicator,
   Pressable,
   ScrollView,
+  Image,
 } from "react-native";
 import { useRouter } from "expo-router";
 
 import { useAuth } from "../hooks/useAuth";
 import { getDevotionalOfTheDay } from "../lib/devotionals";
+import {
+  listLessonsForProfessor,
+  listNextPublishedLessons,
+} from "../lib/lessons";
 import type { Devotional } from "../types/devotional";
+import type { Lesson } from "../types/lesson";
 import { useUnreadNotificationsCount } from "../hooks/useUnreadNotificationsCount";
 
 export default function HomeScreen() {
   const router = useRouter();
   const { firebaseUser, user, isInitializing, signOut } = useAuth();
+
   const [devotionalOfDay, setDevotionalOfDay] = useState<Devotional | null>(null);
   const [isLoadingDevotional, setIsLoadingDevotional] = useState(false);
+
+  const [nextLessons, setNextLessons] = useState<Lesson[]>([]);
+  const [isLoadingLessons, setIsLoadingLessons] = useState(false);
+
+  const [myLessons, setMyLessons] = useState<Lesson[]>([]);
+  const [isLoadingMyLessons, setIsLoadingMyLessons] = useState(false);
+
   const userId = firebaseUser?.uid ?? null;
   const { unreadCount, reload: reloadUnread } = useUnreadNotificationsCount(userId);
   const isApproved = useMemo(() => user?.status === "aprovado", [user?.status]);
+  const papel = user?.papel || "desconhecido";
 
   useEffect(() => {
     if (!isInitializing && !firebaseUser) {
@@ -47,8 +62,35 @@ export default function HomeScreen() {
       }
     }
 
+    async function loadLessons() {
+      try {
+        setIsLoadingLessons(true);
+        const lessons = await listNextPublishedLessons(3);
+        setNextLessons(lessons);
+      } catch (error) {
+        console.error("Erro ao carregar aulas:", error);
+      } finally {
+        setIsLoadingLessons(false);
+      }
+    }
+
+    async function loadMyLessons() {
+      if (papel !== "professor") return;
+      try {
+        setIsLoadingMyLessons(true);
+        const lessons = await listLessonsForProfessor(firebaseUser.uid);
+        setMyLessons(lessons);
+      } catch (error) {
+        console.error("Erro ao carregar aulas do professor:", error);
+      } finally {
+        setIsLoadingMyLessons(false);
+      }
+    }
+
     loadDevotional();
-  }, [firebaseUser, isApproved]);
+    loadLessons();
+    loadMyLessons();
+  }, [firebaseUser, isApproved, papel]);
 
   useEffect(() => {
     if (isApproved) {
@@ -74,13 +116,43 @@ export default function HomeScreen() {
   }
 
   const nome = user?.nome || firebaseUser.email || "Usuario";
-  const papel = user?.papel || "desconhecido";
   const status = user?.status || "vazio";
 
   const isAluno = papel === "aluno";
   const isProfessor = papel === "professor";
   const isCoordenador = papel === "coordenador";
   const isAdmin = papel === "administrador";
+
+  const primeiroNome = nome.split(" ")[0] || nome;
+  const photoUrl = (user as any)?.photoURL || firebaseUser.photoURL || "";
+  const initials = nome
+    .split(" ")
+    .filter((n) => n)
+    .map((n) => n[0]?.toUpperCase?.() || "")
+    .slice(0, 2)
+    .join("") || "U";
+
+  function papelDisplay() {
+    switch (papel) {
+      case "aluno":
+        return "Aluno";
+      case "professor":
+        return "Professor";
+      case "coordenador":
+        return "Coordenador";
+      case "administrador":
+        return "Administrador";
+      default:
+        return "Desconhecido";
+    }
+  }
+
+  function bannerSubtitle() {
+    if (isProfessor) return "Veja suas aulas reservadas e devocionais.";
+    if (isCoordenador || isAdmin)
+      return "Gerencie usuarios, aulas, devocionais e noticias.";
+    return "Fique por dentro das aulas e devocionais.";
+  }
 
   async function handleSignOut() {
     try {
@@ -91,6 +163,9 @@ export default function HomeScreen() {
     }
   }
 
+  const showSummaryNotifications =
+    isApproved && typeof unreadCount === "number" && unreadCount >= 0;
+
   return (
     <ScrollView
       style={styles.container}
@@ -98,15 +173,19 @@ export default function HomeScreen() {
     >
       <View style={styles.header}>
         <View style={styles.headerTop}>
-          <View>
-            <Text style={styles.welcome}>Bem-vindo(a),</Text>
-            <Text style={styles.name}>{nome}</Text>
-            <Text style={styles.infoLine}>
-              Papel: <Text style={styles.badge}>{papel}</Text>
-            </Text>
-            <Text style={styles.infoLine}>
-              Status: <Text style={styles.status}>{status}</Text>
-            </Text>
+          <View style={styles.profileRow}>
+            {photoUrl ? (
+              <Image source={{ uri: photoUrl }} style={styles.avatar} />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Text style={styles.avatarInitials}>{initials}</Text>
+              </View>
+            )}
+            <View>
+              <Text style={styles.welcome}>Bem-vindo(a)</Text>
+              <Text style={styles.name}>{nome}</Text>
+              <Text style={styles.infoLine}>{papelDisplay()}</Text>
+            </View>
           </View>
           {isApproved && (
             <Pressable
@@ -126,12 +205,27 @@ export default function HomeScreen() {
         </View>
       </View>
 
+      <View style={styles.banner}>
+        <Text style={styles.bannerTitle}>Seja bem-vindo(a), {primeiroNome}</Text>
+        <Text style={styles.bannerSubtitle}>{bannerSubtitle()}</Text>
+        {showSummaryNotifications && (
+          <Pressable
+            style={styles.bannerButton}
+            onPress={() => router.push("/notifications" as any)}
+          >
+            <Text style={styles.bannerButtonText}>
+              Voce tem {unreadCount} notificacao(oes)
+            </Text>
+          </Pressable>
+        )}
+      </View>
+
       {status !== "aprovado" && (
         <View style={styles.cardWarning}>
-          <Text style={styles.cardTitle}>Seu cadastro ainda não foi aprovado</Text>
+          <Text style={styles.cardTitle}>Seu cadastro ainda nao foi aprovado</Text>
           <Text style={styles.cardText}>
-            Aguarde até que a liderança revise seus dados. Assim que for aprovado,
-            novas funcionalidades serão liberadas para você.
+            Aguarde ate que a lideranca revise seus dados. Assim que for aprovado,
+            novas funcionalidades serao liberadas para voce.
           </Text>
           <Pressable
             style={[styles.button, styles.buttonSecondary]}
@@ -144,7 +238,15 @@ export default function HomeScreen() {
 
       {status === "aprovado" && (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Devocional do Dia</Text>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardTitle}>Devocional do dia</Text>
+            <Pressable
+              onPress={() => router.push("/devotionals" as any)}
+              style={styles.linkButton}
+            >
+              <Text style={styles.linkButtonText}>Ver todos</Text>
+            </Pressable>
+          </View>
           {isLoadingDevotional ? (
             <View style={styles.inlineCenter}>
               <ActivityIndicator size="small" color="#facc15" />
@@ -167,12 +269,6 @@ export default function HomeScreen() {
               >
                 <Text style={styles.buttonOutlineText}>Ver devocional completo</Text>
               </Pressable>
-              <Pressable
-                style={[styles.button, styles.buttonOutline]}
-                onPress={() => router.push("/devotionals" as any)}
-              >
-                <Text style={styles.buttonOutlineText}>Ver todos os devocionais</Text>
-              </Pressable>
             </>
           ) : (
             <Text style={styles.cardTextMuted}>Nenhum devocional para hoje.</Text>
@@ -180,128 +276,75 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {status === "aprovado" && isAluno && (
+      {status === "aprovado" && (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Área do Aluno</Text>
-          <Text style={styles.cardText}>
-            Em breve você verá aqui as próximas aulas, devocional do dia e
-            materiais de apoio.
-          </Text>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardTitle}>Proximas aulas</Text>
+            <Pressable
+              onPress={() => router.push("/lessons" as any)}
+              style={styles.linkButton}
+            >
+              <Text style={styles.linkButtonText}>Ver todas</Text>
+            </Pressable>
+          </View>
+          {isLoadingLessons ? (
+            <View style={styles.inlineCenter}>
+              <ActivityIndicator size="small" color="#facc15" />
+              <Text style={styles.loadingText}>Carregando aulas...</Text>
+            </View>
+          ) : nextLessons.length === 0 ? (
+            <Text style={styles.cardTextMuted}>Nenhuma aula publicada no momento.</Text>
+          ) : (
+            nextLessons.map((lesson) => (
+              <Pressable
+                key={lesson.id}
+                style={styles.lessonCard}
+                onPress={() => router.push(`/lessons/${lesson.id}` as any)}
+              >
+                <Text style={styles.lessonTitle}>{lesson.titulo}</Text>
+                <Text style={styles.lessonMeta}>Data: {String(lesson.data_aula)}</Text>
+                {lesson.professor_reservado_id && (
+                  <Text style={styles.lessonMeta}>
+                    Professor reservado: {lesson.professor_reservado_id}
+                  </Text>
+                )}
+              </Pressable>
+            ))
+          )}
         </View>
       )}
 
       {status === "aprovado" && isProfessor && (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Área do Professor</Text>
-          <Text style={styles.cardText}>
-            Em breve você poderá reservar aulas, ver suas aulas reservadas e
-            publicar notícias.
-          </Text>
-
-          <Pressable
-            style={[styles.button, styles.buttonOutline]}
-            onPress={() => router.push("/professor/available-lessons" as any)}
-          >
-            <Text style={styles.buttonOutlineText}>
-              Ver aulas disponíveis para reserva
-            </Text>
-          </Pressable>
-        </View>
-      )}
-
-      {status === "aprovado" && isCoordenador && (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Painel do Coordenador</Text>
-          <Text style={styles.cardText}>
-            Acesse rapidamente as aprovações de cadastro e, futuramente, a gestão
-            de aulas e devocionais.
-          </Text>
-
-          <Pressable
-            style={[styles.button, styles.buttonOutline]}
-            onPress={() => router.push("/admin/devotionals/new" as any)}
-          >
-            <Text style={styles.buttonOutlineText}>Criar devocional</Text>
-          </Pressable>
-
-          <Pressable
-            style={[styles.button, styles.buttonOutline]}
-            onPress={() => router.push("/devotionals" as any)}
-          >
-            <Text style={styles.buttonOutlineText}>Gerenciar devocionais</Text>
-          </Pressable>
-
-          <Pressable
-            style={[styles.button, styles.buttonOutline]}
-            onPress={() => router.push("/admin/lessons/new" as any)}
-          >
-            <Text style={styles.buttonOutlineText}>Criar nova aula</Text>
-          </Pressable>
-
-          <Pressable
-            style={[styles.button, styles.buttonOutline]}
-            onPress={() => router.push("/manager/pending-reservations" as any)}
-          >
-            <Text style={styles.buttonOutlineText}>Ver reservas de aula pendentes</Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.button}
-            onPress={() => router.push("/manager/pending-users" as any)}
-          >
-            <Text style={styles.buttonText}>Aprovar usuários pendentes</Text>
-          </Pressable>
-        </View>
-      )}
-
-      {status === "aprovado" && isAdmin && (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Painel do Administrador</Text>
-          <Text style={styles.cardText}>
-            Atalhos para aprovações e gerenciamento completo de usuários.
-          </Text>
-
-          <Pressable
-            style={styles.button}
-            onPress={() => router.push("/admin/pending-users" as any)}
-          >
-            <Text style={styles.buttonText}>Aprovar usuários pendentes</Text>
-          </Pressable>
-
-          <Pressable
-            style={[styles.button, styles.buttonOutline]}
-            onPress={() => router.push("/admin/users" as any)}
-          >
-            <Text style={styles.buttonOutlineText}>Gerenciar todos os usuários</Text>
-          </Pressable>
-
-          <Pressable
-            style={[styles.button, styles.buttonOutline]}
-            onPress={() => router.push("/admin/lessons/new" as any)}
-          >
-            <Text style={styles.buttonOutlineText}>Criar nova aula</Text>
-          </Pressable>
-
-          <Pressable
-            style={[styles.button, styles.buttonOutline]}
-            onPress={() => router.push("/manager/pending-reservations" as any)}
-          >
-            <Text style={styles.buttonOutlineText}>Ver reservas de aula pendentes</Text>
-          </Pressable>
-
-          <Pressable
-            style={[styles.button, styles.buttonOutline]}
-            onPress={() => router.push("/admin/devotionals/new" as any)}
-          >
-            <Text style={styles.buttonOutlineText}>Criar devocional</Text>
-          </Pressable>
-
-          <Pressable
-            style={[styles.button, styles.buttonOutline]}
-            onPress={() => router.push("/devotionals" as any)}
-          >
-            <Text style={styles.buttonOutlineText}>Gerenciar devocionais</Text>
-          </Pressable>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardTitle}>Minhas aulas reservadas</Text>
+            <Pressable
+              onPress={() => router.push("/professor/available-lessons" as any)}
+              style={styles.linkButton}
+            >
+              <Text style={styles.linkButtonText}>Reservar aula</Text>
+            </Pressable>
+          </View>
+          {isLoadingMyLessons ? (
+            <View style={styles.inlineCenter}>
+              <ActivityIndicator size="small" color="#facc15" />
+              <Text style={styles.loadingText}>Carregando aulas...</Text>
+            </View>
+          ) : myLessons.length === 0 ? (
+            <Text style={styles.cardTextMuted}>Voce ainda nao tem aulas reservadas.</Text>
+          ) : (
+            myLessons.map((lesson) => (
+              <Pressable
+                key={lesson.id}
+                style={styles.lessonCard}
+                onPress={() => router.push(`/lessons/${lesson.id}` as any)}
+              >
+                <Text style={styles.lessonTitle}>{lesson.titulo}</Text>
+                <Text style={styles.lessonMeta}>Data: {String(lesson.data_aula)}</Text>
+                <Text style={styles.lessonMeta}>Status: {lesson.status}</Text>
+              </Pressable>
+            ))
+          )}
         </View>
       )}
 
@@ -333,9 +376,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 72,
     paddingBottom: 32,
+    gap: 12,
   },
   header: {
-    marginBottom: 24,
+    marginBottom: 12,
   },
   headerTop: {
     flexDirection: "row",
@@ -343,19 +387,41 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
   },
+  profileRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  avatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+  },
+  avatarPlaceholder: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "#1f2937",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarInitials: {
+    color: "#e5e7eb",
+    fontWeight: "700",
+  },
   welcome: {
     color: "#9ca3af",
     fontSize: 14,
   },
   name: {
     color: "#e5e7eb",
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "700",
     marginTop: 2,
   },
   infoLine: {
     color: "#9ca3af",
-    marginTop: 4,
+    marginTop: 2,
     fontSize: 13,
   },
   badge: {
@@ -392,6 +458,39 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "700",
   },
+  banner: {
+    backgroundColor: "#0b1224",
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#1f2937",
+    marginBottom: 12,
+    gap: 6,
+  },
+  bannerTitle: {
+    color: "#e5e7eb",
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  bannerSubtitle: {
+    color: "#cbd5e1",
+    fontSize: 13,
+  },
+  bannerButton: {
+    alignSelf: "flex-start",
+    marginTop: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#22c55e",
+    backgroundColor: "#022c22",
+  },
+  bannerButtonText: {
+    color: "#bbf7d0",
+    fontWeight: "700",
+    fontSize: 12,
+  },
   card: {
     backgroundColor: "#020617",
     borderRadius: 16,
@@ -399,6 +498,7 @@ const styles = StyleSheet.create({
     borderColor: "#1f2937",
     padding: 16,
     marginBottom: 16,
+    gap: 8,
   },
   cardWarning: {
     backgroundColor: "#451a03",
@@ -407,27 +507,38 @@ const styles = StyleSheet.create({
     borderColor: "#92400e",
     padding: 16,
     marginBottom: 16,
+    gap: 8,
+  },
+  cardHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   cardTitle: {
     color: "#e5e7eb",
     fontSize: 16,
     fontWeight: "600",
-    marginBottom: 8,
   },
   cardText: {
     color: "#d1d5db",
     fontSize: 13,
-    marginBottom: 12,
   },
   cardTextMuted: {
     color: "#9ca3af",
     fontSize: 13,
-    marginBottom: 12,
   },
   cardPreview: {
     color: "#9ca3af",
     fontSize: 13,
-    marginBottom: 8,
+  },
+  linkButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  linkButtonText: {
+    color: "#bbf7d0",
+    fontSize: 12,
+    fontWeight: "700",
   },
   button: {
     backgroundColor: "#22c55e",
@@ -464,8 +575,26 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     fontSize: 14,
   },
+  lessonCard: {
+    borderWidth: 1,
+    borderColor: "#1f2937",
+    borderRadius: 12,
+    padding: 12,
+    backgroundColor: "#0b1224",
+    marginTop: 8,
+    gap: 4,
+  },
+  lessonTitle: {
+    color: "#e5e7eb",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  lessonMeta: {
+    color: "#9ca3af",
+    fontSize: 12,
+  },
   footer: {
-    marginTop: 24,
+    marginTop: 12,
     alignItems: "flex-start",
   },
   logoutButton: {

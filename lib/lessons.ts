@@ -212,6 +212,29 @@ export async function listNextPublishedLessons(max: number): Promise<Lesson[]> {
 }
 
 /**
+ * Lista aulas reservadas/publicadas de um professor.
+ * Observação: se precisar filtrar status, ajustamos no futuro; hoje mantemos as retornadas.
+ */
+export async function listLessonsForProfessor(
+  professorId: string
+): Promise<Lesson[]> {
+  const colRef = collection(firebaseDb, "aulas");
+  const q = query(
+    colRef,
+    where("professor_reservado_id", "==", professorId),
+    orderBy("data_aula", "asc")
+  );
+  const snap = await getDocs(q);
+
+  const list: Lesson[] = [];
+  snap.forEach((docSnap) => {
+    const data = docSnap.data() as Omit<Lesson, "id">;
+    list.push({ id: docSnap.id, ...data });
+  });
+  return list;
+}
+
+/**
  * Atualiza o complemento do professor em uma aula reservada/publicada.
  * Usa serverTimestamp para rascunho_salvo_em e updated_at.
  */
