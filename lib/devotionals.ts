@@ -88,12 +88,7 @@ type UpdateDevotionalBaseParams = {
 };
 
 export async function updateDevotionalBase(params: UpdateDevotionalBaseParams) {
-  const {
-    devotionalId,
-    setPublishedNow,
-    archive,
-    ...updates
-  } = params;
+  const { devotionalId, setPublishedNow, archive, ...updates } = params;
   const ref = doc(firebaseDb, "devocionais", devotionalId);
 
   const payload: Partial<Devotional> = {
@@ -185,7 +180,6 @@ export async function isDevotionalDateAvailable(
   if (snap.empty) return true;
   if (!ignoreId) return false;
 
-  // Se todos os docs retornados forem o próprio ignoreId, então está disponível
   const others = snap.docs.filter((docSnap) => docSnap.id !== ignoreId);
   return others.length === 0;
 }
@@ -210,4 +204,28 @@ export async function setDevotionalStatus(
 
 export async function archiveDevotional(devotionalId: string) {
   return setDevotionalStatus(devotionalId, "arquivado" as DevotionalStatus);
+}
+
+/**
+ * Auto-save de rascunho do devocional.
+ */
+type SaveDevotionalDraftParams = {
+  devotionalId: string;
+  titulo?: string;
+  conteudo_base?: string;
+  data_devocional?: Devotional["data_devocional"];
+  data_publicacao_auto?: Devotional["data_publicacao_auto"];
+};
+
+export async function saveDevotionalDraft(params: SaveDevotionalDraftParams) {
+  const { devotionalId, ...updates } = params;
+  const ref = doc(firebaseDb, "devocionais", devotionalId);
+
+  const payload: Partial<Devotional> = {
+    ...updates,
+    rascunho_salvo_em: serverTimestamp() as any,
+    updated_at: serverTimestamp() as any,
+  };
+
+  await updateDoc(ref, payload as any);
 }

@@ -1,5 +1,5 @@
 // app/admin/lessons/[lessonId].tsx
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -14,7 +14,9 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { useAuth } from "../../../hooks/useAuth";
 import { getLessonById, updateLesson } from "../../../lib/lessons";
-import { LessonStatus, type Lesson } from "../../../types/lesson";
+import type { LessonStatus, Lesson } from "../../../types/lesson";
+
+const AUTOSAVE_DELAY = 3000; // ms
 
 export default function EditLessonScreen() {
   const router = useRouter();
@@ -29,6 +31,10 @@ export default function EditLessonScreen() {
   const [dataAula, setDataAula] = useState("");
   const [dataPublicacaoAuto, setDataPublicacaoAuto] = useState("");
   const [descricao, setDescricao] = useState("");
+
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const autosaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Guard + carregar aula
   useEffect(() => {
@@ -101,10 +107,10 @@ export default function EditLessonScreen() {
         descricao_base: descricao.trim(),
         data_aula: dataAula.trim(),
         data_publicacao_auto: dataPub,
-        status: archive ? LessonStatus.ARQUIVADA : status,
+        status: archive ? ("arquivada" as LessonStatus) : status,
         setPublishedNow: publishNow,
-        clearPublished: !publishNow && status !== LessonStatus.PUBLICADA,
-        setDraftSavedNow: status === LessonStatus.RASCUNHO,
+        clearPublished: !publishNow && status !== "publicada",
+        setDraftSavedNow: status === "rascunho",
       });
 
       Alert.alert("Sucesso", "Aula atualizada.");
@@ -115,6 +121,40 @@ export default function EditLessonScreen() {
       setIsSubmitting(false);
     }
   }
+
+  // Auto-save debounce
+  useEffect(() => {
+    if (!lesson) return;
+
+    if (autosaveTimeoutRef.current) {
+      clearTimeout(autosaveTimeoutRef.current);
+    }
+
+    autosaveTimeoutRef.current = setTimeout(async () => {
+      try {
+        setIsSavingDraft(true);
+        await updateLesson({
+          lessonId: lesson.id,
+          titulo: titulo.trim(),
+          descricao_base: descricao.trim(),
+          data_aula: dataAula.trim(),
+          data_publicacao_auto: dataPublicacaoAuto.trim() || null,
+          setDraftSavedNow: true,
+        });
+        setLastSavedAt(new Date());
+      } catch (error) {
+        console.error("Erro no auto-save de aula:", error);
+      } finally {
+        setIsSavingDraft(false);
+      }
+    }, AUTOSAVE_DELAY);
+
+    return () => {
+      if (autosaveTimeoutRef.current) {
+        clearTimeout(autosaveTimeoutRef.current);
+      }
+    };
+  }, [lesson, titulo, descricao, dataAula, dataPublicacaoAuto]);
 
   if (isInitializing || isLoading) {
     return (
@@ -174,10 +214,18 @@ export default function EditLessonScreen() {
         placeholderTextColor="#6b7280"
       />
 
+      <Text style={styles.saveInfo}>
+        {isSavingDraft
+          ? "Salvando rascunho..."
+          : lastSavedAt
+          ? `Rascunho salvo às ${lastSavedAt.toLocaleTimeString()}`
+          : "Rascunho salvo"}
+      </Text>
+
       <View style={styles.actions}>
         <Pressable
           style={[styles.button, styles.buttonSecondary, isSubmitting && styles.disabled]}
-          onPress={() => handleSave(LessonStatus.RASCUNHO)}
+          onPress={() => handleSave("rascunho" as LessonStatus)}
           disabled={isSubmitting}
         >
           <Text style={styles.buttonSecondaryText}>
@@ -187,7 +235,7 @@ export default function EditLessonScreen() {
 
         <Pressable
           style={[styles.button, styles.buttonPrimary, isSubmitting && styles.disabled]}
-          onPress={() => handleSave(LessonStatus.DISPONIVEL)}
+          onPress={() => handleSave("disponivel" as LessonStatus)}
           disabled={isSubmitting}
         >
           <Text style={styles.buttonPrimaryText}>
@@ -198,7 +246,7 @@ export default function EditLessonScreen() {
 
       <Pressable
         style={[styles.button, styles.buttonPublish, isSubmitting && styles.disabled]}
-        onPress={() => handleSave(LessonStatus.PUBLICADA, true)}
+        onPress={() => handleSave("publicada" as LessonStatus, true)}
         disabled={isSubmitting}
       >
         <Text style={styles.buttonPublishText}>
@@ -208,7 +256,7 @@ export default function EditLessonScreen() {
 
       <Pressable
         style={[styles.button, styles.buttonArchive, isSubmitting && styles.disabled]}
-        onPress={() => handleSave(LessonStatus.ARQUIVADA, false, true)}
+        onPress={() => handleSave("arquivada" as LessonStatus, false, true)}
         disabled={isSubmitting}
       >
         <Text style={styles.buttonArchiveText}>
@@ -228,6 +276,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 56,
     paddingBottom: 24,
+    gap: 12,
   },
   center: {
     flex: 1,
@@ -243,7 +292,6 @@ const styles = StyleSheet.create({
     color: "#e5e7eb",
     fontSize: 22,
     fontWeight: "700",
-    marginBottom: 4,
   },
   subtitle: {
     color: "#9ca3af",
@@ -267,7 +315,11 @@ const styles = StyleSheet.create({
   },
   textarea: {
     minHeight: 140,
-    marginBottom: 8,
+    marginBottom: 4,
+  },
+  saveInfo: {
+    color: "#9ca3af",
+    fontSize: 12,
   },
   actions: {
     flexDirection: "row",

@@ -1,5 +1,5 @@
 // app/admin/devotionals/[devotionalId].tsx
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -11,7 +11,6 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { collection, getDocs, query, where } from "firebase/firestore";
 
 import { useAuth } from "../../../hooks/useAuth";
 import {
@@ -20,9 +19,11 @@ import {
   setDevotionalStatus,
   publishDevotionalNow,
   isDevotionalDateAvailable,
+  saveDevotionalDraft,
 } from "../../../lib/devotionals";
-import { firebaseDb } from "../../../lib/firebase";
 import { DevotionalStatus, type Devotional } from "../../../types/devotional";
+
+const AUTOSAVE_DELAY = 3000; // ms
 
 export default function EditDevotionalScreen() {
   const router = useRouter();
@@ -36,6 +37,10 @@ export default function EditDevotionalScreen() {
   const [dataPublicacaoAuto, setDataPublicacaoAuto] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const autosaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Guard + carregar
   useEffect(() => {
@@ -107,7 +112,6 @@ export default function EditDevotionalScreen() {
     if (!devotional) return;
     if (!validate()) return;
 
-    // Verifica duplicidade de data
     const ok = await checkDateDuplication(dataDevocional.trim(), devotional.id);
     if (!ok) return;
 
@@ -125,7 +129,6 @@ export default function EditDevotionalScreen() {
         archive,
       });
 
-      // Se publishNow não for tratado em update, usamos publishDevotionalNow
       if (publishNow && status === DevotionalStatus.PUBLICADO) {
         await publishDevotionalNow(devotional.id);
       } else if (!publishNow && !archive && status !== DevotionalStatus.PUBLICADO) {
@@ -140,6 +143,39 @@ export default function EditDevotionalScreen() {
       setIsSubmitting(false);
     }
   }
+
+  // Auto-save debounce
+  useEffect(() => {
+    if (!devotional) return;
+
+    if (autosaveTimeoutRef.current) {
+      clearTimeout(autosaveTimeoutRef.current);
+    }
+
+    autosaveTimeoutRef.current = setTimeout(async () => {
+      try {
+        setIsSavingDraft(true);
+        await saveDevotionalDraft({
+          devotionalId: devotional.id,
+          titulo: titulo.trim(),
+          conteudo_base: conteudoBase.trim(),
+          data_devocional: dataDevocional.trim(),
+          data_publicacao_auto: dataPublicacaoAuto.trim() || null,
+        });
+        setLastSavedAt(new Date());
+      } catch (error) {
+        console.error("Erro no auto-save de devocional:", error);
+      } finally {
+        setIsSavingDraft(false);
+      }
+    }, AUTOSAVE_DELAY);
+
+    return () => {
+      if (autosaveTimeoutRef.current) {
+        clearTimeout(autosaveTimeoutRef.current);
+      }
+    };
+  }, [devotional, titulo, dataDevocional, conteudoBase, dataPublicacaoAuto]);
 
   if (isInitializing || isLoading) {
     return (
@@ -198,6 +234,14 @@ export default function EditDevotionalScreen() {
         textAlignVertical="top"
         placeholderTextColor="#6b7280"
       />
+
+      <Text style={styles.saveInfo}>
+        {isSavingDraft
+          ? "Salvando rascunho..."
+          : lastSavedAt
+          ? `Rascunho salvo às ${lastSavedAt.toLocaleTimeString()}`
+          : "Rascunho salvo"}
+      </Text>
 
       <View style={styles.actions}>
         <Pressable
@@ -292,6 +336,10 @@ const styles = StyleSheet.create({
   },
   textarea: {
     minHeight: 160,
+  },
+  saveInfo: {
+    color: "#9ca3af",
+    fontSize: 12,
   },
   actions: {
     flexDirection: "row",

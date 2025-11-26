@@ -5,12 +5,12 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
   orderBy,
   query,
   serverTimestamp,
   updateDoc,
   where,
-  limit,
 } from "firebase/firestore";
 import { firebaseDb } from "./firebase";
 import type { Lesson, LessonStatus } from "../types/lesson";
@@ -206,4 +206,28 @@ export async function updateLessonComplement(
     rascunho_salvo_em: serverTimestamp() as any,
     updated_at: serverTimestamp() as any,
   });
+}
+
+/**
+ * Auto-save de rascunho da aula (título, datas, descrição base).
+ */
+type SaveLessonDraftParams = {
+  lessonId: string;
+  titulo?: string;
+  descricao_base?: string;
+  data_aula?: Lesson["data_aula"];
+  data_publicacao_auto?: Lesson["data_publicacao_auto"];
+};
+
+export async function saveLessonDraft(params: SaveLessonDraftParams) {
+  const { lessonId, ...updates } = params;
+  const ref = doc(firebaseDb, "aulas", lessonId);
+
+  const payload: Partial<Lesson> = {
+    ...updates,
+    rascunho_salvo_em: serverTimestamp() as any,
+    updated_at: serverTimestamp() as any,
+  };
+
+  await updateDoc(ref, payload as any);
 }
