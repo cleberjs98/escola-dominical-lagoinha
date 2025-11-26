@@ -9,39 +9,88 @@ import {
   Alert,
 } from "react-native";
 import { Link, useRouter } from "expo-router";
-import { useAuth } from "../../hooks/useAuth";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+
+import { firebaseAuth, firebaseDb } from "../../lib/firebase";
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { signIn } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  async function handleLogin() {
+  function validate() {
     if (!email.trim() || !password.trim()) {
       Alert.alert("Erro", "Informe email e senha.");
-      return;
+      return false;
     }
 
     if (!email.includes("@")) {
       Alert.alert("Erro", "Informe um email válido.");
-      return;
+      return false;
     }
 
     if (password.length < 6) {
       Alert.alert("Erro", "A senha deve ter pelo menos 6 caracteres.");
-      return;
+      return false;
     }
 
-    try {
-      await signIn(email.trim(), password);
+    return true;
+  }
 
-      // 👉 Fase 2.3: após login, vamos para "Completar perfil"
-      router.replace("/auth/complete-profile");
+  async function handleLogin() {
+    if (!validate()) return;
+
+    try {
+      setIsSubmitting(true);
+
+      console.log("[Login] Fazendo login no Firebase Auth...");
+      const cred = await signInWithEmailAndPassword(
+        firebaseAuth,
+        email.trim(),
+        password
+      );
+
+      const uid = cred.user.uid;
+      console.log("[Login] Usuário autenticado:", uid);
+
+      // Buscar dados do usuário no Firestore
+      const userRef = doc(firebaseDb, "users", uid);
+      const snap = await getDoc(userRef);
+
+      if (!snap.exists()) {
+        console.log(
+          "[Login] Nenhum documento em 'users' para esse UID. Indo para completar perfil."
+        );
+        router.replace("/auth/complete-profile" as any);
+        return;
+      }
+
+      const data = snap.data() as any;
+      const status = data.status ?? "vazio";
+
+      console.log("[Login] Status do usuário no Firestore:", status);
+
+      if (status === "vazio") {
+        router.replace("/auth/complete-profile" as any);
+      } else if (status === "pendente") {
+        // Tela que você criou na Fase 2.4 (ajuste o caminho se for diferente)
+        router.replace("/auth/pending" as any);
+      } else if (status === "rejeitado") {
+        // Por enquanto podemos mandar para a mesma tela de pendente
+        // ou criar uma tela específica depois.
+        router.replace("/auth/pending" as any);
+      } else {
+        // Aprovado → vai para a home
+        router.replace("/" as any);
+      }
     } catch (error: any) {
       console.error("Erro no login:", error);
       Alert.alert("Erro ao entrar", error?.message || "Tente novamente.");
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -74,8 +123,14 @@ export default function LoginScreen() {
           onChangeText={setPassword}
         />
 
-        <Pressable style={styles.button} onPress={handleLogin}>
-          <Text style={styles.buttonText}>Entrar</Text>
+        <Pressable
+          style={[styles.button, isSubmitting && styles.buttonDisabled]}
+          onPress={handleLogin}
+          disabled={isSubmitting}
+        >
+          <Text style={styles.buttonText}>
+            {isSubmitting ? "Entrando..." : "Entrar"}
+          </Text>
         </Pressable>
 
         <View style={styles.linksRow}>
@@ -139,6 +194,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginTop: 8,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   buttonText: {
     color: "#111827",
