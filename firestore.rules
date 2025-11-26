@@ -1,48 +1,88 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isAuthenticated() {
+    // Helpers de autenticação e papel
+    function isSignedIn() {
       return request.auth != null;
     }
 
     function roleFromToken() {
-      return isAuthenticated() ? (request.auth.token.role != null ? request.auth.token.role : null) : null;
+      return isSignedIn() ? (request.auth.token.role != null ? request.auth.token.role : null) : null;
     }
 
     function roleFromDoc(uid) {
-      return isAuthenticated()
-        ? get(/databases/$(database)/documents/users/$(uid)).data.papel
-        : null;
+      return isSignedIn() ? get(/databases/$(database)/documents/users/$(uid)).data.papel : null;
     }
 
-    function isAdmin() {
-      return roleFromToken() == 'administrador' || roleFromDoc(request.auth.uid) == 'administrador';
+    function requestUserRole() {
+      return roleFromToken() != null ? roleFromToken() : roleFromDoc(request.auth.uid);
     }
 
-    function isCoordinator() {
-      return roleFromToken() == 'coordenador' || roleFromDoc(request.auth.uid) == 'coordenador';
+    function isAdmin()       { return requestUserRole() == 'administrador'; }
+    function isCoordinator() { return requestUserRole() == 'coordenador'; }
+    function isProfessor()   { return requestUserRole() == 'professor'; }
+
+    function isApprovedUser() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'aprovado';
     }
 
+    // Users
     match /users/{userId} {
-      function isSelf() {
-        return isAuthenticated() && request.auth.uid == userId;
-      }
+      function isSelf() { return isSignedIn() && request.auth.uid == userId; }
 
-      // leitura: proprio usuario ou coord/admin
       allow get: if isSelf() || isCoordinator() || isAdmin();
       allow list: if isCoordinator() || isAdmin();
-
-      // criar: proprio usuario ou admin
       allow create: if isSelf() || isAdmin();
-
-      // atualizar: proprio usuario; admin; coord (coord nao altera admin)
-      allow update: if
-        isSelf() ||
-        isAdmin() ||
-        (isCoordinator() && resource.data.papel != 'administrador');
-
-      // deletar: apenas admin e nao pode se deletar
+      allow update: if isSelf() || isAdmin() || (isCoordinator() && resource.data.papel != 'administrador');
       allow delete: if isAdmin() && request.auth.uid != userId;
+    }
+
+    // Aulas
+    match /aulas/{id} {
+      allow get, list: if (resource.data.status == 'publicada') || isProfessor() || isCoordinator() || isAdmin();
+      allow create, update: if isCoordinator() || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Reservas de aula
+    match /reservas_aula/{id} {
+      allow create: if isProfessor() && request.resource.data.professor_id == request.auth.uid;
+      allow get, list: if isAdmin() || isCoordinator() ||
+        (isProfessor() && (
+          (request.resource != null && request.resource.data.professor_id == request.auth.uid) ||
+          (resource != null && resource.data.professor_id == request.auth.uid)
+        ));
+      allow update: if isAdmin() || isCoordinator();
+      allow delete: if false;
+    }
+
+    // Devocionais
+    match /devocionais/{id} {
+      allow get, list: if isApprovedUser() && resource.data.status == 'publicado';
+      allow create, update, delete: if isCoordinator() || isAdmin();
+    }
+
+    // Notícias
+    match /noticias/{id} {
+      allow get, list: if isApprovedUser() && resource.data.status == 'publicada';
+
+      allow create: if (isProfessor() || isCoordinator() || isAdmin()) &&
+        request.resource.data.autor_id == request.auth.uid;
+
+      allow update: if (isProfessor() && resource.data.autor_id == request.auth.uid) ||
+        isCoordinator() || isAdmin();
+
+      allow delete: if isCoordinator() || isAdmin();
+    }
+
+    // Materiais de apoio
+    match /materiais_apoio/{id} {
+      allow get, list: if isApprovedUser();
+      allow create: if isProfessor() || isCoordinator() || isAdmin();
+      allow update: if (isProfessor() && resource.data.enviado_por_id == request.auth.uid) ||
+        isCoordinator() || isAdmin();
+      allow delete: if (isProfessor() && resource.data.enviado_por_id == request.auth.uid) ||
+        isCoordinator() || isAdmin();
     }
   }
 }

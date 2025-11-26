@@ -16,8 +16,6 @@ import {
   listMyNews,
   publishNewsNow,
   deleteNews,
-  updateNewsBase,
-  getNewsById,
 } from "../../lib/news";
 import type { News } from "../../types/news";
 
@@ -61,14 +59,26 @@ export default function MyNewsScreen() {
     load();
   }, [canAccess, firebaseUser, isInitializing, router]);
 
+  async function reloadList() {
+    if (!firebaseUser) return;
+    try {
+      setIsLoading(true);
+      const list = await listMyNews(firebaseUser.uid);
+      setNewsList(list);
+    } catch (error) {
+      console.error("Erro ao recarregar notícias:", error);
+      Alert.alert("Erro", "Não foi possível recarregar suas notícias.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   async function handlePublish(newsId: string) {
     try {
       setActionId(newsId);
       await publishNewsNow(newsId);
       Alert.alert("Sucesso", "Notícia publicada.");
-      setNewsList((prev) =>
-        prev.map((n) => (n.id === newsId ? { ...n, status: "publicada", publicado_em: null } : n))
-      );
+      await reloadList();
     } catch (error: any) {
       console.error("Erro ao publicar notícia:", error);
       Alert.alert("Erro", error?.message || "Falha ao publicar notícia.");
@@ -87,7 +97,7 @@ export default function MyNewsScreen() {
           try {
             setActionId(newsId);
             await deleteNews(newsId);
-            setNewsList((prev) => prev.filter((n) => n.id !== newsId));
+            await reloadList();
           } catch (error: any) {
             console.error("Erro ao deletar notícia:", error);
             Alert.alert("Erro", error?.message || "Falha ao deletar notícia.");
