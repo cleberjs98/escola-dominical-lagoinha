@@ -1,5 +1,5 @@
 // app/index.tsx
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -11,17 +11,40 @@ import {
 import { useRouter } from "expo-router";
 
 import { useAuth } from "../hooks/useAuth";
+import { getDevotionalOfTheDay } from "../lib/devotionals";
+import type { Devotional } from "../types/devotional";
 
 export default function HomeScreen() {
   const router = useRouter();
   const { firebaseUser, user, isInitializing, signOut } = useAuth();
+  const [devotionalOfDay, setDevotionalOfDay] = useState<Devotional | null>(null);
+  const [isLoadingDevotional, setIsLoadingDevotional] = useState(false);
 
   useEffect(() => {
     if (!isInitializing && !firebaseUser) {
-      // Se não estiver logado, manda pra tela de login
       router.replace("/auth/login" as any);
     }
   }, [firebaseUser, isInitializing, router]);
+
+  useEffect(() => {
+    if (!firebaseUser || user?.status !== "aprovado") return;
+
+    async function loadDevotional() {
+      try {
+        setIsLoadingDevotional(true);
+        const today = new Date();
+        const dateStr = today.toISOString().slice(0, 10); // "YYYY-MM-DD"
+        const devo = await getDevotionalOfTheDay(dateStr);
+        setDevotionalOfDay(devo);
+      } catch (error) {
+        console.error("Erro ao carregar devocional do dia:", error);
+      } finally {
+        setIsLoadingDevotional(false);
+      }
+    }
+
+    loadDevotional();
+  }, [firebaseUser, user?.status]);
 
   if (isInitializing || (!firebaseUser && isInitializing)) {
     return (
@@ -33,7 +56,6 @@ export default function HomeScreen() {
   }
 
   if (!firebaseUser) {
-    // Enquanto o redirecionamento acontece
     return (
       <View style={styles.center}>
         <Text style={styles.loadingText}>Redirecionando para login...</Text>
@@ -75,7 +97,6 @@ export default function HomeScreen() {
         </Text>
       </View>
 
-      {/* Aviso para pendentes / rejeitados */}
       {status !== "aprovado" && (
         <View style={styles.cardWarning}>
           <Text style={styles.cardTitle}>Seu cadastro ainda não foi aprovado</Text>
@@ -92,7 +113,44 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* Bloco para ALUNO */}
+      {status === "aprovado" && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Devocional do Dia</Text>
+          {isLoadingDevotional ? (
+            <View style={styles.inlineCenter}>
+              <ActivityIndicator size="small" color="#facc15" />
+              <Text style={styles.loadingText}>Carregando devocional...</Text>
+            </View>
+          ) : devotionalOfDay ? (
+            <>
+              <Text style={styles.cardText}>{devotionalOfDay.titulo}</Text>
+              <Text style={styles.cardTextMuted}>
+                {String(devotionalOfDay.data_devocional)}
+              </Text>
+              <Text style={styles.cardPreview}>
+                {devotionalOfDay.conteudo_base.length > 160
+                  ? `${devotionalOfDay.conteudo_base.slice(0, 160)}...`
+                  : devotionalOfDay.conteudo_base}
+              </Text>
+              <Pressable
+                style={[styles.button, styles.buttonOutline]}
+                onPress={() => router.push(`/devotionals/${devotionalOfDay.id}` as any)}
+              >
+                <Text style={styles.buttonOutlineText}>Ver devocional completo</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.button, styles.buttonOutline]}
+                onPress={() => router.push("/devotionals" as any)}
+              >
+                <Text style={styles.buttonOutlineText}>Ver todos os devocionais</Text>
+              </Pressable>
+            </>
+          ) : (
+            <Text style={styles.cardTextMuted}>Nenhum devocional para hoje.</Text>
+          )}
+        </View>
+      )}
+
       {status === "aprovado" && isAluno && (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Área do Aluno</Text>
@@ -103,7 +161,6 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* Bloco para PROFESSOR */}
       {status === "aprovado" && isProfessor && (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Área do Professor</Text>
@@ -123,7 +180,6 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* Bloco para COORDENADOR */}
       {status === "aprovado" && isCoordenador && (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Painel do Coordenador</Text>
@@ -131,6 +187,20 @@ export default function HomeScreen() {
             Acesse rapidamente as aprovações de cadastro e, futuramente, a gestão
             de aulas e devocionais.
           </Text>
+
+          <Pressable
+            style={[styles.button, styles.buttonOutline]}
+            onPress={() => router.push("/admin/devotionals/new" as any)}
+          >
+            <Text style={styles.buttonOutlineText}>Criar devocional</Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.button, styles.buttonOutline]}
+            onPress={() => router.push("/devotionals" as any)}
+          >
+            <Text style={styles.buttonOutlineText}>Gerenciar devocionais</Text>
+          </Pressable>
 
           <Pressable
             style={[styles.button, styles.buttonOutline]}
@@ -155,7 +225,6 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* Bloco para ADMINISTRADOR */}
       {status === "aprovado" && isAdmin && (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Painel do Administrador</Text>
@@ -189,6 +258,20 @@ export default function HomeScreen() {
             onPress={() => router.push("/manager/pending-reservations" as any)}
           >
             <Text style={styles.buttonOutlineText}>Ver reservas de aula pendentes</Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.button, styles.buttonOutline]}
+            onPress={() => router.push("/admin/devotionals/new" as any)}
+          >
+            <Text style={styles.buttonOutlineText}>Criar devocional</Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.button, styles.buttonOutline]}
+            onPress={() => router.push("/devotionals" as any)}
+          >
+            <Text style={styles.buttonOutlineText}>Gerenciar devocionais</Text>
           </Pressable>
         </View>
       )}
@@ -275,6 +358,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginBottom: 12,
   },
+  cardTextMuted: {
+    color: "#9ca3af",
+    fontSize: 13,
+    marginBottom: 12,
+  },
+  cardPreview: {
+    color: "#9ca3af",
+    fontSize: 13,
+    marginBottom: 8,
+  },
   button: {
     backgroundColor: "#22c55e",
     paddingVertical: 10,
@@ -322,5 +415,10 @@ const styles = StyleSheet.create({
     color: "#f97316",
     fontSize: 13,
     fontWeight: "500",
+  },
+  inlineCenter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
 });
