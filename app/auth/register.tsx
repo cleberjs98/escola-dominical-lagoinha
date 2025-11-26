@@ -12,11 +12,11 @@ import {
   Platform,
 } from "react-native";
 import { Link, useRouter } from "expo-router";
-import { useAuth } from "../../hooks/useAuth";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { firebaseAuth } from "../../lib/firebase";
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const { signUp } = useAuth();
 
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
@@ -47,26 +47,29 @@ export default function RegisterScreen() {
     return true;
   }
 
-  async function handleRegister() {
+   async function handleRegister() {
     if (!validate()) return;
 
     try {
-      console.log("[Register] Chamando signUp...");
-      await signUp({
-        nome: nome.trim(),
-        email: email.trim(),
-        password,
-      });
-      console.log("[Register] signUp finalizado com sucesso.");
-
-      Alert.alert(
-        "Conta criada",
-        "Sua conta foi criada com sucesso. Agora você pode fazer login e completar seu perfil."
+      console.log("[Register] criando usuário direto no Firebase Auth...");
+      const cred = await createUserWithEmailAndPassword(
+        firebaseAuth,
+        email.trim(),
+        password
       );
+      console.log("[Register] Usuário criado:", cred.user.uid);
+
+      // 🚀 Em vez de Alert, vamos redirecionar direto
+      console.log("[Register] Redirecionando para /auth/login...");
+      // Se estiver no web, ainda mostramos um alert do browser:
+      if (typeof window !== "undefined") {
+        window.alert("Conta criada com sucesso! Agora faça login.");
+      }
 
       router.replace("/auth/login");
     } catch (error: any) {
-      console.error("Erro no cadastro (handleRegister):", error);
+      console.error("Erro ao criar conta (register.tsx):", error);
+      // Aqui mantemos o Alert de erro (se não funcionar no web, pelo menos loga)
       Alert.alert(
         "Erro ao criar conta",
         error?.message || "Tente novamente mais tarde."
