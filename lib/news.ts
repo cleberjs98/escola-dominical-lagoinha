@@ -16,6 +16,12 @@ import {
 } from "firebase/firestore";
 import { firebaseDb } from "./firebase";
 import type { News, NewsStatus } from "../types/news";
+import { createNotification } from "./notifications";
+import {
+  NotificationReferenceType,
+  NotificationType,
+} from "../types/notification";
+import { listCoordinatorsAndAdminsIds } from "./users";
 
 /**
  * Índices recomendados:
@@ -50,6 +56,7 @@ export async function createNewsDraft(params: CreateNewsDraftParams) {
   };
 
   const docRef = await addDoc(colRef, payload);
+  // Nota: notificações serão disparadas somente ao publicar.
   return docRef.id;
 }
 
@@ -85,6 +92,28 @@ export async function publishNewsNow(newsId: string) {
     data_expiracao: expiresAt,
     updated_at: serverTimestamp() as any,
   });
+
+  // Notificar coordenadores (e admins) sobre nova notícia do professor.
+  try {
+    const snap = await getDoc(ref);
+    const title = snap.data()?.titulo ?? "Nova notícia";
+    const adminIds = await listCoordinatorsAndAdminsIds();
+    await Promise.all(
+      adminIds.map((uid) =>
+        createNotification({
+          usuario_id: uid,
+          tipo: NotificationType.NOVA_NOTICIA,
+          titulo: "Nova notícia publicada",
+          mensagem: title,
+          tipo_referencia: NotificationReferenceType.NOTICIA,
+          referencia_id: newsId,
+        })
+      )
+    );
+    // Opcional: para broadcast total, trocar adminIds por listApprovedUsersIds() no futuro.
+  } catch (err) {
+    console.error("Erro ao notificar sobre notícia publicada:", err);
+  }
 }
 
 export async function getNewsById(newsId: string): Promise<News | null> {

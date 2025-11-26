@@ -14,6 +14,12 @@ import {
 } from "firebase/firestore";
 import { firebaseDb } from "./firebase";
 import type { Devotional, DevotionalStatus } from "../types/devotional";
+import { listApprovedUsersIds } from "./users";
+import { createNotification } from "./notifications";
+import {
+  NotificationReferenceType,
+  NotificationType,
+} from "../types/notification";
 
 /**
  * Índices recomendados (criar no console do Firestore):
@@ -59,6 +65,9 @@ export async function createDevotional(params: CreateDevotionalParams) {
   };
 
   const docRef = await addDoc(colRef, payload);
+  if (status === "publicado" || publishNow) {
+    void notifyDevotionalPublished(docRef.id, titulo);
+  }
   return docRef.id;
 }
 
@@ -97,6 +106,9 @@ export async function updateDevotionalBase(params: UpdateDevotionalBaseParams) {
     rascunho_salvo_em: serverTimestamp() as any,
   };
 
+  const shouldNotify =
+    setPublishedNow === true || updates.status === ("publicado" as DevotionalStatus);
+
   if (setPublishedNow) {
     payload.status = "publicado" as DevotionalStatus;
     payload.publicado_em = serverTimestamp() as any;
@@ -107,6 +119,14 @@ export async function updateDevotionalBase(params: UpdateDevotionalBaseParams) {
   }
 
   await updateDoc(ref, payload as any);
+
+  if (shouldNotify) {
+    const title =
+      updates.titulo ??
+      (await getDoc(ref)).data()?.titulo ??
+      "Devocional publicado";
+    void notifyDevotionalPublished(devotionalId, title as string);
+  }
 }
 
 export async function publishDevotionalNow(devotionalId: string) {
@@ -116,6 +136,13 @@ export async function publishDevotionalNow(devotionalId: string) {
     publicado_em: serverTimestamp() as any,
     updated_at: serverTimestamp() as any,
   });
+  try {
+    const snap = await getDoc(ref);
+    const title = snap.data()?.titulo ?? "Devocional publicado";
+    void notifyDevotionalPublished(devotionalId, title as string);
+  } catch (err) {
+    console.error("Erro ao notificar sobre devocional publicado:", err);
+  }
 }
 
 export async function getDevotionalById(
@@ -228,4 +255,24 @@ export async function saveDevotionalDraft(params: SaveDevotionalDraftParams) {
   };
 
   await updateDoc(ref, payload as any);
+}
+
+async function notifyDevotionalPublished(devotionalId: string, titulo: string) {
+  try {
+    const userIds = await listApprovedUsersIds();
+    await Promise.all(
+      userIds.map((uid) =>
+        createNotification({
+          usuario_id: uid,
+          tipo: NotificationType.NOVO_DEVOCIONAL,
+          titulo: "Novo devocional publicado",
+          mensagem: titulo,
+          tipo_referencia: NotificationReferenceType.DEVOCIONAL,
+          referencia_id: devotionalId,
+        })
+      )
+    );
+  } catch (err) {
+    console.error("Erro ao notificar usuários sobre devocional publicado:", err);
+  }
 }

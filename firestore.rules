@@ -84,5 +84,28 @@ service cloud.firestore {
       allow delete: if (isProfessor() && resource.data.enviado_por_id == request.auth.uid) ||
         isCoordinator() || isAdmin();
     }
+
+    // Notifica��es
+    match /notificacoes/{id} {
+      allow get, list: if isSignedIn() && request.auth.uid == resource.data.usuario_id;
+
+      allow create: if isSignedIn() &&
+        (
+          request.resource.data.usuario_id == request.auth.uid ||
+          isCoordinator() ||
+          isAdmin()
+        );
+
+      allow update: if
+        (isSignedIn() &&
+          resource.data.usuario_id == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lida', 'lida_em']) &&
+          request.resource.data.usuario_id == resource.data.usuario_id) ||
+        isCoordinator() ||
+        isAdmin();
+
+      // Op��o segura: delete apenas por admin (poderia ser bloqueado totalmente)
+      allow delete: if isAdmin();
+    }
   }
 }

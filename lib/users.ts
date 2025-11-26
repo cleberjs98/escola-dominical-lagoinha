@@ -1,9 +1,13 @@
 // lib/users.ts
 import {
+  collection,
   doc,
   getDoc,
+  getDocs,
   serverTimestamp,
   updateDoc,
+  where,
+  query,
 } from "firebase/firestore";
 import { firebaseDb } from "./firebase";
 import type { User, UserRole, UserStatus } from "../types/user";
@@ -114,4 +118,30 @@ export async function updateUserRole(params: UpdateUserRoleParams) {
   };
 
   await updateDoc(userRef, payload as any);
+}
+
+/**
+ * Lista IDs de coordenadores e administradores para acionar notifica��es.
+ * Observa��ǜo: requer permiss��es de leitura/listagem em /users.
+ */
+export async function listCoordinatorsAndAdminsIds(): Promise<string[]> {
+  const colRef = collection(firebaseDb, "users");
+  const q = query(
+    colRef,
+    where("papel", "in", ["coordenador", "administrador"]),
+    where("status", "==", "aprovado")
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((docSnap) => docSnap.id);
+}
+
+/**
+ * Lista IDs de todos os usu��rios aprovados (para broadcast de aulas/devocionais/not��cias).
+ * Observa��ǜo: apenas coord/admin devem usar para evitar leitura ampla por perfis restritos.
+ */
+export async function listApprovedUsersIds(): Promise<string[]> {
+  const colRef = collection(firebaseDb, "users");
+  const q = query(colRef, where("status", "==", "aprovado"));
+  const snap = await getDocs(q);
+  return snap.docs.map((docSnap) => docSnap.id);
 }

@@ -14,6 +14,12 @@ import {
 } from "firebase/firestore";
 import { firebaseDb } from "./firebase";
 import type { Lesson, LessonStatus } from "../types/lesson";
+import { listApprovedUsersIds } from "./users";
+import { createNotification } from "./notifications";
+import {
+  NotificationReferenceType,
+  NotificationType,
+} from "../types/notification";
 
 /**
  * Índices recomendados (criar no console do Firestore):
@@ -61,6 +67,9 @@ export async function createLesson(params: CreateLessonParams) {
   };
 
   const docRef = await addDoc(colRef, payload);
+  if (status === "publicada" || publishNow) {
+    void notifyLessonPublished(docRef.id, titulo);
+  }
   return docRef.id;
 }
 
@@ -113,6 +122,7 @@ export async function updateLesson(params: UpdateLessonParams) {
   const { lessonId, setPublishedNow, clearPublished, setDraftSavedNow, ...fields } =
     params;
   const ref = doc(firebaseDb, "aulas", lessonId);
+  let publishedNow = setPublishedNow === true || fields.status === "publicada";
 
   const payload: Partial<Lesson> = {
     ...fields,
@@ -121,6 +131,7 @@ export async function updateLesson(params: UpdateLessonParams) {
 
   if (setPublishedNow) {
     payload.publicado_em = serverTimestamp() as any;
+    publishedNow = true;
   } else if (clearPublished) {
     payload.publicado_em = null as any;
   }
@@ -130,6 +141,14 @@ export async function updateLesson(params: UpdateLessonParams) {
   }
 
   await updateDoc(ref, payload as any);
+
+  if (publishedNow) {
+    const currentTitle =
+      fields.titulo ??
+      (await getDoc(ref)).data()?.titulo ??
+      "Aula publicada";
+    void notifyLessonPublished(lessonId, currentTitle as string);
+  }
 }
 
 export async function getLessonById(lessonId: string): Promise<Lesson | null> {
@@ -230,4 +249,24 @@ export async function saveLessonDraft(params: SaveLessonDraftParams) {
   };
 
   await updateDoc(ref, payload as any);
+}
+
+async function notifyLessonPublished(lessonId: string, titulo: string) {
+  try {
+    const userIds = await listApprovedUsersIds();
+    await Promise.all(
+      userIds.map((uid) =>
+        createNotification({
+          usuario_id: uid,
+          tipo: NotificationType.NOVA_AULA,
+          titulo: "Nova aula publicada",
+          mensagem: titulo,
+          tipo_referencia: NotificationReferenceType.AULA,
+          referencia_id: lessonId,
+        })
+      )
+    );
+  } catch (err) {
+    console.error("Erro ao notificar usuários sobre aula publicada:", err);
+  }
 }

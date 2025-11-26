@@ -3,16 +3,24 @@ import {
   addDoc,
   collection,
   doc,
+  getDoc,
   getDocs,
   orderBy,
   query,
+  serverTimestamp,
   updateDoc,
   where,
-  serverTimestamp,
-  getDoc,
 } from "firebase/firestore";
 import { firebaseDb } from "./firebase";
 import type { Reservation, ReservationStatus } from "../types/reservation";
+import { createNotification } from "./notifications";
+import {
+  listCoordinatorsAndAdminsIds,
+} from "./users";
+import {
+  NotificationReferenceType,
+  NotificationType,
+} from "../types/notification";
 
 /**
  * Índices recomendados (criar no console do Firestore):
@@ -42,6 +50,26 @@ export async function requestLessonReservation(params: RequestReservationParams)
   };
 
   const docRef = await addDoc(colRef, payload);
+
+  // Notificar coordenadores/admins sobre a nova solicitação
+  try {
+    const adminIds = await listCoordinatorsAndAdminsIds();
+    await Promise.all(
+      adminIds.map((uid) =>
+        createNotification({
+          usuario_id: uid,
+          tipo: NotificationType.NOVA_RESERVA,
+          titulo: "Nova solicitação de reserva",
+          mensagem: "Um professor solicitou reserva de aula.",
+          tipo_referencia: NotificationReferenceType.RESERVA,
+          referencia_id: docRef.id,
+        })
+      )
+    );
+  } catch (err) {
+    console.error("Erro ao notificar coordenadores/admins sobre nova reserva:", err);
+  }
+
   return docRef.id;
 }
 
@@ -70,6 +98,11 @@ type RejectReservationParams = {
 export async function rejectReservation(params: RejectReservationParams) {
   const { reservationId, aprovadorId, motivo } = params;
   const ref = doc(firebaseDb, "reservas_aula", reservationId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) {
+    throw new Error("Reserva não encontrada para rejeição.");
+  }
+  const reservationData = snap.data() as Reservation;
 
   await updateDoc(ref, {
     status: "rejeitada" as ReservationStatus,
@@ -77,6 +110,19 @@ export async function rejectReservation(params: RejectReservationParams) {
     aprovado_em: serverTimestamp(),
     motivo_rejeicao: motivo,
   });
+
+  try {
+    await createNotification({
+      usuario_id: reservationData.professor_id,
+      tipo: NotificationType.RESERVA_REJEITADA,
+      titulo: "Reserva rejeitada",
+      mensagem: `Sua solicitação foi rejeitada. Motivo: ${motivo}`,
+      tipo_referencia: NotificationReferenceType.RESERVA,
+      referencia_id: reservationId,
+    });
+  } catch (err) {
+    console.error("Erro ao notificar professor sobre rejeição da reserva:", err);
+  }
 }
 
 export async function getReservationsForLesson(
@@ -126,7 +172,6 @@ export async function approveReservationAndUpdateLesson(
 ) {
   const { reservationId, aprovadorId } = params;
 
-  // Buscar reserva
   const reservationRef = doc(firebaseDb, "reservas_aula", reservationId);
   const reservationSnap = await getDoc(reservationRef);
   if (!reservationSnap.exists()) {
@@ -139,20 +184,31 @@ export async function approveReservationAndUpdateLesson(
     throw new Error("Dados da reserva incompletos (aula_id ou professor_id ausente).");
   }
 
-  // Atualizar reserva
   await updateDoc(reservationRef, {
     status: "aprovada" as ReservationStatus,
     aprovado_por_id: aprovadorId,
     aprovado_em: serverTimestamp(),
   });
 
-  // Atualizar aula
   const lessonRef = doc(firebaseDb, "aulas", aula_id);
   await updateDoc(lessonRef, {
     status: "reservada",
     professor_reservado_id: professor_id,
     updated_at: serverTimestamp(),
   });
+
+  try {
+    await createNotification({
+      usuario_id: professor_id,
+      tipo: NotificationType.RESERVA_APROVADA,
+      titulo: "Reserva aprovada",
+      mensagem: "Sua solicitação de reserva foi aprovada.",
+      tipo_referencia: NotificationReferenceType.RESERVA,
+      referencia_id: reservationId,
+    });
+  } catch (err) {
+    console.error("Erro ao notificar professor sobre aprovação da reserva:", err);
+  }
 }
 
 type RejectReservationAndKeepLessonParams = {
@@ -169,6 +225,11 @@ export async function rejectReservationAndKeepLesson(
 ) {
   const { reservationId, aprovadorId, motivo } = params;
   const reservationRef = doc(firebaseDb, "reservas_aula", reservationId);
+  const reservationSnap = await getDoc(reservationRef);
+  if (!reservationSnap.exists()) {
+    throw new Error("Reserva não encontrada.");
+  }
+  const reservationData = reservationSnap.data() as Reservation;
 
   await updateDoc(reservationRef, {
     status: "rejeitada" as ReservationStatus,
@@ -176,4 +237,17 @@ export async function rejectReservationAndKeepLesson(
     aprovado_em: serverTimestamp(),
     motivo_rejeicao: motivo,
   });
+
+  try {
+    await createNotification({
+      usuario_id: reservationData.professor_id,
+      tipo: NotificationType.RESERVA_REJEITADA,
+      titulo: "Reserva rejeitada",
+      mensagem: `Sua solicitação foi rejeitada. Motivo: ${motivo}`,
+      tipo_referencia: NotificationReferenceType.RESERVA,
+      referencia_id: reservationId,
+    });
+  } catch (err) {
+    console.error("Erro ao notificar professor sobre rejeição da reserva:", err);
+  }
 }

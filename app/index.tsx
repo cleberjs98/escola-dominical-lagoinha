@@ -1,5 +1,5 @@
 // app/index.tsx
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -13,12 +13,16 @@ import { useRouter } from "expo-router";
 import { useAuth } from "../hooks/useAuth";
 import { getDevotionalOfTheDay } from "../lib/devotionals";
 import type { Devotional } from "../types/devotional";
+import { useUnreadNotificationsCount } from "../hooks/useUnreadNotificationsCount";
 
 export default function HomeScreen() {
   const router = useRouter();
   const { firebaseUser, user, isInitializing, signOut } = useAuth();
   const [devotionalOfDay, setDevotionalOfDay] = useState<Devotional | null>(null);
   const [isLoadingDevotional, setIsLoadingDevotional] = useState(false);
+  const userId = firebaseUser?.uid ?? null;
+  const { unreadCount, reload: reloadUnread } = useUnreadNotificationsCount(userId);
+  const isApproved = useMemo(() => user?.status === "aprovado", [user?.status]);
 
   useEffect(() => {
     if (!isInitializing && !firebaseUser) {
@@ -27,7 +31,7 @@ export default function HomeScreen() {
   }, [firebaseUser, isInitializing, router]);
 
   useEffect(() => {
-    if (!firebaseUser || user?.status !== "aprovado") return;
+    if (!firebaseUser || !isApproved) return;
 
     async function loadDevotional() {
       try {
@@ -44,7 +48,13 @@ export default function HomeScreen() {
     }
 
     loadDevotional();
-  }, [firebaseUser, user?.status]);
+  }, [firebaseUser, isApproved]);
+
+  useEffect(() => {
+    if (isApproved) {
+      void reloadUnread();
+    }
+  }, [isApproved, reloadUnread]);
 
   if (isInitializing || (!firebaseUser && isInitializing)) {
     return (
@@ -63,7 +73,7 @@ export default function HomeScreen() {
     );
   }
 
-  const nome = user?.nome || firebaseUser.email || "Usuário";
+  const nome = user?.nome || firebaseUser.email || "Usuario";
   const papel = user?.papel || "desconhecido";
   const status = user?.status || "vazio";
 
@@ -87,14 +97,33 @@ export default function HomeScreen() {
       contentContainerStyle={styles.contentContainer}
     >
       <View style={styles.header}>
-        <Text style={styles.welcome}>Bem-vindo(a),</Text>
-        <Text style={styles.name}>{nome}</Text>
-        <Text style={styles.infoLine}>
-          Papel: <Text style={styles.badge}>{papel}</Text>
-        </Text>
-        <Text style={styles.infoLine}>
-          Status: <Text style={styles.status}>{status}</Text>
-        </Text>
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={styles.welcome}>Bem-vindo(a),</Text>
+            <Text style={styles.name}>{nome}</Text>
+            <Text style={styles.infoLine}>
+              Papel: <Text style={styles.badge}>{papel}</Text>
+            </Text>
+            <Text style={styles.infoLine}>
+              Status: <Text style={styles.status}>{status}</Text>
+            </Text>
+          </View>
+          {isApproved && (
+            <Pressable
+              style={styles.bellContainer}
+              onPress={() => router.push("/notifications" as any)}
+            >
+              <Text style={styles.bellIcon}>{"\uD83D\uDD14"}</Text>
+              {unreadCount > 0 && (
+                <View style={styles.badgeBubble}>
+                  <Text style={styles.badgeBubbleText}>
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
+          )}
+        </View>
       </View>
 
       {status !== "aprovado" && (
@@ -308,6 +337,12 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: 24,
   },
+  headerTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+  },
   welcome: {
     color: "#9ca3af",
     fontSize: 14,
@@ -330,6 +365,32 @@ const styles = StyleSheet.create({
   status: {
     color: "#38bdf8",
     fontWeight: "600",
+  },
+  bellContainer: {
+    position: "relative",
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#1f2937",
+    backgroundColor: "#0b1224",
+  },
+  bellIcon: {
+    fontSize: 20,
+    color: "#e5e7eb",
+  },
+  badgeBubble: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    backgroundColor: "#ef4444",
+    borderRadius: 999,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  badgeBubbleText: {
+    color: "#f8fafc",
+    fontSize: 10,
+    fontWeight: "700",
   },
   card: {
     backgroundColor: "#020617",
