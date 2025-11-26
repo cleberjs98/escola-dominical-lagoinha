@@ -6,12 +6,12 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { firebaseDb } from "./firebase";
-import type { User, UserRole } from "../types/user";
+import type { User, UserRole, UserStatus } from "../types/user";
 
 type ApproveUserParams = {
-  targetUserId: string;
-  approverId: string;
-  newRole?: UserRole;
+  targetUserId: string; // id do doc em "users" (UID)
+  approverId: string; // UID de quem aprova
+  newRole?: UserRole; // opcional: novo papel final
 };
 
 type RejectUserParams = {
@@ -28,38 +28,47 @@ type UpdateUserRoleParams = {
 
 export async function approveUser(params: ApproveUserParams) {
   const { targetUserId, approverId, newRole } = params;
-  const ref = doc(firebaseDb, "users", targetUserId);
-  const snap = await getDoc(ref);
+
+  if (!targetUserId) throw new Error("ID do usuario alvo é obrigatório.");
+  if (!approverId) throw new Error("ID do aprovador é obrigatório.");
+
+  const userRef = doc(firebaseDb, "users", targetUserId);
+  const snap = await getDoc(userRef);
 
   if (!snap.exists()) {
     throw new Error("Usuario nao encontrado para aprovacao.");
   }
 
-  const data = snap.data() as User;
+  const existing = snap.data() as User;
   const now = serverTimestamp();
 
-  const payload: Record<string, unknown> = {
-    status: "aprovado",
+  const finalRole: UserRole = newRole ?? existing.papel;
+
+  const payload: Partial<User> = {
+    papel: finalRole,
+    status: "aprovado" as UserStatus,
     aprovado_por_id: approverId,
-    aprovado_em: now,
-    motivo_rejeicao: null,
+    aprovado_em: now as any,
     alterado_por_id: approverId,
-    alterado_em: now,
-    updated_at: now,
+    alterado_em: now as any,
+    updated_at: now as any,
   };
 
-  if (newRole && newRole !== data.papel) {
-    payload.papel_anterior = data.papel;
-    payload.papel = newRole;
+  if (newRole && newRole !== existing.papel) {
+    payload.papel_anterior = existing.papel;
   }
 
-  await updateDoc(ref, payload);
+  await updateDoc(userRef, payload as any);
 }
 
 export async function rejectUser(params: RejectUserParams) {
   const { targetUserId, approverId, reason } = params;
-  const ref = doc(firebaseDb, "users", targetUserId);
-  const snap = await getDoc(ref);
+
+  if (!targetUserId) throw new Error("ID do usuario alvo é obrigatório.");
+  if (!approverId) throw new Error("ID do aprovador é obrigatório.");
+
+  const userRef = doc(firebaseDb, "users", targetUserId);
+  const snap = await getDoc(userRef);
 
   if (!snap.exists()) {
     throw new Error("Usuario nao encontrado para rejeicao.");
@@ -67,45 +76,42 @@ export async function rejectUser(params: RejectUserParams) {
 
   const now = serverTimestamp();
 
-  const payload: Record<string, unknown> = {
+  const payload: Partial<User> = {
     status: "rejeitado",
+    motivo_rejeicao: reason,
     aprovado_por_id: null,
     aprovado_em: null,
-    motivo_rejeicao: reason,
     alterado_por_id: approverId,
-    alterado_em: now,
-    updated_at: now,
+    alterado_em: now as any,
+    updated_at: now as any,
   };
 
-  await updateDoc(ref, payload);
+  await updateDoc(userRef, payload as any);
 }
 
 export async function updateUserRole(params: UpdateUserRoleParams) {
   const { targetUserId, approverId, newRole } = params;
-  const ref = doc(firebaseDb, "users", targetUserId);
-  const snap = await getDoc(ref);
+
+  if (!targetUserId) throw new Error("ID do usuario alvo é obrigatório.");
+  if (!approverId) throw new Error("ID do aprovador é obrigatório.");
+
+  const userRef = doc(firebaseDb, "users", targetUserId);
+  const snap = await getDoc(userRef);
 
   if (!snap.exists()) {
-    throw new Error("Usuario nao encontrado para atualizar papel.");
+    throw new Error("Usuario nao encontrado para alteracao de papel.");
   }
 
-  const data = snap.data() as User;
+  const existing = snap.data() as User;
   const now = serverTimestamp();
 
-  if (data.papel === newRole) {
-    await updateDoc(ref, {
-      alterado_por_id: approverId,
-      alterado_em: now,
-      updated_at: now,
-    });
-    return;
-  }
-
-  await updateDoc(ref, {
-    papel_anterior: data.papel,
+  const payload: Partial<User> = {
     papel: newRole,
+    papel_anterior: existing.papel,
     alterado_por_id: approverId,
-    alterado_em: now,
-    updated_at: now,
-  });
+    alterado_em: now as any,
+    updated_at: now as any,
+  };
+
+  await updateDoc(userRef, payload as any);
 }
