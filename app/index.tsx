@@ -111,6 +111,15 @@ export default function HomeScreen() {
             Em breve você poderá reservar aulas, ver suas aulas reservadas e
             publicar notícias.
           </Text>
+
+          <Pressable
+            style={[styles.button, styles.buttonOutline]}
+            onPress={() => router.push("/professor/available-lessons" as any)}
+          >
+            <Text style={styles.buttonOutlineText}>
+              Ver aulas disponíveis para reserva
+            </Text>
+          </Pressable>
         </View>
       )}
 
@@ -122,6 +131,20 @@ export default function HomeScreen() {
             Acesse rapidamente as aprovações de cadastro e, futuramente, a gestão
             de aulas e devocionais.
           </Text>
+
+          <Pressable
+            style={[styles.button, styles.buttonOutline]}
+            onPress={() => router.push("/admin/lessons/new" as any)}
+          >
+            <Text style={styles.buttonOutlineText}>Criar nova aula</Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.button, styles.buttonOutline]}
+            onPress={() => router.push("/manager/pending-reservations" as any)}
+          >
+            <Text style={styles.buttonOutlineText}>Ver reservas de aula pendentes</Text>
+          </Pressable>
 
           <Pressable
             style={styles.button}
@@ -152,6 +175,20 @@ export default function HomeScreen() {
             onPress={() => router.push("/admin/users" as any)}
           >
             <Text style={styles.buttonOutlineText}>Gerenciar todos os usuários</Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.button, styles.buttonOutline]}
+            onPress={() => router.push("/admin/lessons/new" as any)}
+          >
+            <Text style={styles.buttonOutlineText}>Criar nova aula</Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.button, styles.buttonOutline]}
+            onPress={() => router.push("/manager/pending-reservations" as any)}
+          >
+            <Text style={styles.buttonOutlineText}>Ver reservas de aula pendentes</Text>
           </Pressable>
         </View>
       )}
