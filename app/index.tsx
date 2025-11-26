@@ -7,7 +7,7 @@ export default function HomeScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>Escola Dominical Lagoinha Dublin</Text>
       <Text style={styles.subtitle}>
-        App em construção 🚧{"\n"}Fase 2.2 - Telas de autenticação
+        App em construcao - Fase 2.4{"\n"}Tela de espera para status pendente
       </Text>
 
       <View style={styles.buttonsContainer}>

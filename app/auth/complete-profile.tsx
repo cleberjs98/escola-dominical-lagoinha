@@ -208,8 +208,8 @@ export default function CompleteProfileScreen() {
         );
       }
 
-      // Por enquanto manda para a home; na próxima fase vamos mandar para tela de espera
-      router.replace("/" as any);
+      // Agora mandamos direto para a tela de espera (status pendente)
+      router.replace("/auth/pending" as any);
     } catch (error: any) {
       console.error("Erro ao salvar perfil:", error);
       Alert.alert(
