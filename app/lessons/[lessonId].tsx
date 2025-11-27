@@ -1,4 +1,4 @@
-// app/lessons/[lessonId].tsx
+// app/lessons/[lessonId].tsx - detalhe da aula com UI compartilhada
 import { useEffect, useState } from "react";
 import {
   View,
@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
-  Pressable,
   Linking,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -21,11 +20,17 @@ import type { User } from "../../types/user";
 import { listSupportMaterialsForReference } from "../../lib/materials";
 import type { SupportMaterial } from "../../types/material";
 import { SupportMaterialItem } from "../../components/SupportMaterialItem";
+import { Card } from "../../components/ui/Card";
+import { AppButton } from "../../components/ui/AppButton";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { StatusBadge } from "../../components/ui/StatusBadge";
+import { useTheme } from "../../hooks/useTheme";
 
 export default function LessonDetailsScreen() {
   const router = useRouter();
   const { lessonId } = useLocalSearchParams<{ lessonId: string }>();
   const { firebaseUser, user, isInitializing } = useAuth();
+  const { themeSettings } = useTheme();
 
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -63,7 +68,6 @@ export default function LessonDetailsScreen() {
           }
         }
 
-        // materiais da aula
         try {
           setIsLoadingMaterials(true);
           const mats = await listSupportMaterialsForReference("aula", lessonId);
@@ -97,9 +101,7 @@ export default function LessonDetailsScreen() {
     return (
       <View style={styles.center}>
         <Text style={styles.loadingText}>Aula não encontrada.</Text>
-        <Pressable style={styles.backButton} onPress={() => router.replace("/lessons" as any)}>
-          <Text style={styles.backButtonText}>Voltar</Text>
-        </Pressable>
+        <AppButton title="Voltar" variant="outline" onPress={() => router.replace("/lessons" as any)} />
       </View>
     );
   }
@@ -120,22 +122,28 @@ export default function LessonDetailsScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>{lesson.titulo}</Text>
-      <Text style={styles.subtitle}>Data da aula: {String(lesson.data_aula)}</Text>
-      <Text style={styles.subtitleSmall}>Status: {lesson.status}</Text>
+    <ScrollView
+      style={[
+        styles.container,
+        { backgroundColor: themeSettings?.cor_fundo || "#020617" },
+      ]}
+      contentContainerStyle={styles.content}
+    >
+      <Card
+        title={lesson.titulo}
+        subtitle={`Data da aula: ${String(lesson.data_aula)}`}
+        footer={<StatusBadge status={lesson.status} variant="lesson" />}
+      >
+        {lesson.professor_reservado_id ? (
+          <Text style={styles.subtitleSmall}>Professor: {professorNome}</Text>
+        ) : null}
+      </Card>
 
-      {lesson.professor_reservado_id && (
-        <Text style={styles.subtitleSmall}>Professor: {professorNome}</Text>
-      )}
-
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Descrição base</Text>
+      <Card title="Descrição base">
         <Text style={styles.cardText}>{lesson.descricao_base}</Text>
-      </View>
+      </Card>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Complemento do professor</Text>
+      <Card title="Complemento do professor">
         {lesson.complemento_professor ? (
           <Text style={styles.cardText}>{lesson.complemento_professor}</Text>
         ) : (
@@ -143,28 +151,31 @@ export default function LessonDetailsScreen() {
             O professor ainda não adicionou complementos para esta aula.
           </Text>
         )}
-      </View>
+      </Card>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Materiais de apoio</Text>
+      <Card title="Materiais de apoio">
         {isLoadingMaterials ? (
-          <View style={styles.inlineCenter}>
-            <ActivityIndicator size="small" color="#facc15" />
-            <Text style={styles.loadingText}>Carregando materiais...</Text>
-          </View>
+          <ActivityIndicator size="small" color="#facc15" />
         ) : materials.length === 0 ? (
-          <Text style={styles.cardTextMuted}>Nenhum material de apoio disponível para esta aula.</Text>
+          <EmptyState title="Nenhum material de apoio disponível para esta aula." />
         ) : (
           materials.map((m) => (
             <SupportMaterialItem
               key={m.id}
               material={m}
               onPress={() => openMaterial(m)}
-              previewImage={true}
+              previewImage
             />
           ))
         )}
-      </View>
+      </Card>
+
+      <AppButton
+        title="Voltar"
+        variant="outline"
+        fullWidth={false}
+        onPress={() => router.replace("/lessons" as any)}
+      />
     </ScrollView>
   );
 }
@@ -172,7 +183,6 @@ export default function LessonDetailsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#020617",
   },
   content: {
     paddingHorizontal: 16,
@@ -191,43 +201,9 @@ const styles = StyleSheet.create({
     color: "#e5e7eb",
     marginTop: 12,
   },
-  backButton: {
-    marginTop: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#334155",
-  },
-  backButtonText: {
-    color: "#e5e7eb",
-    fontWeight: "600",
-  },
-  title: {
-    color: "#e5e7eb",
-    fontSize: 22,
-    fontWeight: "700",
-  },
-  subtitle: {
-    color: "#9ca3af",
-    fontSize: 14,
-  },
   subtitleSmall: {
     color: "#9ca3af",
     fontSize: 13,
-  },
-  card: {
-    borderWidth: 1,
-    borderColor: "#1f2937",
-    borderRadius: 12,
-    padding: 12,
-    backgroundColor: "#0b1224",
-    gap: 6,
-  },
-  cardTitle: {
-    color: "#e5e7eb",
-    fontSize: 16,
-    fontWeight: "700",
   },
   cardText: {
     color: "#cbd5e1",
@@ -236,10 +212,5 @@ const styles = StyleSheet.create({
   cardTextMuted: {
     color: "#94a3b8",
     fontSize: 13,
-  },
-  inlineCenter: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
   },
 });
