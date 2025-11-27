@@ -1,15 +1,6 @@
-// app/admin/devotionals/new.tsx
+// app/admin/devotionals/new.tsx - criação de devocional com componentes reutilizáveis
 import { useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TextInput,
-  Pressable,
-  Alert,
-  ActivityIndicator,
-} from "react-native";
+import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 
 import { useAuth } from "../../../hooks/useAuth";
@@ -19,10 +10,16 @@ import {
   isDevotionalDateAvailable,
 } from "../../../lib/devotionals";
 import { DevotionalStatus } from "../../../types/devotional";
+import { Card } from "../../../components/ui/Card";
+import { AppInput } from "../../../components/ui/AppInput";
+import { AppButton } from "../../../components/ui/AppButton";
+import { RichTextEditor } from "../../../components/editor/RichTextEditor";
+import { useTheme } from "../../../hooks/useTheme";
 
 export default function NewDevotionalScreen() {
   const router = useRouter();
   const { firebaseUser, user, isInitializing } = useAuth();
+  const { themeSettings } = useTheme();
 
   const [titulo, setTitulo] = useState("");
   const [dataDevocional, setDataDevocional] = useState("");
@@ -78,27 +75,36 @@ export default function NewDevotionalScreen() {
         conteudo_base: conteudoBase.trim(),
         data_devocional: dataDevocional.trim(),
         data_publicacao_auto: dataPublicacaoAuto.trim() || null,
-        criado_por_id: firebaseUser.uid,
       };
 
-      let id: string;
-      if (status === DevotionalStatus.RASCUNHO) {
-        id = await createDevotionalDraft(payloadBase);
-      } else {
-        id = await createDevotional({
+      if (status === "rascunho") {
+        await createDevotionalDraft({
           ...payloadBase,
-          status,
-          publishNow,
+          criado_por_id: firebaseUser.uid,
         });
+        Alert.alert("Sucesso", "Rascunho salvo.");
+      } else if (publishNow) {
+        const id = await createDevotional({
+          ...payloadBase,
+          criado_por_id: firebaseUser.uid,
+          status,
+          publishNow: true,
+        });
+        Alert.alert("Sucesso", "Devocional publicado.", [
+          { text: "Editar", onPress: () => router.replace(`/admin/devotionals/${id}` as any) },
+          { text: "OK" },
+        ]);
+      } else {
+        const id = await createDevotional({
+          ...payloadBase,
+          criado_por_id: firebaseUser.uid,
+          status,
+        });
+        Alert.alert("Sucesso", "Devocional criado.", [
+          { text: "Editar", onPress: () => router.replace(`/admin/devotionals/${id}` as any) },
+          { text: "OK" },
+        ]);
       }
-
-      Alert.alert("Sucesso", "Devocional criado!", [
-        {
-          text: "Editar devocional",
-          onPress: () => router.replace(`/admin/devotionals/${id}` as any),
-        },
-        { text: "OK" },
-      ]);
     } catch (error: any) {
       console.error("Erro ao criar devocional:", error);
       Alert.alert("Erro", error?.message || "Falha ao criar devocional.");
@@ -117,173 +123,73 @@ export default function NewDevotionalScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Criar devocional</Text>
-      <Text style={styles.subtitle}>
-        Preencha os campos e escolha a ação desejada.
-      </Text>
+    <ScrollView
+      style={[
+        styles.container,
+        { backgroundColor: themeSettings?.cor_fundo || "#020617" },
+      ]}
+      contentContainerStyle={styles.content}
+    >
+      <Card title="Criar devocional" subtitle="Preencha os campos básicos e escolha a ação.">
+        <AppInput
+          label="Título"
+          placeholder="Ex.: Devocional sobre fé"
+          value={titulo}
+          onChangeText={setTitulo}
+        />
+        <AppInput
+          label="Data do devocional"
+          placeholder="YYYY-MM-DD"
+          value={dataDevocional}
+          onChangeText={setDataDevocional}
+        />
+        <AppInput
+          label="Data de publicação automática (opcional)"
+          placeholder="YYYY-MM-DD"
+          value={dataPublicacaoAuto}
+          onChangeText={setDataPublicacaoAuto}
+        />
+        <RichTextEditor
+          value={conteudoBase}
+          onChange={setConteudoBase}
+          placeholder="Conteúdo base"
+          minHeight={160}
+        />
 
-      <Text style={styles.label}>Título</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Ex.: Devocional sobre João 3"
-        placeholderTextColor="#6b7280"
-        value={titulo}
-        onChangeText={setTitulo}
-      />
-
-      <Text style={styles.label}>Data do devocional</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="YYYY-MM-DD ou DD/MM/YYYY"
-        placeholderTextColor="#6b7280"
-        value={dataDevocional}
-        onChangeText={setDataDevocional}
-      />
-
-      <Text style={styles.label}>Data de publicação automática (opcional)</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="YYYY-MM-DD ou DD/MM/YYYY"
-        placeholderTextColor="#6b7280"
-        value={dataPublicacaoAuto}
-        onChangeText={setDataPublicacaoAuto}
-      />
-
-      <Text style={styles.label}>Conteúdo base</Text>
-      <TextInput
-        style={[styles.input, styles.textarea]}
-        placeholder="Digite o conteúdo base..."
-        placeholderTextColor="#6b7280"
-        value={conteudoBase}
-        onChangeText={setConteudoBase}
-        multiline
-        textAlignVertical="top"
-      />
-
-      <View style={styles.actions}>
-        <Pressable
-          style={[styles.button, styles.buttonSecondary, isSubmitting && styles.disabled]}
-          onPress={() => handleCreate(DevotionalStatus.RASCUNHO)}
+        <View style={styles.actions}>
+          <AppButton
+            title={isSubmitting ? "Salvando..." : "Salvar rascunho"}
+            variant="secondary"
+            onPress={() => handleCreate("rascunho")}
+            disabled={isSubmitting}
+          />
+          <AppButton
+            title={isSubmitting ? "Disponibilizando..." : "Disponibilizar"}
+            variant="primary"
+            onPress={() => handleCreate("disponivel")}
+            disabled={isSubmitting}
+          />
+        </View>
+        <AppButton
+          title={isSubmitting ? "Publicando..." : "Publicar agora"}
+          variant="secondary"
+          onPress={() => handleCreate("publicado", true)}
           disabled={isSubmitting}
-        >
-          <Text style={styles.buttonSecondaryText}>
-            {isSubmitting ? "Salvando..." : "Salvar rascunho"}
-          </Text>
-        </Pressable>
-
-        <Pressable
-          style={[styles.button, styles.buttonPrimary, isSubmitting && styles.disabled]}
-          onPress={() => handleCreate(DevotionalStatus.DISPONIVEL)}
-          disabled={isSubmitting}
-        >
-          <Text style={styles.buttonPrimaryText}>
-            {isSubmitting ? "Enviando..." : "Disponibilizar"}
-          </Text>
-        </Pressable>
-      </View>
-
-      <Pressable
-        style={[styles.button, styles.buttonPublish, isSubmitting && styles.disabled]}
-        onPress={() => handleCreate(DevotionalStatus.PUBLICADO, true)}
-        disabled={isSubmitting}
-      >
-        <Text style={styles.buttonPublishText}>
-          {isSubmitting ? "Publicando..." : "Publicar agora"}
-        </Text>
-      </Pressable>
+        />
+      </Card>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#020617",
-  },
-  content: {
-    paddingHorizontal: 16,
-    paddingTop: 56,
-    paddingBottom: 24,
-    gap: 12,
-  },
+  container: { flex: 1 },
+  content: { paddingHorizontal: 16, paddingTop: 56, paddingBottom: 24, gap: 12 },
   center: {
     flex: 1,
     backgroundColor: "#020617",
     alignItems: "center",
     justifyContent: "center",
   },
-  loadingText: {
-    color: "#e5e7eb",
-    marginTop: 12,
-  },
-  title: {
-    color: "#e5e7eb",
-    fontSize: 22,
-    fontWeight: "700",
-  },
-  subtitle: {
-    color: "#9ca3af",
-    fontSize: 13,
-    marginBottom: 8,
-  },
-  label: {
-    color: "#e5e7eb",
-    fontSize: 14,
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  input: {
-    backgroundColor: "#020617",
-    borderWidth: 1,
-    borderColor: "#334155",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: "#e5e7eb",
-  },
-  textarea: {
-    minHeight: 160,
-  },
-  actions: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 12,
-  },
-  button: {
-    flex: 1,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  buttonSecondary: {
-    backgroundColor: "#111827",
-    borderWidth: 1,
-    borderColor: "#475569",
-  },
-  buttonSecondaryText: {
-    color: "#e5e7eb",
-    fontWeight: "600",
-  },
-  buttonPrimary: {
-    backgroundColor: "#22c55e",
-  },
-  buttonPrimaryText: {
-    color: "#022c22",
-    fontWeight: "700",
-  },
-  buttonPublish: {
-    backgroundColor: "#fbbf24",
-    marginTop: 10,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  buttonPublishText: {
-    color: "#78350f",
-    fontWeight: "700",
-  },
-  disabled: {
-    opacity: 0.7,
-  },
+  loadingText: { color: "#e5e7eb", marginTop: 12 },
+  actions: { flexDirection: "row", gap: 8, marginTop: 12 },
 });

@@ -1,15 +1,6 @@
-// app/admin/devotionals/[devotionalId].tsx
+// app/admin/devotionals/[devotionalId].tsx - edição de devocional com UI compartilhada
 import { useEffect, useRef, useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TextInput,
-  Pressable,
-  Alert,
-  ActivityIndicator,
-} from "react-native";
+import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { useAuth } from "../../../hooks/useAuth";
@@ -22,6 +13,12 @@ import {
   saveDevotionalDraft,
 } from "../../../lib/devotionals";
 import { DevotionalStatus, type Devotional } from "../../../types/devotional";
+import { Card } from "../../../components/ui/Card";
+import { AppInput } from "../../../components/ui/AppInput";
+import { AppButton } from "../../../components/ui/AppButton";
+import { RichTextEditor } from "../../../components/editor/RichTextEditor";
+import { StatusBadge } from "../../../components/ui/StatusBadge";
+import { useTheme } from "../../../hooks/useTheme";
 
 const AUTOSAVE_DELAY = 3000; // ms
 
@@ -29,6 +26,7 @@ export default function EditDevotionalScreen() {
   const router = useRouter();
   const { devotionalId } = useLocalSearchParams<{ devotionalId: string }>();
   const { firebaseUser, user, isInitializing } = useAuth();
+  const { themeSettings } = useTheme();
 
   const [devotional, setDevotional] = useState<Devotional | null>(null);
   const [titulo, setTitulo] = useState("");
@@ -42,7 +40,6 @@ export default function EditDevotionalScreen() {
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const autosaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Guard + carregar
   useEffect(() => {
     if (isInitializing) return;
     if (!firebaseUser) {
@@ -81,11 +78,11 @@ export default function EditDevotionalScreen() {
     }
 
     load();
-  }, [devotionalId, firebaseUser, isInitializing, router, user?.papel]);
+  }, [firebaseUser, isInitializing, devotionalId, router, user?.papel]);
 
   function validate() {
     if (!titulo.trim()) {
-      Alert.alert("Erro", "Informe o título do devocional.");
+      Alert.alert("Erro", "Informe o título.");
       return false;
     }
     if (!dataDevocional.trim()) {
@@ -99,40 +96,28 @@ export default function EditDevotionalScreen() {
     return true;
   }
 
-  async function checkDateDuplication(targetDate: string, ignoreId: string) {
-    const available = await isDevotionalDateAvailable(targetDate, ignoreId);
-    if (!available) {
-      Alert.alert("Atenção", "Já existe um devocional para essa data.");
-      return false;
-    }
-    return true;
-  }
-
-  async function handleUpdate(status: DevotionalStatus, publishNow = false, archive = false) {
-    if (!devotional) return;
-    if (!validate()) return;
-
-    const ok = await checkDateDuplication(dataDevocional.trim(), devotional.id);
-    if (!ok) return;
+  async function handleSave(status: DevotionalStatus, publishNow = false, archive = false) {
+    if (!validate() || !devotional) return;
 
     try {
       setIsSubmitting(true);
+      const dataPub = dataPublicacaoAuto.trim() || null;
 
-      await updateDevotionalBase({
-        devotionalId: devotional.id,
-        titulo: titulo.trim(),
-        conteudo_base: conteudoBase.trim(),
-        data_devocional: dataDevocional.trim(),
-        data_publicacao_auto: dataPublicacaoAuto.trim() || null,
-        status: archive ? DevotionalStatus.ARQUIVADO : status,
-        setPublishedNow: publishNow,
-        archive,
-      });
-
-      if (publishNow && status === DevotionalStatus.PUBLICADO) {
+      if (publishNow) {
         await publishDevotionalNow(devotional.id);
-      } else if (!publishNow && !archive && status !== DevotionalStatus.PUBLICADO) {
-        await setDevotionalStatus(devotional.id, archive ? DevotionalStatus.ARQUIVADO : status);
+      } else {
+        await setDevotionalStatus({
+          devotionalId: devotional.id,
+          status: archive ? ("arquivado" as DevotionalStatus) : status,
+          data_publicacao_auto: dataPub,
+        });
+        await updateDevotionalBase({
+          devotionalId: devotional.id,
+          titulo: titulo.trim(),
+          conteudo_base: conteudoBase.trim(),
+          data_devocional: dataDevocional.trim(),
+          data_publicacao_auto: dataPub,
+        });
       }
 
       Alert.alert("Sucesso", "Devocional atualizado.");
@@ -144,40 +129,40 @@ export default function EditDevotionalScreen() {
     }
   }
 
-  // Auto-save debounce
   useEffect(() => {
     if (!devotional) return;
-
-    if (autosaveTimeoutRef.current) {
-      clearTimeout(autosaveTimeoutRef.current);
-    }
-
-    autosaveTimeoutRef.current = setTimeout(async () => {
-      try {
-        setIsSavingDraft(true);
-        await saveDevotionalDraft({
-          devotionalId: devotional.id,
-          titulo: titulo.trim(),
-          conteudo_base: conteudoBase.trim(),
-          data_devocional: dataDevocional.trim(),
-          data_publicacao_auto: dataPublicacaoAuto.trim() || null,
-        });
-        setLastSavedAt(new Date());
-      } catch (error) {
-        console.error("Erro no auto-save de devocional:", error);
-      } finally {
-        setIsSavingDraft(false);
-      }
+    if (autosaveTimeoutRef.current) clearTimeout(autosaveTimeoutRef.current);
+    autosaveTimeoutRef.current = setTimeout(() => {
+      void handleAutoSave();
     }, AUTOSAVE_DELAY);
-
     return () => {
-      if (autosaveTimeoutRef.current) {
-        clearTimeout(autosaveTimeoutRef.current);
-      }
+      if (autosaveTimeoutRef.current) clearTimeout(autosaveTimeoutRef.current);
     };
-  }, [devotional, titulo, dataDevocional, conteudoBase, dataPublicacaoAuto]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [titulo, dataDevocional, conteudoBase, dataPublicacaoAuto]);
 
-  if (isInitializing || isLoading) {
+  async function handleAutoSave() {
+    if (!devotional) return;
+    try {
+      setIsSavingDraft(true);
+      const available = await isDevotionalDateAvailable(dataDevocional);
+      if (!available) return;
+      await saveDevotionalDraft({
+        devotionalId: devotional.id,
+        titulo: titulo.trim(),
+        conteudo_base: conteudoBase.trim(),
+        data_devocional: dataDevocional.trim(),
+        data_publicacao_auto: dataPublicacaoAuto.trim() || null,
+      });
+      setLastSavedAt(new Date());
+    } catch (error) {
+      console.error("Erro ao salvar rascunho:", error);
+    } finally {
+      setIsSavingDraft(false);
+    }
+  }
+
+  if (isLoading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#facc15" />
@@ -186,211 +171,89 @@ export default function EditDevotionalScreen() {
     );
   }
 
-  if (!devotional) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.loadingText}>Devocional não encontrado.</Text>
-      </View>
-    );
-  }
-
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Editar devocional</Text>
-      <Text style={styles.subtitle}>Atualize os campos e defina o status.</Text>
-
-      <Text style={styles.label}>Título</Text>
-      <TextInput
-        style={styles.input}
-        value={titulo}
-        onChangeText={setTitulo}
-        placeholderTextColor="#6b7280"
-      />
-
-      <Text style={styles.label}>Data do devocional</Text>
-      <TextInput
-        style={styles.input}
-        value={dataDevocional}
-        onChangeText={setDataDevocional}
-        placeholder="YYYY-MM-DD ou DD/MM/YYYY"
-        placeholderTextColor="#6b7280"
-      />
-
-      <Text style={styles.label}>Data de publicação automática (opcional)</Text>
-      <TextInput
-        style={styles.input}
-        value={dataPublicacaoAuto}
-        onChangeText={setDataPublicacaoAuto}
-        placeholder="YYYY-MM-DD ou DD/MM/YYYY"
-        placeholderTextColor="#6b7280"
-      />
-
-      <Text style={styles.label}>Conteúdo base</Text>
-      <TextInput
-        style={[styles.input, styles.textarea]}
-        value={conteudoBase}
-        onChangeText={setConteudoBase}
-        multiline
-        textAlignVertical="top"
-        placeholderTextColor="#6b7280"
-      />
-
-      <Text style={styles.saveInfo}>
-        {isSavingDraft
-          ? "Salvando rascunho..."
-          : lastSavedAt
-          ? `Rascunho salvo às ${lastSavedAt.toLocaleTimeString()}`
-          : "Rascunho salvo"}
-      </Text>
-
-      <View style={styles.actions}>
-        <Pressable
-          style={[styles.button, styles.buttonSecondary, isSubmitting && styles.disabled]}
-          onPress={() => handleUpdate(DevotionalStatus.RASCUNHO)}
-          disabled={isSubmitting}
-        >
-          <Text style={styles.buttonSecondaryText}>
-            {isSubmitting ? "Salvando..." : "Salvar rascunho"}
-          </Text>
-        </Pressable>
-
-        <Pressable
-          style={[styles.button, styles.buttonPrimary, isSubmitting && styles.disabled]}
-          onPress={() => handleUpdate(DevotionalStatus.DISPONIVEL)}
-          disabled={isSubmitting}
-        >
-          <Text style={styles.buttonPrimaryText}>
-            {isSubmitting ? "Atualizando..." : "Disponibilizar"}
-          </Text>
-        </Pressable>
-      </View>
-
-      <Pressable
-        style={[styles.button, styles.buttonPublish, isSubmitting && styles.disabled]}
-        onPress={() => handleUpdate(DevotionalStatus.PUBLICADO, true)}
-        disabled={isSubmitting}
+    <ScrollView
+      style={[
+        styles.container,
+        { backgroundColor: themeSettings?.cor_fundo || "#020617" },
+      ]}
+      contentContainerStyle={styles.content}
+    >
+      <Card
+        title="Editar devocional"
+        subtitle={devotional ? `Status: ${devotional.status}` : undefined}
+        footer={devotional ? <StatusBadge status={devotional.status} variant="devotional" /> : null}
       >
-        <Text style={styles.buttonPublishText}>
-          {isSubmitting ? "Publicando..." : "Publicar agora"}
-        </Text>
-      </Pressable>
+        <AppInput
+          label="Título"
+          placeholder="Ex.: Devocional sobre fé"
+          value={titulo}
+          onChangeText={setTitulo}
+        />
+        <AppInput
+          label="Data do devocional"
+          placeholder="YYYY-MM-DD"
+          value={dataDevocional}
+          onChangeText={setDataDevocional}
+        />
+        <AppInput
+          label="Data de publicação automática (opcional)"
+          placeholder="YYYY-MM-DD"
+          value={dataPublicacaoAuto}
+          onChangeText={setDataPublicacaoAuto}
+        />
+        <RichTextEditor
+          value={conteudoBase}
+          onChange={setConteudoBase}
+          placeholder="Conteúdo base"
+          minHeight={160}
+        />
 
-      <Pressable
-        style={[styles.button, styles.buttonArchive, isSubmitting && styles.disabled]}
-        onPress={() => handleUpdate(DevotionalStatus.ARQUIVADO, false, true)}
-        disabled={isSubmitting}
-      >
-        <Text style={styles.buttonArchiveText}>
-          {isSubmitting ? "Arquivando..." : "Arquivar devocional"}
-        </Text>
-      </Pressable>
+        <View style={styles.actions}>
+          <AppButton
+            title={isSubmitting || isSavingDraft ? "Salvando..." : "Salvar rascunho"}
+            variant="secondary"
+            onPress={() => handleSave("rascunho")}
+            disabled={isSubmitting || isSavingDraft}
+          />
+          <AppButton
+            title={isSubmitting ? "Disponibilizando..." : "Disponibilizar"}
+            variant="primary"
+            onPress={() => handleSave("disponivel")}
+            disabled={isSubmitting}
+          />
+        </View>
+
+        <View style={[styles.actions, { marginTop: 8 }]}>
+          <AppButton
+            title={isSubmitting ? "Publicando..." : "Publicar agora"}
+            variant="secondary"
+            onPress={() => handleSave("publicado", true, false)}
+            disabled={isSubmitting}
+          />
+          <AppButton
+            title="Arquivar"
+            variant="outline"
+            onPress={() => handleSave("publicado", false, true)}
+            disabled={isSubmitting}
+          />
+        </View>
+
+        {isSavingDraft ? (
+          <Text style={styles.savingText}>Salvando rascunho...</Text>
+        ) : lastSavedAt ? (
+          <Text style={styles.savingText}>Rascunho salvo {lastSavedAt.toLocaleTimeString()}</Text>
+        ) : null}
+      </Card>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#020617",
-  },
-  content: {
-    paddingHorizontal: 16,
-    paddingTop: 56,
-    paddingBottom: 24,
-    gap: 12,
-  },
-  center: {
-    flex: 1,
-    backgroundColor: "#020617",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  loadingText: {
-    color: "#e5e7eb",
-    marginTop: 12,
-  },
-  title: {
-    color: "#e5e7eb",
-    fontSize: 22,
-    fontWeight: "700",
-  },
-  subtitle: {
-    color: "#9ca3af",
-    fontSize: 13,
-    marginBottom: 8,
-  },
-  label: {
-    color: "#e5e7eb",
-    fontSize: 14,
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  input: {
-    backgroundColor: "#020617",
-    borderWidth: 1,
-    borderColor: "#334155",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: "#e5e7eb",
-  },
-  textarea: {
-    minHeight: 160,
-  },
-  saveInfo: {
-    color: "#9ca3af",
-    fontSize: 12,
-  },
-  actions: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 12,
-  },
-  button: {
-    flex: 1,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  buttonSecondary: {
-    backgroundColor: "#111827",
-    borderWidth: 1,
-    borderColor: "#475569",
-  },
-  buttonSecondaryText: {
-    color: "#e5e7eb",
-    fontWeight: "600",
-  },
-  buttonPrimary: {
-    backgroundColor: "#22c55e",
-  },
-  buttonPrimaryText: {
-    color: "#022c22",
-    fontWeight: "700",
-  },
-  buttonPublish: {
-    backgroundColor: "#fbbf24",
-    marginTop: 10,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  buttonPublishText: {
-    color: "#78350f",
-    fontWeight: "700",
-  },
-  buttonArchive: {
-    backgroundColor: "#7f1d1d",
-    marginTop: 10,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  buttonArchiveText: {
-    color: "#fecaca",
-    fontWeight: "700",
-  },
-  disabled: {
-    opacity: 0.7,
-  },
+  container: { flex: 1 },
+  content: { paddingHorizontal: 16, paddingTop: 56, paddingBottom: 24, gap: 12 },
+  center: { flex: 1, backgroundColor: "#020617", alignItems: "center", justifyContent: "center" },
+  loadingText: { color: "#e5e7eb", marginTop: 12 },
+  actions: { flexDirection: "row", gap: 8, marginTop: 12 },
+  savingText: { color: "#9ca3af", marginTop: 6 },
 });

@@ -1,20 +1,17 @@
-// app/admin/lessons/[lessonId].tsx
+// app/admin/lessons/[lessonId].tsx - edição de aula com componentes reutilizáveis
 import { useEffect, useRef, useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  Pressable,
-  Alert,
-  ScrollView,
-  ActivityIndicator,
-} from "react-native";
+import { View, Text, StyleSheet, Alert, ScrollView, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { useAuth } from "../../../hooks/useAuth";
 import { getLessonById, updateLesson } from "../../../lib/lessons";
 import type { LessonStatus, Lesson } from "../../../types/lesson";
+import { Card } from "../../../components/ui/Card";
+import { AppInput } from "../../../components/ui/AppInput";
+import { AppButton } from "../../../components/ui/AppButton";
+import { RichTextEditor } from "../../../components/editor/RichTextEditor";
+import { StatusBadge } from "../../../components/ui/StatusBadge";
+import { useTheme } from "../../../hooks/useTheme";
 
 const AUTOSAVE_DELAY = 3000; // ms
 
@@ -22,6 +19,7 @@ export default function EditLessonScreen() {
   const router = useRouter();
   const { lessonId } = useLocalSearchParams<{ lessonId: string }>();
   const { firebaseUser, user, isInitializing } = useAuth();
+  const { themeSettings } = useTheme();
 
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -122,41 +120,45 @@ export default function EditLessonScreen() {
     }
   }
 
-  // Auto-save debounce
+  // Auto-save rascunho
   useEffect(() => {
     if (!lesson) return;
 
     if (autosaveTimeoutRef.current) {
       clearTimeout(autosaveTimeoutRef.current);
     }
-
-    autosaveTimeoutRef.current = setTimeout(async () => {
-      try {
-        setIsSavingDraft(true);
-        await updateLesson({
-          lessonId: lesson.id,
-          titulo: titulo.trim(),
-          descricao_base: descricao.trim(),
-          data_aula: dataAula.trim(),
-          data_publicacao_auto: dataPublicacaoAuto.trim() || null,
-          setDraftSavedNow: true,
-        });
-        setLastSavedAt(new Date());
-      } catch (error) {
-        console.error("Erro no auto-save de aula:", error);
-      } finally {
-        setIsSavingDraft(false);
-      }
+    autosaveTimeoutRef.current = setTimeout(() => {
+      void handleAutoSave();
     }, AUTOSAVE_DELAY);
 
     return () => {
-      if (autosaveTimeoutRef.current) {
-        clearTimeout(autosaveTimeoutRef.current);
-      }
+      if (autosaveTimeoutRef.current) clearTimeout(autosaveTimeoutRef.current);
     };
-  }, [lesson, titulo, descricao, dataAula, dataPublicacaoAuto]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [titulo, dataAula, dataPublicacaoAuto, descricao]);
 
-  if (isInitializing || isLoading) {
+  async function handleAutoSave() {
+    if (!lesson) return;
+    try {
+      setIsSavingDraft(true);
+      await updateLesson({
+        lessonId: lesson.id,
+        titulo: titulo.trim(),
+        descricao_base: descricao.trim(),
+        data_aula: dataAula.trim(),
+        data_publicacao_auto: dataPublicacaoAuto.trim() || null,
+        status: lesson.status,
+        setDraftSavedNow: true,
+      });
+      setLastSavedAt(new Date());
+    } catch (error) {
+      console.error("Erro ao salvar rascunho:", error);
+    } finally {
+      setIsSavingDraft(false);
+    }
+  }
+
+  if (isLoading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#facc15" />
@@ -165,104 +167,80 @@ export default function EditLessonScreen() {
     );
   }
 
-  if (!lesson) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.loadingText}>Aula não encontrada.</Text>
-      </View>
-    );
-  }
-
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Editar aula</Text>
-      <Text style={styles.subtitle}>Atualize os dados e escolha a ação.</Text>
-
-      <Text style={styles.label}>Título da aula</Text>
-      <TextInput
-        style={styles.input}
-        value={titulo}
-        onChangeText={setTitulo}
-        placeholderTextColor="#6b7280"
-      />
-
-      <Text style={styles.label}>Data da aula</Text>
-      <TextInput
-        style={styles.input}
-        value={dataAula}
-        onChangeText={setDataAula}
-        placeholder="YYYY-MM-DD ou DD/MM/YYYY"
-        placeholderTextColor="#6b7280"
-      />
-
-      <Text style={styles.label}>Data de publicação automática (opcional)</Text>
-      <TextInput
-        style={styles.input}
-        value={dataPublicacaoAuto}
-        onChangeText={setDataPublicacaoAuto}
-        placeholder="YYYY-MM-DD ou DD/MM/YYYY"
-        placeholderTextColor="#6b7280"
-      />
-
-      <Text style={styles.label}>Descrição base</Text>
-      <TextInput
-        style={[styles.input, styles.textarea]}
-        value={descricao}
-        onChangeText={setDescricao}
-        multiline
-        textAlignVertical="top"
-        placeholderTextColor="#6b7280"
-      />
-
-      <Text style={styles.saveInfo}>
-        {isSavingDraft
-          ? "Salvando rascunho..."
-          : lastSavedAt
-          ? `Rascunho salvo às ${lastSavedAt.toLocaleTimeString()}`
-          : "Rascunho salvo"}
-      </Text>
-
-      <View style={styles.actions}>
-        <Pressable
-          style={[styles.button, styles.buttonSecondary, isSubmitting && styles.disabled]}
-          onPress={() => handleSave("rascunho" as LessonStatus)}
-          disabled={isSubmitting}
-        >
-          <Text style={styles.buttonSecondaryText}>
-            {isSubmitting ? "Salvando..." : "Salvar rascunho"}
-          </Text>
-        </Pressable>
-
-        <Pressable
-          style={[styles.button, styles.buttonPrimary, isSubmitting && styles.disabled]}
-          onPress={() => handleSave("disponivel" as LessonStatus)}
-          disabled={isSubmitting}
-        >
-          <Text style={styles.buttonPrimaryText}>
-            {isSubmitting ? "Atualizando..." : "Marcar disponível"}
-          </Text>
-        </Pressable>
-      </View>
-
-      <Pressable
-        style={[styles.button, styles.buttonPublish, isSubmitting && styles.disabled]}
-        onPress={() => handleSave("publicada" as LessonStatus, true)}
-        disabled={isSubmitting}
+    <ScrollView
+      style={[
+        styles.container,
+        { backgroundColor: themeSettings?.cor_fundo || "#020617" },
+      ]}
+      contentContainerStyle={styles.content}
+    >
+      <Card
+        title="Editar aula"
+        subtitle={lesson ? `Status atual: ${lesson.status}` : undefined}
+        footer={lesson ? <StatusBadge status={lesson.status} variant="lesson" /> : null}
       >
-        <Text style={styles.buttonPublishText}>
-          {isSubmitting ? "Publicando..." : "Publicar agora"}
-        </Text>
-      </Pressable>
+        <AppInput
+          label="Título da aula"
+          placeholder="Ex.: Aula sobre Romanos 8"
+          value={titulo}
+          onChangeText={setTitulo}
+        />
+        <AppInput
+          label="Data da aula"
+          placeholder="YYYY-MM-DD ou DD/MM/YYYY"
+          value={dataAula}
+          onChangeText={setDataAula}
+        />
+        <AppInput
+          label="Data de publicação automática (opcional)"
+          placeholder="YYYY-MM-DD ou DD/MM/YYYY"
+          value={dataPublicacaoAuto}
+          onChangeText={setDataPublicacaoAuto}
+        />
+        <RichTextEditor
+          value={descricao}
+          onChange={setDescricao}
+          placeholder="Digite a descrição base da aula..."
+          minHeight={160}
+        />
 
-      <Pressable
-        style={[styles.button, styles.buttonArchive, isSubmitting && styles.disabled]}
-        onPress={() => handleSave("arquivada" as LessonStatus, false, true)}
-        disabled={isSubmitting}
-      >
-        <Text style={styles.buttonArchiveText}>
-          {isSubmitting ? "Arquivando..." : "Arquivar aula"}
-        </Text>
-      </Pressable>
+        <View style={styles.actions}>
+          <AppButton
+            title={isSubmitting || isSavingDraft ? "Salvando..." : "Salvar rascunho"}
+            variant="secondary"
+            onPress={() => handleSave("rascunho", false, false)}
+            disabled={isSubmitting || isSavingDraft}
+          />
+          <AppButton
+            title={isSubmitting ? "Enviando..." : "Marcar disponível"}
+            variant="primary"
+            onPress={() => handleSave("disponivel", false, false)}
+            disabled={isSubmitting}
+          />
+        </View>
+
+        <View style={[styles.actions, { marginTop: 8 }]}>
+          <AppButton
+            title={isSubmitting ? "Publicando..." : "Publicar agora"}
+            variant="secondary"
+            onPress={() => handleSave("publicada", true, false)}
+            disabled={isSubmitting}
+          />
+          <AppButton
+            title="Arquivar aula"
+            variant="outline"
+            onPress={() => handleSave("publicada", false, true)}
+            disabled={isSubmitting}
+          />
+        </View>
+
+        {isSavingDraft ? (
+          <Text style={styles.savingText}>Salvando rascunho...</Text>
+        ) : lastSavedAt ? (
+          <Text style={styles.savingText}>Rascunho salvo {lastSavedAt.toLocaleTimeString()}</Text>
+        ) : null}
+      </Card>
     </ScrollView>
   );
 }
@@ -270,7 +248,6 @@ export default function EditLessonScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#020617",
   },
   content: {
     paddingHorizontal: 16,
@@ -288,89 +265,13 @@ const styles = StyleSheet.create({
     color: "#e5e7eb",
     marginTop: 12,
   },
-  title: {
-    color: "#e5e7eb",
-    fontSize: 22,
-    fontWeight: "700",
-  },
-  subtitle: {
-    color: "#9ca3af",
-    fontSize: 13,
-    marginBottom: 16,
-  },
-  label: {
-    color: "#e5e7eb",
-    fontSize: 14,
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  input: {
-    backgroundColor: "#020617",
-    borderWidth: 1,
-    borderColor: "#334155",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: "#e5e7eb",
-  },
-  textarea: {
-    minHeight: 140,
-    marginBottom: 4,
-  },
-  saveInfo: {
-    color: "#9ca3af",
-    fontSize: 12,
-  },
   actions: {
     flexDirection: "row",
     gap: 8,
     marginTop: 12,
   },
-  button: {
-    flex: 1,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  buttonSecondary: {
-    backgroundColor: "#111827",
-    borderWidth: 1,
-    borderColor: "#475569",
-  },
-  buttonSecondaryText: {
-    color: "#e5e7eb",
-    fontWeight: "600",
-  },
-  buttonPrimary: {
-    backgroundColor: "#22c55e",
-  },
-  buttonPrimaryText: {
-    color: "#022c22",
-    fontWeight: "700",
-  },
-  buttonPublish: {
-    backgroundColor: "#fbbf24",
-    marginTop: 10,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  buttonPublishText: {
-    color: "#78350f",
-    fontWeight: "700",
-  },
-  buttonArchive: {
-    backgroundColor: "#7f1d1d",
-    marginTop: 10,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  buttonArchiveText: {
-    color: "#fecaca",
-    fontWeight: "700",
-  },
-  disabled: {
-    opacity: 0.7,
+  savingText: {
+    color: "#9ca3af",
+    marginTop: 6,
   },
 });
