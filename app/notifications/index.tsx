@@ -1,4 +1,4 @@
-// app/notifications/index.tsx
+// app/notifications/index.tsx - centro de notificações com UI compartilhada
 import { useEffect, useMemo, useState } from "react";
 import {
   View,
@@ -20,12 +20,18 @@ import type {
   Notification,
   NotificationReferenceType,
 } from "../../types/notification";
+import { Card } from "../../components/ui/Card";
+import { AppButton } from "../../components/ui/AppButton";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { StatusBadge } from "../../components/ui/StatusBadge";
+import { useTheme } from "../../hooks/useTheme";
 
 type FilterKey = "todas" | NotificationReferenceType;
 
 export default function NotificationsScreen() {
   const router = useRouter();
   const { firebaseUser, isInitializing } = useAuth();
+  const { themeSettings } = useTheme();
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -118,221 +124,142 @@ export default function NotificationsScreen() {
   }
 
   function formatDate(value: any) {
-    // value pode ser Timestamp ou string
+    if (!value) return "";
     try {
-      if (value?.toDate) {
-        return new Date(value.toDate()).toLocaleString();
-      }
-      if (typeof value === "string") {
-        return new Date(value).toLocaleString();
-      }
-      return "";
+      const d = value.toDate ? value.toDate() : new Date(value);
+      return d.toLocaleString();
     } catch {
-      return "";
+      return String(value);
     }
   }
 
-  if (isInitializing || !firebaseUser) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#facc15" />
-        <Text style={styles.loadingText}>Carregando...</Text>
-      </View>
-    );
-  }
-
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.titleRow}>
-        <Text style={styles.title}>Notificações</Text>
-        <Pressable
-          style={[
-            styles.buttonSmall,
-            isMarkingAll && styles.buttonSmallDisabled,
-          ]}
-          onPress={handleMarkAll}
-          disabled={isMarkingAll}
-        >
-          <Text style={styles.buttonSmallText}>
-            {isMarkingAll ? "Marcando..." : "Marcar todas"}
-          </Text>
-        </Pressable>
-      </View>
+    <ScrollView
+      style={[
+        styles.container,
+        { backgroundColor: themeSettings?.cor_fundo || "#020617" },
+      ]}
+      contentContainerStyle={styles.content}
+    >
+      <Card
+        title="Notificações"
+        subtitle="Revise suas notificações e abra os detalhes."
+        footer={
+          <AppButton
+            title={isMarkingAll ? "Marcando..." : "Marcar todas como lidas"}
+            variant="outline"
+            fullWidth={false}
+            onPress={handleMarkAll}
+            disabled={isMarkingAll}
+          />
+        }
+      />
 
-      <View style={styles.filterRow}>
-        {(["todas", "aula", "reserva", "devocional", "noticia"] as FilterKey[]).map(
-          (key) => (
-            <Pressable
-              key={key}
-              style={[
-                styles.filterChip,
-                filter === key && styles.filterChipActive,
-              ]}
-              onPress={() => setFilter(key)}
-            >
-              <Text
-                style={[
-                  styles.filterChipText,
-                  filter === key && styles.filterChipTextActive,
-                ]}
+      <View style={styles.filters}>
+        {(["todas", "aula", "devocional", "noticia", "reserva"] as FilterKey[]).map(
+          (f) => {
+            const active = filter === f;
+            return (
+              <Pressable
+                key={f}
+                style={[styles.filterChip, active && styles.filterChipActive]}
+                onPress={() => setFilter(f)}
               >
-                {mapFilterLabel(key)}
-              </Text>
-            </Pressable>
-          )
+                <Text
+                  style={[styles.filterChipText, active && styles.filterChipTextActive]}
+                >
+                  {f === "todas" ? "Todas" : f}
+                </Text>
+              </Pressable>
+            );
+          }
         )}
       </View>
 
       {isLoading ? (
-        <View style={styles.centerInner}>
+        <View style={styles.center}>
           <ActivityIndicator size="large" color="#facc15" />
-          <Text style={styles.loadingText}>Buscando notificações...</Text>
+          <Text style={styles.loadingText}>Carregando notificações...</Text>
         </View>
       ) : filteredNotifications.length === 0 ? (
-        <View style={styles.emptyBox}>
-          <Text style={styles.emptyText}>Você ainda não tem notificações.</Text>
-        </View>
+        <EmptyState title="Você ainda não tem notificações." />
       ) : (
-        filteredNotifications.map((item) => (
-          <Pressable
-            key={item.id}
-            style={[styles.card, !item.lida && styles.cardUnread]}
-            onPress={() => void handlePressNotification(item)}
-          >
-            <View style={styles.cardHeader}>
-              <Text style={[styles.cardTitle, !item.lida && styles.cardTitleUnread]}>
-                {item.titulo}
-              </Text>
-              {!item.lida && <View style={styles.unreadDot} />}
-            </View>
-            <Text style={styles.cardMessage}>{item.mensagem}</Text>
-            <Text style={styles.cardDate}>{formatDate(item.created_at)}</Text>
-            {item.tipo_referencia && item.referencia_id && (
-              <Pressable
-                style={styles.buttonGhost}
-                onPress={() =>
-                  navigateToReference(item.tipo_referencia!, item.referencia_id!)
-                }
-              >
-                <Text style={styles.buttonGhostText}>Ver detalhes</Text>
-              </Pressable>
-            )}
-          </Pressable>
-        ))
+        filteredNotifications.map((item) => {
+          const isUnread = !item.lida;
+          return (
+            <Pressable
+              key={item.id}
+              style={[styles.card, isUnread && styles.cardUnread]}
+              onPress={() => handlePressNotification(item)}
+            >
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardTitle}>{item.titulo}</Text>
+                {isUnread && <Text style={styles.unreadDot}>•</Text>}
+              </View>
+              <Text style={styles.cardMessage}>{item.mensagem}</Text>
+              <View style={styles.cardFooter}>
+                <Text style={styles.cardDate}>{formatDate(item.created_at)}</Text>
+                <StatusBadge
+                  status={item.tipo_referencia || "notificação"}
+                  variant="news"
+                />
+              </View>
+            </Pressable>
+          );
+        })
       )}
     </ScrollView>
   );
 }
 
-function mapFilterLabel(key: FilterKey) {
-  switch (key) {
-    case "todas":
-      return "Todas";
-    case "aula":
-      return "Aulas";
-    case "reserva":
-      return "Reservas";
-    case "devocional":
-      return "Devocionais";
-    case "noticia":
-      return "Notícias";
-    case "outro":
-      return "Outros";
-    default:
-      return "Todas";
-  }
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#020617",
   },
   content: {
     paddingHorizontal: 16,
     paddingTop: 56,
-    paddingBottom: 32,
+    paddingBottom: 24,
     gap: 12,
   },
-  titleRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  title: {
-    color: "#e5e7eb",
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  buttonSmall: {
-    borderWidth: 1,
-    borderColor: "#22c55e",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
-  buttonSmallDisabled: {
-    opacity: 0.6,
-  },
-  buttonSmallText: {
-    color: "#bbf7d0",
-    fontWeight: "700",
-    fontSize: 12,
-  },
-  filterRow: {
+  filters: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
   },
   filterChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: "#1f2937",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    backgroundColor: "#0b1224",
   },
   filterChipActive: {
     borderColor: "#22c55e",
-    backgroundColor: "#022c22",
+    backgroundColor: "#22c55e22",
   },
   filterChipText: {
     color: "#cbd5e1",
-    fontSize: 12,
+    fontWeight: "500",
   },
   filterChipTextActive: {
-    color: "#bbf7d0",
+    color: "#e5e7eb",
     fontWeight: "700",
   },
   center: {
-    flex: 1,
-    backgroundColor: "#020617",
     alignItems: "center",
     justifyContent: "center",
-  },
-  centerInner: {
-    alignItems: "center",
-    gap: 8,
+    padding: 16,
   },
   loadingText: {
     color: "#e5e7eb",
     marginTop: 8,
   },
-  emptyBox: {
-    borderWidth: 1,
-    borderColor: "#1f2937",
-    borderRadius: 12,
-    padding: 16,
-  },
-  emptyText: {
-    color: "#9ca3af",
-    fontSize: 13,
-  },
   card: {
     borderWidth: 1,
     borderColor: "#1f2937",
     borderRadius: 12,
-    padding: 14,
+    padding: 12,
     backgroundColor: "#0b1224",
     gap: 6,
   },
@@ -341,43 +268,30 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
-    gap: 8,
+    alignItems: "center",
   },
   cardTitle: {
     color: "#e5e7eb",
     fontSize: 15,
     fontWeight: "700",
   },
-  cardTitleUnread: {
-    color: "#bbf7d0",
+  unreadDot: {
+    color: "#22c55e",
+    fontSize: 18,
+    fontWeight: "900",
   },
   cardMessage: {
     color: "#cbd5e1",
     fontSize: 13,
   },
+  cardFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
   cardDate: {
     color: "#94a3b8",
-    fontSize: 12,
-  },
-  unreadDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: "#22c55e",
-  },
-  buttonGhost: {
-    alignSelf: "flex-start",
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#334155",
-  },
-  buttonGhostText: {
-    color: "#bbf7d0",
-    fontWeight: "600",
     fontSize: 12,
   },
 });
