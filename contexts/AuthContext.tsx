@@ -31,7 +31,6 @@ type AuthContextValue = {
   isApproved: boolean;
   isPending: boolean;
   isRejected: boolean;
-  isProfileEmpty: boolean;
 
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (params: { nome: string; email: string; password: string }) => Promise<void>;
@@ -51,13 +50,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const userUnsubscribeRef = useRef<(() => void) | null>(null);
 
-  // Listener principal de autenticação (Firebase Auth)
+  // Listener principal de autenticacao (Firebase Auth)
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(firebaseAuth, (current) => {
       setFirebaseUser(current);
 
       if (!current) {
-        // usuário deslogado
+        // usuario deslogado
         setUser(null);
         setIsInitializing(false);
 
@@ -69,7 +68,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return;
       }
 
-      // Se tem usuário logado, escutamos o documento dele no Firestore
+      // Se tem usuario logado, escutamos o documento dele no Firestore
       const userDocRef = doc(firebaseDb, "users", current.uid);
 
       const unsubscribeUser = onSnapshot(
@@ -78,13 +77,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
           if (snapshot.exists()) {
             setUser(snapshot.data() as User);
           } else {
-            // Ainda não existe doc do usuário (vamos criar na Fase 2.3)
             setUser(null);
           }
           setIsInitializing(false);
         },
         (error) => {
-          console.error("Erro ao ouvir documento do usuário:", error);
+          console.error("Erro ao ouvir documento do usuario:", error);
           setIsInitializing(false);
         }
       );
@@ -105,7 +103,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     await signInWithEmailAndPassword(firebaseAuth, email, password);
   };
 
-  // Cadastro (por enquanto só cria no Auth)
+  // Cadastro via helper (principal fluxo cria doc em `users` na tela de registro)
   const signUp = async (params: {
     nome: string;
     email: string;
@@ -121,15 +119,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       password
     );
 
-    console.log("[signUp] Usuário criado no Auth:", cred.user.uid);
+    console.log("[signUp] Usuario criado no Auth:", cred.user.uid);
 
-    // ⚠️ IMPORTANTE:
-    // Ainda NÃO estamos criando o documento no Firestore aqui.
-    // Vamos fazer isso na Fase 2.3, quando o usuário completar o perfil
-    // (telefone, data de nascimento, status = "pendente", etc.).
-    //
-    // Por isso, o `user` do contexto ainda ficará null logo após o signup.
-    // Isso é esperado neste momento.
+    // Observacao: o cadastro completo deve criar o documento no Firestore.
+    // Este helper permanece apenas para usos pontuais e nao cria o doc de perfil.
   };
 
   const signOut = async () => {
@@ -143,7 +136,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const isApproved = status === "aprovado";
   const isPending = status === "pendente";
   const isRejected = status === "rejeitado";
-  const isProfileEmpty = status === "vazio";
 
   const value: AuthContextValue = {
     firebaseUser,
@@ -155,7 +147,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     isApproved,
     isPending,
     isRejected,
-    isProfileEmpty,
     signIn,
     signUp,
     signOut,

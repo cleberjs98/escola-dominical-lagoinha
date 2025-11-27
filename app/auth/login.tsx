@@ -3,7 +3,7 @@ import { useState } from "react";
 import { View, Text, StyleSheet, Alert } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 
 import { firebaseAuth, firebaseDb } from "../../lib/firebase";
 import { Card } from "../../components/ui/Card";
@@ -22,7 +22,7 @@ export default function LoginScreen() {
 
   function validate() {
     if (!isValidEmail(email)) {
-      Alert.alert("Erro", "Informe um email válido.");
+      Alert.alert("Erro", "Informe um email valido.");
       return false;
     }
     if (!isValidPassword(password)) {
@@ -37,10 +37,11 @@ export default function LoginScreen() {
 
     try {
       setIsSubmitting(true);
+      const trimmedEmail = email.trim();
 
       const cred = await signInWithEmailAndPassword(
         firebaseAuth,
-        email.trim(),
+        trimmedEmail,
         password
       );
 
@@ -49,16 +50,31 @@ export default function LoginScreen() {
       const snap = await getDoc(userRef);
 
       if (!snap.exists()) {
-        router.replace("/auth/complete-profile" as any);
+        await setDoc(userRef, {
+          id: uid,
+          nome: cred.user.displayName || trimmedEmail,
+          email: cred.user.email || trimmedEmail,
+          telefone: null,
+          data_nascimento: null,
+          papel: "aluno",
+          status: "pendente",
+          aprovado_por_id: null,
+          aprovado_em: null,
+          alterado_por_id: null,
+          alterado_em: serverTimestamp(),
+          papel_anterior: null,
+          motivo_rejeicao: null,
+          created_at: serverTimestamp(),
+          updated_at: serverTimestamp(),
+        });
+        router.replace("/auth/pending" as any);
         return;
       }
 
       const data = snap.data() as any;
-      const status = data.status ?? "vazio";
+      const status = data.status ?? "pendente";
 
-      if (status === "vazio") {
-        router.replace("/auth/complete-profile" as any);
-      } else if (status === "pendente" || status === "rejeitado") {
+      if (status === "pendente" || status === "rejeitado" || status === "vazio") {
         router.replace("/auth/pending" as any);
       } else {
         router.replace("/" as any);
@@ -104,7 +120,7 @@ export default function LoginScreen() {
           </Link>
         </View>
         <View style={styles.linksRow}>
-          <Text style={styles.smallText}>Ainda não tem conta? </Text>
+          <Text style={styles.smallText}>Ainda nao tem conta? </Text>
           <Link href="/auth/register" style={styles.linkText}>
             Criar conta
           </Link>

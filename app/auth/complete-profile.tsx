@@ -1,4 +1,5 @@
-// app/auth/complete-profile.tsx - completar perfil com validações
+// [DESATIVADA] Fluxo antigo de completar perfil. Mantido apenas para referencia.
+// app/auth/complete-profile.tsx - completar perfil com validacoes
 import { useEffect, useState } from "react";
 import {
   View,
@@ -57,7 +58,7 @@ export default function CompleteProfileScreen() {
           setNome(user?.nome ?? "");
         }
       } catch (error) {
-        console.error("Erro ao carregar doc do usuário:", error);
+        console.error("Erro ao carregar doc do usuario:", error);
       } finally {
         setIsLoadingUserDoc(false);
       }
@@ -83,11 +84,14 @@ export default function CompleteProfileScreen() {
       return false;
     }
     if (!isValidPhone(telefone)) {
-      Alert.alert("Erro", "Informe um telefone com ao menos 9 dígitos.");
+      Alert.alert("Erro", "Informe um telefone com ao menos 9 digitos.");
       return false;
     }
     if (dataNascimento.trim() && !isValidDateLike(dataNascimento)) {
-      Alert.alert("Erro", "Data de nascimento deve estar no formato YYYY-MM-DD ou DD/MM/YYYY.");
+      Alert.alert(
+        "Erro",
+        "Data de nascimento deve estar no formato YYYY-MM-DD ou DD/MM/YYYY."
+      );
       return false;
     }
     return true;
@@ -95,7 +99,7 @@ export default function CompleteProfileScreen() {
 
   async function handleSubmit() {
     if (!firebaseUser) {
-      Alert.alert("Erro", "Usuário não autenticado.");
+      Alert.alert("Erro", "Usuario nao autenticado.");
       return;
     }
     if (!validate()) return;
@@ -120,7 +124,7 @@ export default function CompleteProfileScreen() {
         { merge: true }
       );
 
-      Alert.alert("Sucesso", "Perfil atualizado. Aguarde aprovação.", [
+      Alert.alert("Sucesso", "Perfil atualizado. Aguarde aprovacao.", [
         { text: "OK", onPress: () => router.replace("/auth/pending" as any) },
       ]);
     } catch (error: any) {
@@ -151,7 +155,7 @@ export default function CompleteProfileScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <Card
           title="Completar perfil"
-          subtitle="Preencha seus dados básicos para enviarmos para aprovação."
+          subtitle="Preencha seus dados basicos para enviarmos para aprovacao."
         >
           <AppInput label="Nome completo" value={nome} onChangeText={setNome} />
           <AppInput
@@ -159,7 +163,7 @@ export default function CompleteProfileScreen() {
             value={telefone}
             onChangeText={handlePhoneChange}
             keyboardType="phone-pad"
-            placeholder="Apenas números"
+            placeholder="Apenas numeros"
           />
           <AppInput
             label="Data de nascimento (opcional)"
@@ -168,7 +172,7 @@ export default function CompleteProfileScreen() {
             placeholder="YYYY-MM-DD"
           />
           <AppButton
-            title={isSubmitting ? "Enviando..." : "Salvar e enviar para aprovação"}
+            title={isSubmitting ? "Enviando..." : "Salvar e enviar para aprovacao"}
             onPress={handleSubmit}
             loading={isSubmitting}
           />
