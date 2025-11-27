@@ -20,6 +20,7 @@ import {
   NotificationReferenceType,
   NotificationType,
 } from "../types/notification";
+import { sanitizeText } from "../utils/sanitize";
 
 /**
  * Índices recomendados (criar no console do Firestore):
@@ -48,12 +49,15 @@ export async function createLesson(params: CreateLessonParams) {
     publishNow = false,
   } = params;
 
+  const safeTitle = sanitizeText(titulo);
+  const safeDescription = sanitizeText(descricao_base);
+
   const colRef = collection(firebaseDb, "aulas");
   const now = serverTimestamp();
 
   const payload: Omit<Lesson, "id"> = {
-    titulo,
-    descricao_base,
+    titulo: safeTitle,
+    descricao_base: safeDescription,
     data_aula,
     data_publicacao_auto,
     status,
@@ -103,6 +107,11 @@ export async function updateLessonBase(params: UpdateLessonBaseParams) {
     updated_at: serverTimestamp() as any,
   };
 
+  if (payload.titulo) payload.titulo = sanitizeText(payload.titulo as any);
+  if (payload.descricao_base) {
+    payload.descricao_base = sanitizeText(payload.descricao_base as any);
+  }
+
   await updateDoc(ref, payload as any);
 }
 
@@ -128,6 +137,11 @@ export async function updateLesson(params: UpdateLessonParams) {
     ...fields,
     updated_at: serverTimestamp() as any,
   };
+
+  if (payload.titulo) payload.titulo = sanitizeText(payload.titulo as any);
+  if (payload.descricao_base) {
+    payload.descricao_base = sanitizeText(payload.descricao_base as any);
+  }
 
   if (setPublishedNow) {
     payload.publicado_em = serverTimestamp() as any;
@@ -308,7 +322,7 @@ export async function updateLessonComplement(
 ) {
   const ref = doc(firebaseDb, "aulas", lessonId);
   await updateDoc(ref, {
-    complemento_professor: complemento,
+    complemento_professor: sanitizeText(complemento),
     rascunho_salvo_em: serverTimestamp() as any,
     updated_at: serverTimestamp() as any,
   });
@@ -334,6 +348,11 @@ export async function saveLessonDraft(params: SaveLessonDraftParams) {
     rascunho_salvo_em: serverTimestamp() as any,
     updated_at: serverTimestamp() as any,
   };
+
+  if (payload.titulo) payload.titulo = sanitizeText(payload.titulo as any);
+  if (payload.descricao_base) {
+    payload.descricao_base = sanitizeText(payload.descricao_base as any);
+  }
 
   await updateDoc(ref, payload as any);
 }

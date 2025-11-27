@@ -10,6 +10,7 @@ import { Card } from "../../components/ui/Card";
 import { AppInput } from "../../components/ui/AppInput";
 import { AppButton } from "../../components/ui/AppButton";
 import { useTheme } from "../../hooks/useTheme";
+import { isValidEmail, isValidPassword } from "../../utils/validation";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -20,16 +21,12 @@ export default function LoginScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   function validate() {
-    if (!email.trim() || !password.trim()) {
-      Alert.alert("Erro", "Informe email e senha.");
-      return false;
-    }
-    if (!email.includes("@")) {
+    if (!isValidEmail(email)) {
       Alert.alert("Erro", "Informe um email válido.");
       return false;
     }
-    if (password.length < 6) {
-      Alert.alert("Erro", "A senha deve ter pelo menos 6 caracteres.");
+    if (!isValidPassword(password)) {
+      Alert.alert("Erro", "A senha deve ter pelo menos 8 caracteres.");
       return false;
     }
     return true;

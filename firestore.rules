@@ -1,125 +1,141 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helpers
     function isSignedIn() {
       return request.auth != null;
     }
-    function roleFromToken() {
-      return isSignedIn() ? (request.auth.token.role != null ? request.auth.token.role : null) : null;
+
+    function userDoc(uid) {
+      return get(/databases/$(database)/documents/users/$(uid));
     }
-    function roleFromDoc(uid) {
-      return isSignedIn() ? get(/databases/$(database)/documents/users/$(uid)).data.papel : null;
-    }
+
     function requestUserRole() {
-      return roleFromToken() != null ? roleFromToken() : roleFromDoc(request.auth.uid);
+      return isSignedIn()
+        ? (request.auth.token.role != null ? request.auth.token.role : userDoc(request.auth.uid).data.papel)
+        : null;
     }
+
+    function requestUserStatus() {
+      return isSignedIn() ? userDoc(request.auth.uid).data.status : null;
+    }
+
     function isAdmin()       { return requestUserRole() == 'administrador'; }
     function isCoordinator() { return requestUserRole() == 'coordenador'; }
     function isProfessor()   { return requestUserRole() == 'professor'; }
-    function isApprovedUser() {
-      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'aprovado';
-    }
+    function isApprovedUser() { return isSignedIn() && requestUserStatus() == 'aprovado'; }
 
     // Users
     match /users/{userId} {
       function isSelf() { return isSignedIn() && request.auth.uid == userId; }
+      function isNonAdminTarget() { return resource.data.papel != 'administrador'; }
+      function allowedProfileUpdate() {
+        return request.resource.data.diff(resource.data).changedKeys().hasOnly(['nome','telefone','data_nascimento','updated_at']) &&
+          request.resource.data.papel == resource.data.papel &&
+          request.resource.data.status == resource.data.status;
+      }
+      function allowedModerationUpdate() {
+        return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'papel','status','aprovado_por_id','aprovado_em','motivo_rejeicao',
+          'papel_anterior','alterado_por_id','alterado_em','updated_at','telefone','nome'
+        ]);
+      }
+
       allow get: if isSelf() || isCoordinator() || isAdmin();
       allow list: if isCoordinator() || isAdmin();
-      allow create: if isSelf() || isAdmin();
-      allow update: if isSelf() || isAdmin() || (isCoordinator() && resource.data.papel != 'administrador');
+      allow create: if isSignedIn() && (isSelf() || isAdmin());
+      allow update: if
+        (isSelf() && allowedProfileUpdate()) ||
+        (isCoordinator() && isNonAdminTarget() && allowedModerationUpdate()) ||
+        isAdmin();
       allow delete: if isAdmin() && request.auth.uid != userId;
     }
 
     // Aulas
     match /aulas/{id} {
-      allow get, list: if (resource.data.status == 'publicada') || isProfessor() || isCoordinator() || isAdmin();
+      function isAssignedProfessor() {
+        return isProfessor() && resource != null && resource.data.professor_reservado_id == request.auth.uid;
+      }
+      function professorFieldsOnly() {
+        return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'complemento_professor','rascunho_salvo_em','updated_at'
+        ]);
+      }
+
+      allow get, list: if resource.data.status == 'publicada' || isApprovedUser() || isCoordinator() || isAdmin();
       allow create, update: if isCoordinator() || isAdmin();
+      allow update: if isAssignedProfessor() && professorFieldsOnly();
       allow delete: if isAdmin();
     }
 
     // Reservas de aula
     match /reservas_aula/{id} {
-      allow create: if isProfessor() && request.resource.data.professor_id == request.auth.uid;
-      allow get, list: if isAdmin() || isCoordinator() ||
-        (isProfessor() && (
-          (request.resource != null && request.resource.data.professor_id == request.auth.uid) ||
-          (resource != null && resource.data.professor_id == request.auth.uid)
-        ));
-      allow update: if isAdmin() || isCoordinator();
+      allow create: if isProfessor()
+        && request.resource.data.professor_id == request.auth.uid
+        && request.resource.data.status == 'pendente';
+
+      allow get, list: if isAdmin() || isCoordinator()
+        || (isProfessor() && ((resource != null && resource.data.professor_id == request.auth.uid) || (request.resource != null && request.resource.data.professor_id == request.auth.uid)));
+
+      allow update: if (isAdmin() || isCoordinator())
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status','aprovado_por_id','aprovado_em','motivo_rejeicao']);
+
       allow delete: if false;
     }
 
     // Devocionais
     match /devocionais/{id} {
-      allow get, list: if isApprovedUser() && resource.data.status == 'publicado';
+      allow get, list: if (resource.data.status == 'publicado' && isApprovedUser()) || isCoordinator() || isAdmin();
       allow create, update, delete: if isCoordinator() || isAdmin();
     }
 
     // Noticias
     match /noticias/{id} {
-      allow get, list: if isApprovedUser() && resource.data.status == 'publicada';
-      allow create: if (isProfessor() || isCoordinator() || isAdmin()) &&
-        request.resource.data.autor_id == request.auth.uid;
-      allow update: if (isProfessor() && resource.data.autor_id == request.auth.uid) || isCoordinator() || isAdmin();
-      allow delete: if isCoordinator() || isAdmin();
+      function isAuthor() { return isSignedIn() && resource.data.autor_id == request.auth.uid; }
+      allow get, list: if (resource.data.status == 'publicada' && isApprovedUser()) || isCoordinator() || isAdmin() || isAuthor();
+      allow create: if (isProfessor() || isCoordinator() || isAdmin())
+        && request.resource.data.autor_id == request.auth.uid;
+      allow update: if
+        isAdmin() || isCoordinator() ||
+        (isProfessor() && isAuthor() && resource.data.status == 'rascunho'
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly(['titulo','conteudo','rascunho_salvo_em','updated_at']));
+      allow delete: if isAdmin() || isCoordinator() || (isAuthor() && resource.data.status == 'rascunho');
     }
 
     // Materiais de apoio
     match /materiais_apoio/{id} {
+      function isOwner() { return isSignedIn() && resource.data.enviado_por_id == request.auth.uid; }
       allow get, list: if isApprovedUser();
-      allow create: if isProfessor() || isCoordinator() || isAdmin();
-      allow update: if (isProfessor() && resource.data.enviado_por_id == request.auth.uid) || isCoordinator() || isAdmin();
-      allow delete: if (isProfessor() && resource.data.enviado_por_id == request.auth.uid) || isCoordinator() || isAdmin();
+      allow create: if (isProfessor() || isCoordinator() || isAdmin()) &&
+        request.resource.data.enviado_por_id == request.auth.uid;
+      allow update, delete: if isAdmin() || isCoordinator() || isOwner();
     }
 
     // Notificacoes
     match /notificacoes/{id} {
-      allow get, list: if isSignedIn() && request.auth.uid == resource.data.usuario_id;
+      function isOwner() { return isSignedIn() && resource.data.usuario_id == request.auth.uid; }
+      allow get, list: if isOwner();
       allow create: if isSignedIn() &&
-        (
-          request.resource.data.usuario_id == request.auth.uid ||
-          isCoordinator() ||
-          isAdmin()
-        );
-      allow update: if
-        (isSignedIn() &&
-          resource.data.usuario_id == request.auth.uid &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lida', 'lida_em']) &&
-          request.resource.data.usuario_id == resource.data.usuario_id) ||
-        isCoordinator() ||
-        isAdmin();
+        (request.resource.data.usuario_id == request.auth.uid || isCoordinator() || isAdmin());
+      allow update: if (isOwner() &&
+        request.resource.data.diff(resource.data).changedKeys().hasOnly(['lida','lida_em'])) || isCoordinator() || isAdmin();
       allow delete: if isAdmin();
     }
 
-    // Theme settings - apenas administradores
+    // Theme / Layout / Background / Navegacao / Layout de telas
     match /theme_settings/{id} {
-      allow get, list: if isAdmin();
-      allow create, update, delete: if isAdmin();
+      allow get, list, create, update, delete: if isAdmin();
     }
-
-    // Layout settings - apenas administradores
     match /layout_settings/{id} {
-      allow get, list: if isAdmin();
-      allow create, update, delete: if isAdmin();
+      allow get, list, create, update, delete: if isAdmin();
     }
-
-    // Backgrounds - apenas administradores
     match /backgrounds/{id} {
-      allow get, list: if isAdmin();
-      allow create, update, delete: if isAdmin();
+      allow get, list, create, update, delete: if isAdmin();
     }
-
-    // Navigation tabs - apenas administradores
     match /navigation_tabs/{id} {
-      allow get, list: if isAdmin();
-      allow create, update, delete: if isAdmin();
+      allow get, list, create, update, delete: if isAdmin();
     }
-
-    // Screen layouts - apenas administradores
     match /screen_layouts/{id} {
-      allow get, list: if isAdmin();
-      allow create, update, delete: if isAdmin();
+      allow get, list, create, update, delete: if isAdmin();
     }
   }
 }

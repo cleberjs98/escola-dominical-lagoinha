@@ -20,6 +20,7 @@ import {
   NotificationReferenceType,
   NotificationType,
 } from "../types/notification";
+import { sanitizeText } from "../utils/sanitize";
 
 /**
  * Índices recomendados (criar no console do Firestore):
@@ -48,12 +49,15 @@ export async function createDevotional(params: CreateDevotionalParams) {
     publishNow = false,
   } = params;
 
+  const safeTitle = sanitizeText(titulo);
+  const safeContent = sanitizeText(conteudo_base);
+
   const colRef = collection(firebaseDb, "devocionais");
   const now = serverTimestamp();
 
   const payload: Omit<Devotional, "id"> = {
-    titulo,
-    conteudo_base,
+    titulo: safeTitle,
+    conteudo_base: safeContent,
     data_devocional,
     data_publicacao_auto,
     status,
@@ -100,11 +104,26 @@ export async function updateDevotionalBase(params: UpdateDevotionalBaseParams) {
   const { devotionalId, setPublishedNow, archive, ...updates } = params;
   const ref = doc(firebaseDb, "devocionais", devotionalId);
 
+  if (updates.data_devocional) {
+    const available = await isDevotionalDateAvailable(
+      updates.data_devocional,
+      devotionalId
+    );
+    if (!available) {
+      throw new Error("Já existe devocional para esta data.");
+    }
+  }
+
   const payload: Partial<Devotional> = {
     ...updates,
     updated_at: serverTimestamp() as any,
     rascunho_salvo_em: serverTimestamp() as any,
   };
+
+  if (payload.titulo) payload.titulo = sanitizeText(payload.titulo as any);
+  if (payload.conteudo_base) {
+    payload.conteudo_base = sanitizeText(payload.conteudo_base as any);
+  }
 
   const shouldNotify =
     setPublishedNow === true || updates.status === ("publicado" as DevotionalStatus);
@@ -253,6 +272,11 @@ export async function saveDevotionalDraft(params: SaveDevotionalDraftParams) {
     rascunho_salvo_em: serverTimestamp() as any,
     updated_at: serverTimestamp() as any,
   };
+
+  if (payload.titulo) payload.titulo = sanitizeText(payload.titulo as any);
+  if (payload.conteudo_base) {
+    payload.conteudo_base = sanitizeText(payload.conteudo_base as any);
+  }
 
   await updateDoc(ref, payload as any);
 }

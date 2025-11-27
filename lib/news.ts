@@ -22,6 +22,7 @@ import {
   NotificationType,
 } from "../types/notification";
 import { listCoordinatorsAndAdminsIds } from "./users";
+import { sanitizeText } from "../utils/sanitize";
 
 /**
  * Índices recomendados:
@@ -42,9 +43,12 @@ export async function createNewsDraft(params: CreateNewsDraftParams) {
   const colRef = collection(firebaseDb, "noticias");
   const now = serverTimestamp();
 
+  const safeTitle = sanitizeText(titulo);
+  const safeContent = sanitizeText(conteudo);
+
   const payload: Omit<News, "id"> = {
-    titulo,
-    conteudo,
+    titulo: safeTitle,
+    conteudo: safeContent,
     autor_id,
     papel_autor,
     status: "rascunho" as NewsStatus,
@@ -75,6 +79,9 @@ export async function updateNewsBase(params: UpdateNewsBaseParams) {
     rascunho_salvo_em: serverTimestamp() as any,
     updated_at: serverTimestamp() as any,
   };
+
+  if (payload.titulo) payload.titulo = sanitizeText(payload.titulo as any);
+  if (payload.conteudo) payload.conteudo = sanitizeText(payload.conteudo as any);
 
   await updateDoc(ref, payload as any);
 }

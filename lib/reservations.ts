@@ -14,18 +14,18 @@ import {
 import { firebaseDb } from "./firebase";
 import type { Reservation, ReservationStatus } from "../types/reservation";
 import { createNotification } from "./notifications";
-import {
-  listCoordinatorsAndAdminsIds,
-} from "./users";
+import { listCoordinatorsAndAdminsIds } from "./users";
 import {
   NotificationReferenceType,
   NotificationType,
 } from "../types/notification";
+import { logAudit } from "./audit";
 
 /**
  * Índices recomendados (criar no console do Firestore):
  * - Collection "reservas_aula" com filtro aula_id (where aula_id == ...) -> índice em aula_id.
  * - Collection "reservas_aula" com filtro status e orderBy solicitado_em -> índice composto (status, solicitado_em).
+ * - Collection "reservas_aula" com filtros aula_id + professor_id + status (pendente/aprovada) para evitar duplicidade.
  */
 
 type RequestReservationParams = {
@@ -35,6 +35,18 @@ type RequestReservationParams = {
 
 export async function requestLessonReservation(params: RequestReservationParams) {
   const { lessonId, professorId } = params;
+
+  const duplicateSnap = await getDocs(
+    query(
+      collection(firebaseDb, "reservas_aula"),
+      where("aula_id", "==", lessonId),
+      where("professor_id", "==", professorId),
+      where("status", "in", ["pendente", "aprovada"])
+    )
+  );
+  if (!duplicateSnap.empty) {
+    throw new Error("Já existe uma reserva pendente ou aprovada para esta aula por este professor.");
+  }
 
   const colRef = collection(firebaseDb, "reservas_aula");
   const now = serverTimestamp();
@@ -50,8 +62,8 @@ export async function requestLessonReservation(params: RequestReservationParams)
   };
 
   const docRef = await addDoc(colRef, payload);
+  logAudit("request_reservation", { reservationId: docRef.id, lessonId, professorId });
 
-  // Notificar coordenadores/admins sobre a nova solicitação
   try {
     const adminIds = await listCoordinatorsAndAdminsIds();
     await Promise.all(
@@ -87,6 +99,7 @@ export async function approveReservation(params: ApproveReservationParams) {
     aprovado_por_id: aprovadorId,
     aprovado_em: serverTimestamp(),
   });
+  logAudit("approve_reservation", { reservationId, aprovadorId });
 }
 
 type RejectReservationParams = {
@@ -110,6 +123,7 @@ export async function rejectReservation(params: RejectReservationParams) {
     aprovado_em: serverTimestamp(),
     motivo_rejeicao: motivo,
   });
+  logAudit("reject_reservation", { reservationId, aprovadorId, motivo });
 
   try {
     await createNotification({
@@ -184,18 +198,31 @@ export async function approveReservationAndUpdateLesson(
     throw new Error("Dados da reserva incompletos (aula_id ou professor_id ausente).");
   }
 
+  const lessonRef = doc(firebaseDb, "aulas", aula_id);
+  const currentLesson = await getDoc(lessonRef);
+  if (currentLesson.exists()) {
+    const lessonData = currentLesson.data() as any;
+    if (
+      lessonData.status === "reservada" &&
+      lessonData.professor_reservado_id &&
+      lessonData.professor_reservado_id !== professor_id
+    ) {
+      throw new Error("Aula já reservada para outro professor.");
+    }
+  }
+
   await updateDoc(reservationRef, {
     status: "aprovada" as ReservationStatus,
     aprovado_por_id: aprovadorId,
     aprovado_em: serverTimestamp(),
   });
 
-  const lessonRef = doc(firebaseDb, "aulas", aula_id);
   await updateDoc(lessonRef, {
     status: "reservada",
     professor_reservado_id: professor_id,
     updated_at: serverTimestamp(),
   });
+  logAudit("approve_reservation", { reservationId, aprovadorId, lessonId: aula_id });
 
   try {
     await createNotification({
@@ -237,6 +264,7 @@ export async function rejectReservationAndKeepLesson(
     aprovado_em: serverTimestamp(),
     motivo_rejeicao: motivo,
   });
+  logAudit("reject_reservation", { reservationId, aprovadorId, motivo });
 
   try {
     await createNotification({

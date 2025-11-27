@@ -1,4 +1,4 @@
-// app/auth/complete-profile.tsx - completar perfil com UI compartilhada
+// app/auth/complete-profile.tsx - completar perfil com validações
 import { useEffect, useState } from "react";
 import {
   View,
@@ -20,6 +20,11 @@ import { Card } from "../../components/ui/Card";
 import { AppInput } from "../../components/ui/AppInput";
 import { AppButton } from "../../components/ui/AppButton";
 import { useTheme } from "../../hooks/useTheme";
+import {
+  isNonEmpty,
+  isValidDateLike,
+  isValidPhone,
+} from "../../utils/validation";
 
 export default function CompleteProfileScreen() {
   const router = useRouter();
@@ -73,12 +78,16 @@ export default function CompleteProfileScreen() {
   }
 
   function validate() {
-    if (!nome.trim()) {
+    if (!isNonEmpty(nome, 3)) {
       Alert.alert("Erro", "Informe o nome.");
       return false;
     }
-    if (!telefone.trim()) {
-      Alert.alert("Erro", "Informe o telefone.");
+    if (!isValidPhone(telefone)) {
+      Alert.alert("Erro", "Informe um telefone com ao menos 9 dígitos.");
+      return false;
+    }
+    if (dataNascimento.trim() && !isValidDateLike(dataNascimento)) {
+      Alert.alert("Erro", "Data de nascimento deve estar no formato YYYY-MM-DD ou DD/MM/YYYY.");
       return false;
     }
     return true;

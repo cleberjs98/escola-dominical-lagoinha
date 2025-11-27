@@ -14,6 +14,11 @@ import {
 import { Link, useRouter } from "expo-router";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { firebaseAuth } from "../../lib/firebase";
+import {
+  isNonEmpty,
+  isValidEmail,
+  isValidPassword,
+} from "../../utils/validation";
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -24,18 +29,18 @@ export default function RegisterScreen() {
   const [confirmPassword, setConfirmPassword] = useState("");
 
   function validate() {
-    if (!nome.trim()) {
+    if (!isNonEmpty(nome, 3)) {
       Alert.alert("Erro", "Informe seu nome completo.");
       return false;
     }
 
-    if (!email.trim() || !email.includes("@")) {
+    if (!isValidEmail(email)) {
       Alert.alert("Erro", "Informe um email válido.");
       return false;
     }
 
-    if (password.length < 6) {
-      Alert.alert("Erro", "A senha deve ter pelo menos 6 caracteres.");
+    if (!isValidPassword(password)) {
+      Alert.alert("Erro", "A senha deve ter pelo menos 8 caracteres.");
       return false;
     }
 
@@ -47,11 +52,10 @@ export default function RegisterScreen() {
     return true;
   }
 
-   async function handleRegister() {
+  async function handleRegister() {
     if (!validate()) return;
 
     try {
-      console.log("[Register] criando usuário direto no Firebase Auth...");
       const cred = await createUserWithEmailAndPassword(
         firebaseAuth,
         email.trim(),
@@ -59,9 +63,6 @@ export default function RegisterScreen() {
       );
       console.log("[Register] Usuário criado:", cred.user.uid);
 
-      // 🚀 Em vez de Alert, vamos redirecionar direto
-      console.log("[Register] Redirecionando para /auth/login...");
-      // Se estiver no web, ainda mostramos um alert do browser:
       if (typeof window !== "undefined") {
         window.alert("Conta criada com sucesso! Agora faça login.");
       }
@@ -69,7 +70,6 @@ export default function RegisterScreen() {
       router.replace("/auth/login");
     } catch (error: any) {
       console.error("Erro ao criar conta (register.tsx):", error);
-      // Aqui mantemos o Alert de erro (se não funcionar no web, pelo menos loga)
       Alert.alert(
         "Erro ao criar conta",
         error?.message || "Tente novamente mais tarde."
@@ -115,7 +115,7 @@ export default function RegisterScreen() {
 
             <Text style={styles.label}>Senha</Text>
             <TextInput
-              placeholder="••••••••"
+              placeholder="********"
               placeholderTextColor="#6b7280"
               style={styles.input}
               secureTextEntry
@@ -125,7 +125,7 @@ export default function RegisterScreen() {
 
             <Text style={styles.label}>Confirmar senha</Text>
             <TextInput
-              placeholder="••••••••"
+              placeholder="********"
               placeholderTextColor="#6b7280"
               style={styles.input}
               secureTextEntry

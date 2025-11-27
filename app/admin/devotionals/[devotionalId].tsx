@@ -1,4 +1,4 @@
-// app/admin/devotionals/[devotionalId].tsx - edição de devocional com UI compartilhada
+// app/admin/devotionals/[devotionalId].tsx - edição de devocional com validações reforçadas
 import { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -19,6 +19,7 @@ import { AppButton } from "../../../components/ui/AppButton";
 import { RichTextEditor } from "../../../components/editor/RichTextEditor";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { useTheme } from "../../../hooks/useTheme";
+import { isNonEmpty, isValidDateLike } from "../../../utils/validation";
 
 const AUTOSAVE_DELAY = 3000; // ms
 
@@ -81,15 +82,19 @@ export default function EditDevotionalScreen() {
   }, [firebaseUser, isInitializing, devotionalId, router, user?.papel]);
 
   function validate() {
-    if (!titulo.trim()) {
+    if (!isNonEmpty(titulo, 3)) {
       Alert.alert("Erro", "Informe o título.");
       return false;
     }
-    if (!dataDevocional.trim()) {
-      Alert.alert("Erro", "Informe a data do devocional.");
+    if (!isValidDateLike(dataDevocional)) {
+      Alert.alert("Erro", "Informe a data do devocional em YYYY-MM-DD ou DD/MM/YYYY.");
       return false;
     }
-    if (!conteudoBase.trim()) {
+    if (dataPublicacaoAuto.trim() && !isValidDateLike(dataPublicacaoAuto)) {
+      Alert.alert("Erro", "Data de publicação automática inválida.");
+      return false;
+    }
+    if (!isNonEmpty(conteudoBase, 3)) {
       Alert.alert("Erro", "Informe o conteúdo base.");
       return false;
     }
@@ -103,20 +108,28 @@ export default function EditDevotionalScreen() {
       setIsSubmitting(true);
       const dataPub = dataPublicacaoAuto.trim() || null;
 
+      // Verifica duplicidade de data ao salvar/atualizar
+      const available = await isDevotionalDateAvailable(dataDevocional.trim(), devotional.id);
+      if (!available) {
+        Alert.alert("Atenção", "Já existe um devocional para essa data.");
+        return;
+      }
+
       if (publishNow) {
         await publishDevotionalNow(devotional.id);
       } else {
-        await setDevotionalStatus({
-          devotionalId: devotional.id,
-          status: archive ? ("arquivado" as DevotionalStatus) : status,
-          data_publicacao_auto: dataPub,
-        });
+        if (archive) {
+          await setDevotionalStatus(devotional.id, "arquivado" as DevotionalStatus);
+        } else {
+          await setDevotionalStatus(devotional.id, status);
+        }
         await updateDevotionalBase({
           devotionalId: devotional.id,
           titulo: titulo.trim(),
           conteudo_base: conteudoBase.trim(),
           data_devocional: dataDevocional.trim(),
           data_publicacao_auto: dataPub,
+          status: archive ? ("arquivado" as DevotionalStatus) : status,
         });
       }
 
@@ -142,10 +155,10 @@ export default function EditDevotionalScreen() {
   }, [titulo, dataDevocional, conteudoBase, dataPublicacaoAuto]);
 
   async function handleAutoSave() {
-    if (!devotional) return;
+    if (!devotional || !validate()) return;
     try {
       setIsSavingDraft(true);
-      const available = await isDevotionalDateAvailable(dataDevocional);
+      const available = await isDevotionalDateAvailable(dataDevocional.trim(), devotional.id);
       if (!available) return;
       await saveDevotionalDraft({
         devotionalId: devotional.id,

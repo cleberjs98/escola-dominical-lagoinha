@@ -1,4 +1,4 @@
-// app/admin/lessons/new.tsx - criação de aula com componentes reutilizáveis
+// app/admin/lessons/new.tsx - criação de aula com validações reforçadas
 import { useEffect, useState } from "react";
 import { View, Text, StyleSheet, Alert, ScrollView, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
@@ -11,6 +11,7 @@ import { AppInput } from "../../../components/ui/AppInput";
 import { AppButton } from "../../../components/ui/AppButton";
 import { RichTextEditor } from "../../../components/editor/RichTextEditor";
 import { useTheme } from "../../../hooks/useTheme";
+import { isNonEmpty, isValidDateLike } from "../../../utils/validation";
 
 export default function NewLessonScreen() {
   const router = useRouter();
@@ -40,15 +41,19 @@ export default function NewLessonScreen() {
   }, [firebaseUser, isInitializing, router, user?.papel]);
 
   function validate() {
-    if (!titulo.trim()) {
+    if (!isNonEmpty(titulo, 3)) {
       Alert.alert("Erro", "Informe o título da aula.");
       return false;
     }
-    if (!dataAula.trim()) {
-      Alert.alert("Erro", "Informe a data da aula.");
+    if (!isValidDateLike(dataAula)) {
+      Alert.alert("Erro", "Informe a data da aula em YYYY-MM-DD ou DD/MM/YYYY.");
       return false;
     }
-    if (!descricao.trim()) {
+    if (dataPublicacaoAuto.trim() && !isValidDateLike(dataPublicacaoAuto)) {
+      Alert.alert("Erro", "Data de publicação automática inválida.");
+      return false;
+    }
+    if (!isNonEmpty(descricao, 3)) {
       Alert.alert("Erro", "Informe a descrição base.");
       return false;
     }

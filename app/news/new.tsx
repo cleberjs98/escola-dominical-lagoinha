@@ -1,4 +1,4 @@
-// app/news/new.tsx - criação de notícia com componentes reutilizáveis
+// app/news/new.tsx - criação de notícia com validações reforçadas
 import { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
@@ -10,6 +10,7 @@ import { AppInput } from "../../components/ui/AppInput";
 import { AppButton } from "../../components/ui/AppButton";
 import { RichTextEditor } from "../../components/editor/RichTextEditor";
 import { useTheme } from "../../hooks/useTheme";
+import { isNonEmpty } from "../../utils/validation";
 
 export default function NewNewsScreen() {
   const router = useRouter();
@@ -37,11 +38,11 @@ export default function NewNewsScreen() {
   }, [canPost, firebaseUser, isInitializing, router]);
 
   function validate() {
-    if (!titulo.trim()) {
+    if (!isNonEmpty(titulo, 3)) {
       Alert.alert("Erro", "Informe o título.");
       return false;
     }
-    if (!conteudo.trim()) {
+    if (!isNonEmpty(conteudo, 10)) {
       Alert.alert("Erro", "Informe o conteúdo.");
       return false;
     }

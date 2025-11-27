@@ -11,6 +11,7 @@ import {
 } from "firebase/firestore";
 import { firebaseDb } from "./firebase";
 import type { User, UserRole, UserStatus } from "../types/user";
+import { logAudit } from "./audit";
 
 type ApproveUserParams = {
   targetUserId: string; // id do doc em "users" (UID)
@@ -63,6 +64,7 @@ export async function approveUser(params: ApproveUserParams) {
   }
 
   await updateDoc(userRef, payload as any);
+  logAudit("approve_user", { targetUserId, approverId, newRole: finalRole });
 }
 
 export async function rejectUser(params: RejectUserParams) {
@@ -91,6 +93,7 @@ export async function rejectUser(params: RejectUserParams) {
   };
 
   await updateDoc(userRef, payload as any);
+  logAudit("reject_user", { targetUserId, approverId, reason });
 }
 
 export async function updateUserRole(params: UpdateUserRoleParams) {
@@ -118,6 +121,7 @@ export async function updateUserRole(params: UpdateUserRoleParams) {
   };
 
   await updateDoc(userRef, payload as any);
+  logAudit("change_role", { targetUserId, approverId, newRole, previous: existing.papel });
 }
 
 /**

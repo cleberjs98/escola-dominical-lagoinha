@@ -1,4 +1,4 @@
-// app/admin/devotionals/new.tsx - criação de devocional com componentes reutilizáveis
+// app/admin/devotionals/new.tsx - criação de devocional com validações reforçadas
 import { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
@@ -15,6 +15,7 @@ import { AppInput } from "../../../components/ui/AppInput";
 import { AppButton } from "../../../components/ui/AppButton";
 import { RichTextEditor } from "../../../components/editor/RichTextEditor";
 import { useTheme } from "../../../hooks/useTheme";
+import { isNonEmpty, isValidDateLike } from "../../../utils/validation";
 
 export default function NewDevotionalScreen() {
   const router = useRouter();
@@ -42,15 +43,19 @@ export default function NewDevotionalScreen() {
   }, [firebaseUser, isInitializing, router, user?.papel]);
 
   function validate() {
-    if (!titulo.trim()) {
+    if (!isNonEmpty(titulo, 3)) {
       Alert.alert("Erro", "Informe o título do devocional.");
       return false;
     }
-    if (!dataDevocional.trim()) {
-      Alert.alert("Erro", "Informe a data do devocional.");
+    if (!isValidDateLike(dataDevocional)) {
+      Alert.alert("Erro", "Informe a data do devocional em YYYY-MM-DD ou DD/MM/YYYY.");
       return false;
     }
-    if (!conteudoBase.trim()) {
+    if (dataPublicacaoAuto.trim() && !isValidDateLike(dataPublicacaoAuto)) {
+      Alert.alert("Erro", "Data de publicação automática inválida.");
+      return false;
+    }
+    if (!isNonEmpty(conteudoBase, 3)) {
       Alert.alert("Erro", "Informe o conteúdo base.");
       return false;
     }
