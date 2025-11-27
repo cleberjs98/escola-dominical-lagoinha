@@ -145,3 +145,31 @@ export async function listApprovedUsersIds(): Promise<string[]> {
   const snap = await getDocs(q);
   return snap.docs.map((docSnap) => docSnap.id);
 }
+
+type UpdateUserProfileParams = {
+  userId: string;
+  nome?: string;
+  telefone?: string | null;
+};
+
+/**
+ * Atualiza dados basicos do perfil (nome/telefone) do usuario.
+ * Evita enviar campos undefined para o Firestore.
+ */
+export async function updateUserProfile(params: UpdateUserProfileParams) {
+  const { userId, nome, telefone } = params;
+  if (!userId) throw new Error("ID do usuario obrigatorio.");
+
+  const payload: Partial<User> = {};
+  if (typeof nome === "string") payload.nome = nome;
+  if (telefone !== undefined) payload.telefone = telefone;
+  payload.updated_at = serverTimestamp() as any;
+
+  const { updated_at, ...rest } = payload;
+  if (Object.keys(rest).length === 0) {
+    // nada para atualizar alem de updated_at
+    return;
+  }
+
+  await updateDoc(doc(firebaseDb, "users", userId), payload as any);
+}
