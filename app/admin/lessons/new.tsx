@@ -1,24 +1,21 @@
-// app/admin/lessons/new.tsx
+// app/admin/lessons/new.tsx - criação de aula com componentes reutilizáveis
 import { useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  Pressable,
-  Alert,
-  ScrollView,
-  ActivityIndicator,
-} from "react-native";
+import { View, Text, StyleSheet, Alert, ScrollView, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 
 import { useAuth } from "../../../hooks/useAuth";
 import { createLesson } from "../../../lib/lessons";
 import { LessonStatus } from "../../../types/lesson";
+import { Card } from "../../../components/ui/Card";
+import { AppInput } from "../../../components/ui/AppInput";
+import { AppButton } from "../../../components/ui/AppButton";
+import { RichTextEditor } from "../../../components/editor/RichTextEditor";
+import { useTheme } from "../../../hooks/useTheme";
 
 export default function NewLessonScreen() {
   const router = useRouter();
   const { firebaseUser, user, isInitializing } = useAuth();
+  const { themeSettings } = useTheme();
 
   const [titulo, setTitulo] = useState("");
   const [dataAula, setDataAula] = useState("");
@@ -101,81 +98,61 @@ export default function NewLessonScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Criar aula</Text>
-      <Text style={styles.subtitle}>
-        Preencha os campos básicos e escolha a ação desejada.
-      </Text>
+    <ScrollView
+      style={[
+        styles.container,
+        { backgroundColor: themeSettings?.cor_fundo || "#020617" },
+      ]}
+      contentContainerStyle={styles.content}
+    >
+      <Card title="Criar aula" subtitle="Preencha os campos básicos e escolha a ação.">
+        <AppInput
+          label="Título da aula"
+          placeholder="Ex.: Aula sobre Romanos 8"
+          value={titulo}
+          onChangeText={setTitulo}
+        />
+        <AppInput
+          label="Data da aula"
+          placeholder="YYYY-MM-DD ou DD/MM/YYYY"
+          value={dataAula}
+          onChangeText={setDataAula}
+        />
+        <AppInput
+          label="Data de publicação automática (opcional)"
+          placeholder="YYYY-MM-DD ou DD/MM/YYYY"
+          value={dataPublicacaoAuto}
+          onChangeText={setDataPublicacaoAuto}
+        />
+        <RichTextEditor
+          value={descricao}
+          onChange={setDescricao}
+          placeholder="Digite a descrição base da aula..."
+          minHeight={160}
+        />
 
-      <Text style={styles.label}>Título da aula</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Ex.: Aula sobre Romanos 8"
-        placeholderTextColor="#6b7280"
-        value={titulo}
-        onChangeText={setTitulo}
-      />
+        <View style={styles.actions}>
+          <AppButton
+            title={isSubmitting ? "Salvando..." : "Salvar rascunho"}
+            variant="secondary"
+            onPress={() => handleCreate(LessonStatus.RASCUNHO)}
+            disabled={isSubmitting}
+          />
+          <AppButton
+            title={isSubmitting ? "Enviando..." : "Marcar disponível"}
+            variant="primary"
+            onPress={() => handleCreate(LessonStatus.DISPONIVEL)}
+            disabled={isSubmitting}
+          />
+        </View>
 
-      <Text style={styles.label}>Data da aula</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="YYYY-MM-DD ou DD/MM/YYYY"
-        placeholderTextColor="#6b7280"
-        value={dataAula}
-        onChangeText={setDataAula}
-      />
-
-      <Text style={styles.label}>Data de publicação automática (opcional)</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="YYYY-MM-DD ou DD/MM/YYYY"
-        placeholderTextColor="#6b7280"
-        value={dataPublicacaoAuto}
-        onChangeText={setDataPublicacaoAuto}
-      />
-
-      <Text style={styles.label}>Descrição base</Text>
-      <TextInput
-        style={[styles.input, styles.textarea]}
-        placeholder="Digite a descrição base da aula..."
-        placeholderTextColor="#6b7280"
-        value={descricao}
-        onChangeText={setDescricao}
-        multiline
-        textAlignVertical="top"
-      />
-
-      <View style={styles.actions}>
-        <Pressable
-          style={[styles.button, styles.buttonSecondary, isSubmitting && styles.disabled]}
-          onPress={() => handleCreate(LessonStatus.RASCUNHO)}
+        <AppButton
+          title={isSubmitting ? "Publicando..." : "Publicar agora"}
+          variant="secondary"
+          onPress={() => handleCreate(LessonStatus.PUBLICADA, true)}
           disabled={isSubmitting}
-        >
-          <Text style={styles.buttonSecondaryText}>
-            {isSubmitting ? "Salvando..." : "Salvar rascunho"}
-          </Text>
-        </Pressable>
-
-        <Pressable
-          style={[styles.button, styles.buttonPrimary, isSubmitting && styles.disabled]}
-          onPress={() => handleCreate(LessonStatus.DISPONIVEL)}
-          disabled={isSubmitting}
-        >
-          <Text style={styles.buttonPrimaryText}>
-            {isSubmitting ? "Enviando..." : "Marcar disponível"}
-          </Text>
-        </Pressable>
-      </View>
-
-      <Pressable
-        style={[styles.button, styles.buttonPublish, isSubmitting && styles.disabled]}
-        onPress={() => handleCreate(LessonStatus.PUBLICADA, true)}
-        disabled={isSubmitting}
-      >
-        <Text style={styles.buttonPublishText}>
-          {isSubmitting ? "Publicando..." : "Publicar agora"}
-        </Text>
-      </Pressable>
+        />
+      </Card>
     </ScrollView>
   );
 }
@@ -183,12 +160,12 @@ export default function NewLessonScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#020617",
   },
   content: {
     paddingHorizontal: 16,
     paddingTop: 56,
     paddingBottom: 24,
+    gap: 12,
   },
   center: {
     flex: 1,
@@ -200,75 +177,9 @@ const styles = StyleSheet.create({
     color: "#e5e7eb",
     marginTop: 12,
   },
-  title: {
-    color: "#e5e7eb",
-    fontSize: 22,
-    fontWeight: "700",
-    marginBottom: 4,
-  },
-  subtitle: {
-    color: "#9ca3af",
-    fontSize: 13,
-    marginBottom: 16,
-  },
-  label: {
-    color: "#e5e7eb",
-    fontSize: 14,
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  input: {
-    backgroundColor: "#020617",
-    borderWidth: 1,
-    borderColor: "#334155",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: "#e5e7eb",
-  },
-  textarea: {
-    minHeight: 140,
-    marginBottom: 8,
-  },
   actions: {
     flexDirection: "row",
     gap: 8,
     marginTop: 12,
-  },
-  button: {
-    flex: 1,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  buttonSecondary: {
-    backgroundColor: "#111827",
-    borderWidth: 1,
-    borderColor: "#475569",
-  },
-  buttonSecondaryText: {
-    color: "#e5e7eb",
-    fontWeight: "600",
-  },
-  buttonPrimary: {
-    backgroundColor: "#22c55e",
-  },
-  buttonPrimaryText: {
-    color: "#022c22",
-    fontWeight: "700",
-  },
-  buttonPublish: {
-    backgroundColor: "#fbbf24",
-    marginTop: 10,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  buttonPublishText: {
-    color: "#78350f",
-    fontWeight: "700",
-  },
-  disabled: {
-    opacity: 0.7,
   },
 });

@@ -1,4 +1,4 @@
-// app/professor/available-lessons.tsx
+// app/professor/available-lessons.tsx - reservas usando componentes reutilizáveis
 import { useEffect, useMemo, useState } from "react";
 import {
   View,
@@ -6,7 +6,6 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
-  Pressable,
   ScrollView,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -23,24 +22,29 @@ import { useAuth } from "../../hooks/useAuth";
 import { firebaseDb } from "../../lib/firebase";
 import { requestLessonReservation } from "../../lib/reservations";
 import type { Lesson } from "../../types/lesson";
+import { Card } from "../../components/ui/Card";
+import { AppButton } from "../../components/ui/AppButton";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { AulaCard } from "../../components/cards/AulaCard";
+import { useTheme } from "../../hooks/useTheme";
 
 type LessonWithId = Lesson;
 
 export default function AvailableLessonsScreen() {
   const router = useRouter();
   const { firebaseUser, user, isInitializing } = useAuth();
+  const { themeSettings } = useTheme();
 
   const [lessons, setLessons] = useState<LessonWithId[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [requestingIds, setRequestingIds] = useState<Set<string>>(new Set());
-  const [lockedLessons, setLockedLessons] = useState<Set<string>>(new Set()); // já solicitadas/aprovadas
+  const [lockedLessons, setLockedLessons] = useState<Set<string>>(new Set());
 
   const isProfessorApproved = useMemo(
     () => user?.papel === "professor" && user?.status === "aprovado",
     [user?.papel, user?.status]
   );
 
-  // Guard de acesso
   useEffect(() => {
     if (isInitializing) return;
     if (!firebaseUser) {
@@ -141,10 +145,7 @@ export default function AvailableLessonsScreen() {
         lessonId,
         professorId: firebaseUser.uid,
       });
-      Alert.alert(
-        "Sucesso",
-        "Reserva solicitada com sucesso. Aguarde aprovação."
-      );
+      Alert.alert("Sucesso", "Reserva solicitada com sucesso. Aguarde aprovação.");
       setLockedLessons((prev) => new Set(prev).add(lessonId));
     } catch (error: any) {
       console.error("Erro ao solicitar reserva:", error);
@@ -168,11 +169,17 @@ export default function AvailableLessonsScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Aulas disponíveis para reserva</Text>
-      <Text style={styles.subtitle}>
-        Escolha uma aula e solicite a reserva. Aguarde aprovação do coordenador/admin.
-      </Text>
+    <ScrollView
+      style={[
+        styles.container,
+        { backgroundColor: themeSettings?.cor_fundo || "#020617" },
+      ]}
+      contentContainerStyle={styles.content}
+    >
+      <Card
+        title="Aulas disponíveis para reserva"
+        subtitle="Escolha uma aula e solicite a reserva. Aguarde aprovação do coordenador/admin."
+      />
 
       {isLoading ? (
         <View style={styles.centerInner}>
@@ -180,43 +187,29 @@ export default function AvailableLessonsScreen() {
           <Text style={styles.loadingText}>Buscando aulas disponíveis...</Text>
         </View>
       ) : lessons.length === 0 ? (
-        <View style={styles.emptyBox}>
-          <Text style={styles.emptyText}>
-            Nenhuma aula disponível para reserva no momento.
-          </Text>
-        </View>
+        <EmptyState title="Nenhuma aula disponível para reserva no momento." />
       ) : (
         lessons.map((lesson) => {
           const locked = lockedLessons.has(lesson.id);
           const requesting = requestingIds.has(lesson.id);
           return (
-            <View key={lesson.id} style={styles.card}>
-              <Text style={styles.cardTitle}>{lesson.titulo}</Text>
-              <Text style={styles.cardLine}>Data: {String(lesson.data_aula)}</Text>
-              <Text style={styles.cardLine}>Status: {lesson.status}</Text>
-              <Text style={styles.cardDescription}>
-                {lesson.descricao_base.length > 140
-                  ? `${lesson.descricao_base.slice(0, 140)}...`
-                  : lesson.descricao_base}
-              </Text>
-
-              <Pressable
-                style={[
-                  styles.button,
-                  (locked || requesting) && styles.buttonDisabled,
-                ]}
-                onPress={() => handleRequest(lesson.id)}
-                disabled={locked || requesting}
-              >
-                <Text style={styles.buttonText}>
-                  {locked
-                    ? "Solicitação enviada"
-                    : requesting
-                    ? "Enviando..."
-                    : "Solicitar reserva"}
-                </Text>
-              </Pressable>
-            </View>
+            <Card
+              key={lesson.id}
+              footer={
+                <AppButton
+                  title={
+                    locked ? "Solicitação enviada" : requesting ? "Enviando..." : "Solicitar reserva"
+                  }
+                  variant="primary"
+                  fullWidth
+                  disabled={locked || requesting}
+                  loading={requesting}
+                  onPress={() => handleRequest(lesson.id)}
+                />
+              }
+            >
+              <AulaCard lesson={lesson} showStatus />
+            </Card>
           );
         })
       )}
@@ -227,23 +220,12 @@ export default function AvailableLessonsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#020617",
   },
   content: {
     paddingHorizontal: 16,
     paddingTop: 56,
     paddingBottom: 24,
     gap: 12,
-  },
-  title: {
-    color: "#e5e7eb",
-    fontSize: 22,
-    fontWeight: "700",
-  },
-  subtitle: {
-    color: "#9ca3af",
-    fontSize: 13,
-    marginBottom: 8,
   },
   center: {
     flex: 1,
@@ -258,51 +240,5 @@ const styles = StyleSheet.create({
   loadingText: {
     color: "#e5e7eb",
     marginTop: 12,
-  },
-  emptyBox: {
-    borderWidth: 1,
-    borderColor: "#1f2937",
-    borderRadius: 12,
-    padding: 16,
-  },
-  emptyText: {
-    color: "#9ca3af",
-    fontSize: 13,
-  },
-  card: {
-    borderWidth: 1,
-    borderColor: "#1f2937",
-    borderRadius: 12,
-    padding: 14,
-    backgroundColor: "#0b1224",
-    gap: 6,
-  },
-  cardTitle: {
-    color: "#e5e7eb",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  cardLine: {
-    color: "#cbd5e1",
-    fontSize: 13,
-  },
-  cardDescription: {
-    color: "#9ca3af",
-    fontSize: 13,
-    marginTop: 6,
-  },
-  button: {
-    marginTop: 10,
-    backgroundColor: "#22c55e",
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: "center",
-  },
-  buttonDisabled: {
-    backgroundColor: "#475569",
-  },
-  buttonText: {
-    color: "#022c22",
-    fontWeight: "700",
   },
 });

@@ -1,4 +1,4 @@
-// app/(tabs)/index.tsx - Home principal (copiado do conteudo anterior)
+// app/(tabs)/index.tsx - Home principal com componentes reutilizáveis
 import { useEffect, useMemo, useState } from "react";
 import {
   View,
@@ -20,10 +20,18 @@ import {
 import type { Devotional } from "../../types/devotional";
 import type { Lesson } from "../../types/lesson";
 import { useUnreadNotificationsCount } from "../../hooks/useUnreadNotificationsCount";
+import { Card } from "../../components/ui/Card";
+import { AppButton } from "../../components/ui/AppButton";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { AulaCard } from "../../components/cards/AulaCard";
+import { DevocionalCard } from "../../components/cards/DevocionalCard";
+import { Header } from "../../components/ui/Header";
+import { useTheme } from "../../hooks/useTheme";
 
 export default function HomeScreen() {
   const router = useRouter();
   const { firebaseUser, user, isInitializing, signOut } = useAuth();
+  const { themeSettings } = useTheme();
 
   const [devotionalOfDay, setDevotionalOfDay] = useState<Devotional | null>(null);
   const [isLoadingDevotional, setIsLoadingDevotional] = useState(false);
@@ -118,7 +126,6 @@ export default function HomeScreen() {
   const nome = user?.nome || firebaseUser.email || "Usuario";
   const status = user?.status || "vazio";
 
-  const isAluno = papel === "aluno";
   const isProfessor = papel === "professor";
   const isCoordenador = papel === "coordenador";
   const isAdmin = papel === "administrador";
@@ -168,191 +175,153 @@ export default function HomeScreen() {
 
   return (
     <ScrollView
-      style={styles.container}
+      style={[
+        styles.container,
+        { backgroundColor: themeSettings?.cor_fundo || "#020617" },
+      ]}
       contentContainerStyle={styles.contentContainer}
     >
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View style={styles.profileRow}>
-            {photoUrl ? (
-              <Image source={{ uri: photoUrl }} style={styles.avatar} />
-            ) : (
-              <View style={styles.avatarPlaceholder}>
-                <Text style={styles.avatarInitials}>{initials}</Text>
-              </View>
-            )}
-            <View>
-              <Text style={styles.welcome}>Bem-vindo(a)</Text>
-              <Text style={styles.name}>{nome}</Text>
-              <Text style={styles.infoLine}>{papelDisplay()}</Text>
-              <Pressable
-                style={styles.linkButton}
-                onPress={() => router.push("/(tabs)/profile" as any)}
-              >
-                <Text style={styles.linkButtonText}>Ver perfil</Text>
-              </Pressable>
-            </View>
-          </View>
-          {isApproved && (
+      <Header
+        title={`Bem-vindo(a), ${primeiroNome}`}
+        subtitle={bannerSubtitle()}
+        rightContent={
+          isApproved ? (
             <Pressable
               style={styles.bellContainer}
               onPress={() => router.push("/notifications" as any)}
             >
               <Text style={styles.bellIcon}>{"\uD83D\uDD14"}</Text>
-              {unreadCount > 0 && (
+              {unreadCount ? (
                 <View style={styles.badgeBubble}>
-                  <Text style={styles.badgeBubbleText}>
-                    {unreadCount > 99 ? "99+" : unreadCount}
-                  </Text>
+                  <Text style={styles.badgeBubbleText}>{unreadCount}</Text>
                 </View>
-              )}
+              ) : null}
             </Pressable>
+          ) : null
+        }
+      />
+
+      <Card>
+        <View style={styles.profileRow}>
+          {photoUrl ? (
+            <Image source={{ uri: photoUrl }} style={styles.avatar} />
+          ) : (
+            <View style={styles.avatarPlaceholder}>
+              <Text style={styles.avatarInitials}>{initials}</Text>
+            </View>
           )}
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={styles.welcome}>Olá, {primeiroNome}</Text>
+            <Text style={styles.infoLine}>{papelDisplay()}</Text>
+            <AppButton
+              title="Ver perfil"
+              variant="outline"
+              fullWidth={false}
+              onPress={() => router.push("/(tabs)/profile" as any)}
+            />
+          </View>
         </View>
-      </View>
+      </Card>
 
-      <View style={styles.banner}>
-        <Text style={styles.bannerTitle}>Seja bem-vindo(a), {primeiroNome}</Text>
-        <Text style={styles.bannerSubtitle}>{bannerSubtitle()}</Text>
-        {showSummaryNotifications && (
-          <Pressable
-            style={styles.bannerButton}
-            onPress={() => router.push("/notifications" as any)}
-          >
-            <Text style={styles.bannerButtonText}>
-              Voce tem {unreadCount} notificacao(oes)
-            </Text>
-          </Pressable>
-        )}
-      </View>
-
-      {status !== "aprovado" && (
-        <View style={styles.cardWarning}>
-          <Text style={styles.cardTitle}>Seu cadastro ainda nao foi aprovado</Text>
+      {showSummaryNotifications ? (
+        <Card
+          title="Notificações"
+          subtitle={`Você tem ${unreadCount} não lida(s).`}
+          footer={
+            <AppButton
+              title="Ver todas"
+              variant="outline"
+              fullWidth={false}
+              onPress={() => router.push("/notifications" as any)}
+            />
+          }
+          style={styles.cardWarning}
+        >
           <Text style={styles.cardText}>
-            Aguarde ate que a lideranca revise seus dados. Assim que for aprovado,
-            novas funcionalidades serao liberadas para voce.
+            Fique atento aos avisos e aprovações.
           </Text>
-          <Pressable
-            style={[styles.button, styles.buttonSecondary]}
-            onPress={() => router.replace("/auth/pending" as any)}
-          >
-            <Text style={styles.buttonSecondaryText}>Ver detalhes</Text>
-          </Pressable>
-        </View>
-      )}
+        </Card>
+      ) : null}
 
-      {status === "aprovado" && (
-        <View style={styles.card}>
-          <View style={styles.cardHeaderRow}>
-            <Text style={styles.cardTitle}>Devocional do dia</Text>
-            <Pressable
-              onPress={() => router.push("/(tabs)/devotionals" as any)}
-              style={styles.linkButton}
-            >
-              <Text style={styles.linkButtonText}>Ver todos</Text>
-            </Pressable>
-          </View>
-          {isLoadingDevotional ? (
-            <View style={styles.inlineCenter}>
-              <ActivityIndicator size="small" color="#facc15" />
-              <Text style={styles.loadingText}>Carregando devocional...</Text>
-            </View>
-          ) : devotionalOfDay ? (
-            <>
-              <Text style={styles.cardText}>{devotionalOfDay.titulo}</Text>
-              <Text style={styles.cardTextMuted}>
-                {String(devotionalOfDay.data_devocional)}
-              </Text>
-              <Text style={styles.cardPreview}>
-                {devotionalOfDay.conteudo_base.length > 160
-                  ? `${devotionalOfDay.conteudo_base.slice(0, 160)}...`
-                  : devotionalOfDay.conteudo_base}
-              </Text>
-              <Pressable
-                style={[styles.button, styles.buttonOutline]}
-                onPress={() => router.push(`/devotionals/${devotionalOfDay.id}` as any)}
-              >
-                <Text style={styles.buttonOutlineText}>Ver devocional completo</Text>
-              </Pressable>
-            </>
-          ) : (
-            <Text style={styles.cardTextMuted}>Nenhum devocional para hoje.</Text>
-          )}
-        </View>
-      )}
+      <Card
+        title="Devocional do Dia"
+        subtitle="Aprofunde-se na Palavra diariamente."
+        footer={
+          <AppButton
+            title="Ver todos"
+            variant="outline"
+            fullWidth={false}
+            onPress={() => router.push("/devotionals" as any)}
+          />
+        }
+      >
+        {isLoadingDevotional ? (
+          <ActivityIndicator color={themeSettings?.cor_info || "#facc15"} />
+        ) : devotionalOfDay ? (
+          <DevocionalCard
+            devotional={devotionalOfDay}
+            onPress={() => router.push(`/devotionals/${devotionalOfDay.id}` as any)}
+          />
+        ) : (
+          <EmptyState title="Nenhum devocional para hoje." />
+        )}
+      </Card>
 
-      {status === "aprovado" && (
-        <View style={styles.card}>
-          <View style={styles.cardHeaderRow}>
-            <Text style={styles.cardTitle}>Proximas aulas</Text>
-            <Pressable
+      <Card
+        title="Próximas aulas"
+        subtitle="Confira o que vem pela frente."
+        footer={
+          <AppButton
+            title="Ver todas"
+            variant="outline"
+            fullWidth={false}
+            onPress={() => router.push("/(tabs)/lessons" as any)}
+          />
+        }
+      >
+        {isLoadingLessons ? (
+          <ActivityIndicator color={themeSettings?.cor_info || "#facc15"} />
+        ) : nextLessons.length === 0 ? (
+          <EmptyState title="Nenhuma aula publicada no momento." />
+        ) : (
+          nextLessons.map((lesson) => (
+            <AulaCard
+              key={lesson.id}
+              lesson={lesson}
+              onPress={() => router.push(`/lessons/${lesson.id}` as any)}
+            />
+          ))
+        )}
+      </Card>
+
+      {isProfessor ? (
+        <Card
+          title="Minhas aulas reservadas"
+          subtitle="Acompanhe as aulas que você ministrará."
+          footer={
+            <AppButton
+              title="Ver todas"
+              variant="outline"
+              fullWidth={false}
               onPress={() => router.push("/(tabs)/lessons" as any)}
-              style={styles.linkButton}
-            >
-              <Text style={styles.linkButtonText}>Ver todas</Text>
-            </Pressable>
-          </View>
-          {isLoadingLessons ? (
-            <View style={styles.inlineCenter}>
-              <ActivityIndicator size="small" color="#facc15" />
-              <Text style={styles.loadingText}>Carregando aulas...</Text>
-            </View>
-          ) : nextLessons.length === 0 ? (
-            <Text style={styles.cardTextMuted}>Nenhuma aula publicada no momento.</Text>
-          ) : (
-            nextLessons.map((lesson) => (
-              <Pressable
-                key={lesson.id}
-                style={styles.lessonCard}
-                onPress={() => router.push(`/lessons/${lesson.id}` as any)}
-              >
-                <Text style={styles.lessonTitle}>{lesson.titulo}</Text>
-                <Text style={styles.lessonMeta}>Data: {String(lesson.data_aula)}</Text>
-                {lesson.professor_reservado_id && (
-                  <Text style={styles.lessonMeta}>
-                    Professor reservado: {lesson.professor_reservado_id}
-                  </Text>
-                )}
-              </Pressable>
-            ))
-          )}
-        </View>
-      )}
-
-      {status === "aprovado" && isProfessor && (
-        <View style={styles.card}>
-          <View style={styles.cardHeaderRow}>
-            <Text style={styles.cardTitle}>Minhas aulas reservadas</Text>
-            <Pressable
-              onPress={() => router.push("/professor/available-lessons" as any)}
-              style={styles.linkButton}
-            >
-              <Text style={styles.linkButtonText}>Reservar aula</Text>
-            </Pressable>
-          </View>
+            />
+          }
+        >
           {isLoadingMyLessons ? (
-            <View style={styles.inlineCenter}>
-              <ActivityIndicator size="small" color="#facc15" />
-              <Text style={styles.loadingText}>Carregando aulas...</Text>
-            </View>
+            <ActivityIndicator color={themeSettings?.cor_info || "#facc15"} />
           ) : myLessons.length === 0 ? (
-            <Text style={styles.cardTextMuted}>Voce ainda nao tem aulas reservadas.</Text>
+            <EmptyState title="Você ainda não tem aulas reservadas." />
           ) : (
             myLessons.map((lesson) => (
-              <Pressable
+              <AulaCard
                 key={lesson.id}
-                style={styles.lessonCard}
+                lesson={lesson}
                 onPress={() => router.push(`/lessons/${lesson.id}` as any)}
-              >
-                <Text style={styles.lessonTitle}>{lesson.titulo}</Text>
-                <Text style={styles.lessonMeta}>Data: {String(lesson.data_aula)}</Text>
-                <Text style={styles.lessonMeta}>Status: {lesson.status}</Text>
-              </Pressable>
+              />
             ))
           )}
-        </View>
-      )}
+        </Card>
+      ) : null}
 
       <View style={styles.footer}>
         <Pressable style={styles.logoutButton} onPress={handleSignOut}>
@@ -376,21 +345,10 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    backgroundColor: "#020617",
   },
   contentContainer: {
-    paddingHorizontal: 24,
-    paddingTop: 72,
+    padding: 16,
     paddingBottom: 32,
-    gap: 12,
-  },
-  header: {
-    marginBottom: 12,
-  },
-  headerTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
     gap: 12,
   },
   profileRow: {
@@ -420,24 +378,10 @@ const styles = StyleSheet.create({
     color: "#9ca3af",
     fontSize: 14,
   },
-  name: {
-    color: "#e5e7eb",
-    fontSize: 20,
-    fontWeight: "700",
-    marginTop: 2,
-  },
   infoLine: {
     color: "#9ca3af",
     marginTop: 2,
     fontSize: 13,
-  },
-  badge: {
-    color: "#facc15",
-    fontWeight: "600",
-  },
-  status: {
-    color: "#38bdf8",
-    fontWeight: "600",
   },
   bellContainer: {
     position: "relative",
@@ -465,140 +409,13 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "700",
   },
-  banner: {
-    backgroundColor: "#0b1224",
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#1f2937",
-    marginBottom: 12,
-    gap: 6,
-  },
-  bannerTitle: {
-    color: "#e5e7eb",
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  bannerSubtitle: {
-    color: "#cbd5e1",
-    fontSize: 13,
-  },
-  bannerButton: {
-    alignSelf: "flex-start",
-    marginTop: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#22c55e",
-    backgroundColor: "#022c22",
-  },
-  bannerButtonText: {
-    color: "#bbf7d0",
-    fontWeight: "700",
-    fontSize: 12,
-  },
-  card: {
-    backgroundColor: "#020617",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#1f2937",
-    padding: 16,
-    marginBottom: 16,
-    gap: 8,
-  },
   cardWarning: {
     backgroundColor: "#451a03",
-    borderRadius: 16,
-    borderWidth: 1,
     borderColor: "#92400e",
-    padding: 16,
-    marginBottom: 16,
-    gap: 8,
-  },
-  cardHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  cardTitle: {
-    color: "#e5e7eb",
-    fontSize: 16,
-    fontWeight: "600",
   },
   cardText: {
     color: "#d1d5db",
     fontSize: 13,
-  },
-  cardTextMuted: {
-    color: "#9ca3af",
-    fontSize: 13,
-  },
-  cardPreview: {
-    color: "#9ca3af",
-    fontSize: 13,
-  },
-  linkButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  linkButtonText: {
-    color: "#bbf7d0",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  button: {
-    backgroundColor: "#22c55e",
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 999,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 4,
-  },
-  buttonText: {
-    color: "#022c22",
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  buttonOutline: {
-    backgroundColor: "transparent",
-    borderWidth: 1,
-    borderColor: "#22c55e",
-    marginTop: 8,
-  },
-  buttonOutlineText: {
-    color: "#bbf7d0",
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  buttonSecondary: {
-    backgroundColor: "#111827",
-    borderWidth: 1,
-    borderColor: "#fde68a",
-  },
-  buttonSecondaryText: {
-    color: "#fbbf24",
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  lessonCard: {
-    borderWidth: 1,
-    borderColor: "#1f2937",
-    borderRadius: 12,
-    padding: 12,
-    backgroundColor: "#0b1224",
-    marginTop: 8,
-    gap: 4,
-  },
-  lessonTitle: {
-    color: "#e5e7eb",
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  lessonMeta: {
-    color: "#9ca3af",
-    fontSize: 12,
   },
   footer: {
     marginTop: 12,
@@ -612,10 +429,5 @@ const styles = StyleSheet.create({
     color: "#f97316",
     fontSize: 13,
     fontWeight: "500",
-  },
-  inlineCenter: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
   },
 });

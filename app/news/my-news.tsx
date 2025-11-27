@@ -1,27 +1,22 @@
-// app/news/my-news.tsx
+// app/news/my-news.tsx - lista de notícias do autor usando componentes compartilhados
 import { useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  ActivityIndicator,
-  Pressable,
-  Alert,
-} from "react-native";
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert } from "react-native";
 import { useRouter } from "expo-router";
 
 import { useAuth } from "../../hooks/useAuth";
-import {
-  listMyNews,
-  publishNewsNow,
-  deleteNews,
-} from "../../lib/news";
+import { listMyNews, publishNewsNow, deleteNews } from "../../lib/news";
 import type { News } from "../../types/news";
+import { Card } from "../../components/ui/Card";
+import { AppButton } from "../../components/ui/AppButton";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { NoticiaCard } from "../../components/cards/NoticiaCard";
+import { StatusBadge } from "../../components/ui/StatusBadge";
+import { useTheme } from "../../hooks/useTheme";
 
 export default function MyNewsScreen() {
   const router = useRouter();
   const { firebaseUser, user, isInitializing } = useAuth();
+  const { themeSettings } = useTheme();
 
   const [newsList, setNewsList] = useState<News[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -43,20 +38,7 @@ export default function MyNewsScreen() {
       return;
     }
 
-    async function load() {
-      try {
-        setIsLoading(true);
-        const list = await listMyNews(firebaseUser.uid);
-        setNewsList(list);
-      } catch (error) {
-        console.error("Erro ao carregar notícias:", error);
-        Alert.alert("Erro", "Não foi possível carregar suas notícias.");
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
-    load();
+    void reloadList();
   }, [canAccess, firebaseUser, isInitializing, router]);
 
   async function reloadList() {
@@ -66,8 +48,8 @@ export default function MyNewsScreen() {
       const list = await listMyNews(firebaseUser.uid);
       setNewsList(list);
     } catch (error) {
-      console.error("Erro ao recarregar notícias:", error);
-      Alert.alert("Erro", "Não foi possível recarregar suas notícias.");
+      console.error("Erro ao carregar notícias:", error);
+      Alert.alert("Erro", "Não foi possível carregar suas notícias.");
     } finally {
       setIsLoading(false);
     }
@@ -119,9 +101,25 @@ export default function MyNewsScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Minhas notícias</Text>
-      <Text style={styles.subtitle}>Crie, edite e publique suas notícias.</Text>
+    <ScrollView
+      style={[
+        styles.container,
+        { backgroundColor: themeSettings?.cor_fundo || "#020617" },
+      ]}
+      contentContainerStyle={styles.content}
+    >
+      <Card
+        title="Minhas notícias"
+        subtitle="Crie, edite e publique suas notícias."
+        footer={
+          <AppButton
+            title="Nova notícia"
+            variant="primary"
+            fullWidth={false}
+            onPress={() => router.push("/news/new" as any)}
+          />
+        }
+      />
 
       {isLoading ? (
         <View style={styles.centerInner}>
@@ -129,61 +127,65 @@ export default function MyNewsScreen() {
           <Text style={styles.loadingText}>Buscando notícias...</Text>
         </View>
       ) : newsList.length === 0 ? (
-        <View style={styles.emptyBox}>
-          <Text style={styles.emptyText}>Você ainda não criou notícias.</Text>
-        </View>
+        <EmptyState
+          title="Você ainda não criou notícias."
+          actionLabel="Criar agora"
+          onActionPress={() => router.push("/news/new" as any)}
+        />
       ) : (
         newsList.map((news) => {
           const isDraft = news.status === "rascunho";
           const isActing = actionId === news.id;
           return (
-            <View key={news.id} style={styles.card}>
-              <Text style={styles.cardTitle}>{news.titulo}</Text>
-              <Text style={styles.cardLine}>Status: {news.status}</Text>
-              {news.publicado_em && <Text style={styles.cardLine}>Publicado em: {String(news.publicado_em)}</Text>}
-              {news.data_expiracao && (
-                <Text style={styles.cardLine}>Expira em: {String(news.data_expiracao)}</Text>
-              )}
-
+            <Card
+              key={news.id}
+              title={news.titulo}
+              subtitle={
+                news.publicado_em
+                  ? `Publicado em: ${String(news.publicado_em)}`
+                  : "Rascunho"
+              }
+              footer={<StatusBadge status={news.status} variant="news" />}
+            >
+              <NoticiaCard news={news} showStatus />
               <View style={styles.actions}>
-                {isDraft && (
+                {isDraft ? (
                   <>
-                    <Pressable
-                      style={[styles.button, styles.buttonPrimary, isActing && styles.disabled]}
+                    <AppButton
+                      title="Editar"
+                      variant="primary"
+                      fullWidth={false}
                       onPress={() => router.push(`/news/edit/${news.id}` as any)}
                       disabled={isActing}
-                    >
-                      <Text style={styles.buttonPrimaryText}>Editar</Text>
-                    </Pressable>
-
-                    <Pressable
-                      style={[styles.button, styles.buttonSecondary, isActing && styles.disabled]}
+                      loading={isActing}
+                    />
+                    <AppButton
+                      title="Publicar"
+                      variant="secondary"
+                      fullWidth={false}
                       onPress={() => handlePublish(news.id)}
                       disabled={isActing}
-                    >
-                      <Text style={styles.buttonSecondaryText}>Publicar</Text>
-                    </Pressable>
-
-                    <Pressable
-                      style={[styles.button, styles.buttonDanger, isActing && styles.disabled]}
+                      loading={isActing}
+                    />
+                    <AppButton
+                      title="Deletar"
+                      variant="danger"
+                      fullWidth={false}
                       onPress={() => handleDelete(news.id)}
                       disabled={isActing}
-                    >
-                      <Text style={styles.buttonDangerText}>Deletar</Text>
-                    </Pressable>
+                      loading={isActing}
+                    />
                   </>
-                )}
-
-                {!isDraft && (
-                  <Pressable
-                    style={[styles.button, styles.buttonOutline]}
+                ) : (
+                  <AppButton
+                    title="Ver"
+                    variant="outline"
+                    fullWidth={false}
                     onPress={() => router.push(`/news/edit/${news.id}` as any)}
-                  >
-                    <Text style={styles.buttonOutlineText}>Ver</Text>
-                  </Pressable>
+                  />
                 )}
               </View>
-            </View>
+            </Card>
           );
         })
       )}
@@ -192,34 +194,10 @@ export default function MyNewsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#020617" },
+  container: { flex: 1 },
   content: { paddingHorizontal: 16, paddingTop: 56, paddingBottom: 24, gap: 12 },
   center: { flex: 1, backgroundColor: "#020617", alignItems: "center", justifyContent: "center" },
   centerInner: { alignItems: "center", marginTop: 12 },
   loadingText: { color: "#e5e7eb", marginTop: 12 },
-  title: { color: "#e5e7eb", fontSize: 22, fontWeight: "700" },
-  subtitle: { color: "#9ca3af", fontSize: 13, marginBottom: 8 },
-  emptyBox: { borderWidth: 1, borderColor: "#1f2937", borderRadius: 12, padding: 16 },
-  emptyText: { color: "#9ca3af", fontSize: 13 },
-  card: {
-    borderWidth: 1,
-    borderColor: "#1f2937",
-    borderRadius: 12,
-    padding: 14,
-    backgroundColor: "#0b1224",
-    gap: 6,
-  },
-  cardTitle: { color: "#e5e7eb", fontSize: 16, fontWeight: "700" },
-  cardLine: { color: "#cbd5e1", fontSize: 13 },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
-  button: { borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12, alignItems: "center" },
-  buttonPrimary: { backgroundColor: "#22c55e" },
-  buttonPrimaryText: { color: "#022c22", fontWeight: "700" },
-  buttonSecondary: { backgroundColor: "#fbbf24" },
-  buttonSecondaryText: { color: "#78350f", fontWeight: "700" },
-  buttonDanger: { backgroundColor: "#b91c1c" },
-  buttonDangerText: { color: "#fee2e2", fontWeight: "700" },
-  buttonOutline: { borderWidth: 1, borderColor: "#22c55e" },
-  buttonOutlineText: { color: "#bbf7d0", fontWeight: "600" },
-  disabled: { opacity: 0.7 },
 });
