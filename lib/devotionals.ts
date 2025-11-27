@@ -257,6 +257,56 @@ export async function saveDevotionalDraft(params: SaveDevotionalDraftParams) {
   await updateDoc(ref, payload as any);
 }
 
+// ---------- Busca de devocionais ----------
+export type DevotionalSearchFilters = {
+  termo?: string;
+  status?: DevotionalStatus | "todas";
+  dataMinima?: Devotional["data_devocional"] | null;
+};
+
+export async function searchDevotionals(
+  filters: DevotionalSearchFilters
+): Promise<Devotional[]> {
+  const { termo, status, dataMinima } = filters;
+  const colRef = collection(firebaseDb, "devocionais");
+  const conditions = [];
+  if (status && status !== "todas") {
+    conditions.push(where("status", "==", status));
+  } else {
+    conditions.push(where("status", "==", "publicado"));
+  }
+
+  const q = query(colRef, ...conditions, orderBy("data_devocional", "desc"));
+  const snap = await getDocs(q);
+  const list: Devotional[] = [];
+  snap.forEach((docSnap) => {
+    const data = docSnap.data() as Omit<Devotional, "id">;
+    // data mínima se fornecida (assume string ou Timestamp)
+    if (dataMinima) {
+      const millisDoc =
+        (data.data_devocional as any)?.toMillis?.() ??
+        (typeof data.data_devocional === "string"
+          ? Date.parse(data.data_devocional)
+          : 0);
+      const millisMin =
+        (dataMinima as any)?.toMillis?.() ??
+        (typeof dataMinima === "string" ? Date.parse(dataMinima) : 0);
+      if (millisDoc < millisMin) return;
+    }
+    list.push({ id: docSnap.id, ...data });
+  });
+
+  if (termo) {
+    const term = termo.toLowerCase();
+    return list.filter(
+      (d) =>
+        d.titulo.toLowerCase().includes(term) ||
+        d.conteudo_base.toLowerCase().includes(term)
+    );
+  }
+  return list;
+}
+
 async function notifyDevotionalPublished(devotionalId: string, titulo: string) {
   try {
     const userIds = await listApprovedUsersIds();

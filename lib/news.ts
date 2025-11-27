@@ -174,5 +174,36 @@ export async function deleteNews(newsId: string) {
 }
 
 /**
- * Nota: Cloud Function agendada pode limpar/arquivar notícias expiradas.
+ * Nota: Cloud Function agendada pode limpar/arquivar noticias expiradas.
  */
+
+// ---------- Busca de noticias ----------
+export type NewsSearchFilters = {
+  titulo?: string;
+  status?: NewsStatus | "todas";
+};
+
+export async function searchNews(filters: NewsSearchFilters): Promise<News[]> {
+  const { titulo, status } = filters;
+  const colRef = collection(firebaseDb, "noticias");
+  const conditions = [];
+  if (status && status !== "todas") {
+    conditions.push(where("status", "==", status));
+  } else {
+    conditions.push(where("status", "==", "publicada"));
+  }
+  const q = query(colRef, ...conditions, orderBy("publicado_em", "desc"));
+  const snap = await getDocs(q);
+
+  const list: News[] = [];
+  snap.forEach((docSnap) => {
+    const data = docSnap.data() as Omit<News, "id">;
+    list.push({ id: docSnap.id, ...data });
+  });
+
+  if (titulo) {
+    const term = titulo.toLowerCase();
+    return list.filter((n) => n.titulo.toLowerCase().includes(term));
+  }
+  return list;
+}

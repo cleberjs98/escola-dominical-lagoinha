@@ -68,6 +68,58 @@ export async function getActiveBackgrounds(): Promise<BackgroundSettings[]> {
   return list;
 }
 
+export async function listBackgroundsForSection(
+  secao: string
+): Promise<BackgroundSettings[]> {
+  const q = query(
+    collection(firebaseDb, BACKGROUNDS),
+    where("secao", "==", secao),
+    orderBy("created_at", "desc")
+  );
+  const snap = await getDocs(q);
+  const list: BackgroundSettings[] = [];
+  snap.forEach((docSnap) => {
+    const data = docSnap.data() as Omit<BackgroundSettings, "id">;
+    list.push({ id: docSnap.id, ...data });
+  });
+  return list;
+}
+
+export async function getActiveBackgroundForSection(
+  secao: string
+): Promise<BackgroundSettings | null> {
+  const q = query(
+    collection(firebaseDb, BACKGROUNDS),
+    where("secao", "==", secao),
+    where("ativo", "==", true),
+    limit(1)
+  );
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+  const docSnap = snap.docs[0];
+  const data = docSnap.data() as Omit<BackgroundSettings, "id">;
+  return { id: docSnap.id, ...data };
+}
+
+/**
+ * Marca um background como ativo e desativa os demais da mesma secao.
+ * Em producao, ideal seria transaction; aqui fazemos multiplos updates simples.
+ */
+export async function setActiveBackgroundForSection(
+  secao: string,
+  backgroundId: string
+) {
+  const list = await listBackgroundsForSection(secao);
+  await Promise.all(
+    list.map((bg) =>
+      updateDoc(doc(firebaseDb, BACKGROUNDS, bg.id), {
+        ativo: bg.id === backgroundId,
+        updated_at: serverTimestamp() as any,
+      })
+    )
+  );
+}
+
 // ----- NAVIGATION TABS -----
 
 export async function createNavigationTab(input: NavigationTabConfigInput) {
@@ -116,6 +168,21 @@ export async function listActiveNavigationTabs(): Promise<NavigationTabConfig[]>
     list.push({ id: docSnap.id, ...data });
   });
   return list;
+}
+
+/**
+ * Atualiza a ordem de varias tabs de uma vez.
+ * Em producao, o ideal seria uma batch/transaction; aqui usamos updates em serie.
+ */
+export async function reorderNavigationTabs(
+  items: { id: string; ordem: number }[]
+) {
+  for (const item of items) {
+    await updateDoc(doc(firebaseDb, NAV_TABS, item.id), {
+      ordem: item.ordem,
+      updated_at: serverTimestamp() as any,
+    });
+  }
 }
 
 // ----- SCREEN LAYOUTS -----

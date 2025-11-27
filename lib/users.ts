@@ -173,3 +173,46 @@ export async function updateUserProfile(params: UpdateUserProfileParams) {
 
   await updateDoc(doc(firebaseDb, "users", userId), payload as any);
 }
+
+// ---------- Busca de usuarios ----------
+export type UserSearchFilters = {
+  termo?: string;
+  papel?: UserRole | "todos";
+  status?: UserStatus | "todos";
+};
+
+export async function searchUsers(filters: UserSearchFilters): Promise<User[]> {
+  const { termo, papel, status } = filters;
+  const colRef = collection(firebaseDb, "users");
+  const conditions = [];
+  if (papel && papel !== "todos") {
+    conditions.push(where("papel", "==", papel));
+  }
+  if (status && status !== "todos") {
+    conditions.push(where("status", "==", status));
+  }
+
+  const q = conditions.length ? query(colRef, ...conditions) : query(colRef);
+  const snap = await getDocs(q);
+  const list: User[] = [];
+  snap.forEach((docSnap) => {
+    const data = docSnap.data() as Omit<User, "id">;
+    list.push({ id: docSnap.id, ...data });
+  });
+
+  if (termo) {
+    const term = termo.toLowerCase();
+    return list.filter((u) => {
+      const nome = u.nome?.toLowerCase?.() || "";
+      const email = (u as any).email?.toLowerCase?.() || "";
+      const tel = u.telefone?.toLowerCase?.() || "";
+      return (
+        nome.includes(term) ||
+        email.includes(term) ||
+        tel.includes(term)
+      );
+    });
+  }
+
+  return list;
+}

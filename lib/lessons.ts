@@ -234,6 +234,70 @@ export async function listLessonsForProfessor(
   return list;
 }
 
+// ---------- Busca de aulas ----------
+export type LessonSearchFilters = {
+  titulo?: string;
+  status?: LessonStatus | "todas";
+  dataMinima?: Date | null;
+  professorId?: string | null;
+  somentePublicadas?: boolean;
+  somenteFuturas?: boolean;
+};
+
+export async function searchLessons(filters: LessonSearchFilters): Promise<Lesson[]> {
+  const {
+    titulo,
+    status,
+    dataMinima,
+    professorId,
+    somentePublicadas = true,
+    somenteFuturas = false,
+  } = filters;
+
+  const colRef = collection(firebaseDb, "aulas");
+  const conditions = [];
+  if (status && status !== "todas") {
+    conditions.push(where("status", "==", status));
+  } else if (somentePublicadas) {
+    conditions.push(where("status", "==", "publicada"));
+  }
+  if (professorId) {
+    conditions.push(where("professor_reservado_id", "==", professorId));
+  }
+
+  const q = conditions.length
+    ? query(colRef, ...conditions, orderBy("data_aula", "desc"))
+    : query(colRef, orderBy("data_aula", "desc"));
+
+  const snap = await getDocs(q);
+  const list: Lesson[] = [];
+  const now = Date.now();
+  snap.forEach((docSnap) => {
+    const data = docSnap.data() as Omit<Lesson, "id">;
+    // filtro data futura
+    if (somenteFuturas) {
+      const millis =
+        (data.data_aula as any)?.toMillis?.() ??
+        (typeof data.data_aula === "string" ? Date.parse(data.data_aula) : now);
+      if (millis < now) return;
+    }
+    // filtro data minima
+    if (dataMinima) {
+      const millis =
+        (data.data_aula as any)?.toMillis?.() ??
+        (typeof data.data_aula === "string" ? Date.parse(data.data_aula) : 0);
+      if (millis < dataMinima.getTime()) return;
+    }
+    list.push({ id: docSnap.id, ...data });
+  });
+
+  if (titulo) {
+    const term = titulo.toLowerCase();
+    return list.filter((l) => l.titulo.toLowerCase().includes(term));
+  }
+  return list;
+}
+
 /**
  * Atualiza o complemento do professor em uma aula reservada/publicada.
  * Usa serverTimestamp para rascunho_salvo_em e updated_at.
