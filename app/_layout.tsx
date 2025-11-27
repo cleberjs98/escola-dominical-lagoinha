@@ -4,6 +4,7 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { View } from "react-native";
 import { AuthProvider } from "../contexts/AuthContext";
+import { ThemeProvider } from "../contexts/ThemeContext";
 import { useAuth } from "../hooks/useAuth";
 
 function PendingGuard() {
@@ -33,18 +34,20 @@ function PendingGuard() {
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <View style={{ flex: 1, backgroundColor: "#020617" }}>
-        <StatusBar style="light" />
-        <PendingGuard />
-        <Stack
-          screenOptions={{
-            headerStyle: { backgroundColor: "#020617" },
-            headerTintColor: "#e5e7eb",
-            headerTitleStyle: { fontWeight: "600" },
-            contentStyle: { backgroundColor: "#020617" },
-          }}
-        />
-      </View>
+      <ThemeProvider>
+        <View style={{ flex: 1, backgroundColor: "#020617" }}>
+          <StatusBar style="light" />
+          <PendingGuard />
+          <Stack
+            screenOptions={{
+              headerStyle: { backgroundColor: "#020617" },
+              headerTintColor: "#e5e7eb",
+              headerTitleStyle: { fontWeight: "600" },
+              contentStyle: { backgroundColor: "#020617" },
+            }}
+          />
+        </View>
+      </ThemeProvider>
     </AuthProvider>
   );
 }

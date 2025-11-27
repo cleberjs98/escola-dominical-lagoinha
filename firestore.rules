@@ -1,27 +1,22 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helpers de autenticação e papel
+    // Helpers
     function isSignedIn() {
       return request.auth != null;
     }
-
     function roleFromToken() {
       return isSignedIn() ? (request.auth.token.role != null ? request.auth.token.role : null) : null;
     }
-
     function roleFromDoc(uid) {
       return isSignedIn() ? get(/databases/$(database)/documents/users/$(uid)).data.papel : null;
     }
-
     function requestUserRole() {
       return roleFromToken() != null ? roleFromToken() : roleFromDoc(request.auth.uid);
     }
-
     function isAdmin()       { return requestUserRole() == 'administrador'; }
     function isCoordinator() { return requestUserRole() == 'coordenador'; }
     function isProfessor()   { return requestUserRole() == 'professor'; }
-
     function isApprovedUser() {
       return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'aprovado';
     }
@@ -29,7 +24,6 @@ service cloud.firestore {
     // Users
     match /users/{userId} {
       function isSelf() { return isSignedIn() && request.auth.uid == userId; }
-
       allow get: if isSelf() || isCoordinator() || isAdmin();
       allow list: if isCoordinator() || isAdmin();
       allow create: if isSelf() || isAdmin();
@@ -62,16 +56,12 @@ service cloud.firestore {
       allow create, update, delete: if isCoordinator() || isAdmin();
     }
 
-    // Notícias
+    // Noticias
     match /noticias/{id} {
       allow get, list: if isApprovedUser() && resource.data.status == 'publicada';
-
       allow create: if (isProfessor() || isCoordinator() || isAdmin()) &&
         request.resource.data.autor_id == request.auth.uid;
-
-      allow update: if (isProfessor() && resource.data.autor_id == request.auth.uid) ||
-        isCoordinator() || isAdmin();
-
+      allow update: if (isProfessor() && resource.data.autor_id == request.auth.uid) || isCoordinator() || isAdmin();
       allow delete: if isCoordinator() || isAdmin();
     }
 
@@ -79,23 +69,19 @@ service cloud.firestore {
     match /materiais_apoio/{id} {
       allow get, list: if isApprovedUser();
       allow create: if isProfessor() || isCoordinator() || isAdmin();
-      allow update: if (isProfessor() && resource.data.enviado_por_id == request.auth.uid) ||
-        isCoordinator() || isAdmin();
-      allow delete: if (isProfessor() && resource.data.enviado_por_id == request.auth.uid) ||
-        isCoordinator() || isAdmin();
+      allow update: if (isProfessor() && resource.data.enviado_por_id == request.auth.uid) || isCoordinator() || isAdmin();
+      allow delete: if (isProfessor() && resource.data.enviado_por_id == request.auth.uid) || isCoordinator() || isAdmin();
     }
 
-    // Notifica��es
+    // Notificacoes
     match /notificacoes/{id} {
       allow get, list: if isSignedIn() && request.auth.uid == resource.data.usuario_id;
-
       allow create: if isSignedIn() &&
         (
           request.resource.data.usuario_id == request.auth.uid ||
           isCoordinator() ||
           isAdmin()
         );
-
       allow update: if
         (isSignedIn() &&
           resource.data.usuario_id == request.auth.uid &&
@@ -103,9 +89,37 @@ service cloud.firestore {
           request.resource.data.usuario_id == resource.data.usuario_id) ||
         isCoordinator() ||
         isAdmin();
-
-      // Op��o segura: delete apenas por admin (poderia ser bloqueado totalmente)
       allow delete: if isAdmin();
+    }
+
+    // Theme settings - apenas administradores
+    match /theme_settings/{id} {
+      allow get, list: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Layout settings - apenas administradores
+    match /layout_settings/{id} {
+      allow get, list: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Backgrounds - apenas administradores
+    match /backgrounds/{id} {
+      allow get, list: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Navigation tabs - apenas administradores
+    match /navigation_tabs/{id} {
+      allow get, list: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Screen layouts - apenas administradores
+    match /screen_layouts/{id} {
+      allow get, list: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
   }
 }
