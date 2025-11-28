@@ -1,6 +1,7 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    /* Ajustes fase de testes — Home, notificações, gestão de papéis e permissões */
     function isSignedIn() {
       return request.auth != null;
     }
@@ -29,24 +30,38 @@ service cloud.firestore {
       function isSelf() { return isSignedIn() && request.auth.uid == userId; }
       function isNonAdminTarget() { return resource.data.papel != 'administrador'; }
       function allowedProfileUpdate() {
-        return request.resource.data.diff(resource.data).changedKeys().hasOnly(['nome','telefone','data_nascimento','updated_at']) &&
+        return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'nome','sobrenome','nome_completo','telefone','telefone_completo','codigo_pais','data_nascimento','updated_at'
+        ]) &&
           request.resource.data.papel == resource.data.papel &&
           request.resource.data.status == resource.data.status;
       }
-      function allowedModerationUpdate() {
+      function allowedApprovalUpdate() {
         return request.resource.data.diff(resource.data).changedKeys().hasOnly([
-          'papel','status','aprovado_por_id','aprovado_em','motivo_rejeicao',
-          'papel_anterior','alterado_por_id','alterado_em','updated_at','telefone','nome'
-        ]);
+          'status','aprovado_por_id','aprovado_em','motivo_rejeicao',
+          'alterado_por_id','alterado_em','updated_at','papel_anterior'
+        ]) &&
+        request.resource.data.papel == resource.data.papel;
+      }
+      function allowedCoordinatorRoleUpdate() {
+        return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'papel','papel_anterior','alterado_por_id','alterado_em','updated_at'
+        ]) &&
+        request.resource.data.papel != 'administrador' &&
+        resource.data.papel != 'administrador';
       }
 
-      allow get: if isSelf() || isCoordinator() || isAdmin();
-      allow list: if isCoordinator() || isAdmin();
+      allow get: if isSelf() || isCoordinator() || isAdmin() || isProfessor();
+      allow list: if isCoordinator() || isAdmin() || isProfessor();
       allow create: if isSignedIn() && (isSelf() || isAdmin());
       allow update: if
         (isSelf() && allowedProfileUpdate()) ||
-        (isCoordinator() && isNonAdminTarget() && allowedModerationUpdate()) ||
-        isAdmin();
+        (isProfessor() && allowedApprovalUpdate()) ||
+        (isCoordinator() && (allowedApprovalUpdate() || (isNonAdminTarget() && allowedCoordinatorRoleUpdate()))) ||
+        (isAdmin() && (
+          (request.auth.uid == userId && request.resource.data.papel == 'administrador') ||
+          request.auth.uid != userId
+        ));
       allow delete: if isAdmin() && request.auth.uid != userId;
     }
 

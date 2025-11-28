@@ -1,4 +1,5 @@
 // lib/users.ts
+/* Ajustes fase de testes — Home, notificações, gestão de papéis e permissões */
 import {
   collection,
   doc,
@@ -34,8 +35,8 @@ type UpdateUserRoleParams = {
 export async function approveUser(params: ApproveUserParams) {
   const { targetUserId, approverId, newRole } = params;
 
-  if (!targetUserId) throw new Error("ID do usuario alvo é obrigatório.");
-  if (!approverId) throw new Error("ID do aprovador é obrigatório.");
+  if (!targetUserId) throw new Error("ID do usuario alvo e obrigatorio.");
+  if (!approverId) throw new Error("ID do aprovador e obrigatorio.");
 
   const userRef = doc(firebaseDb, "users", targetUserId);
   const snap = await getDoc(userRef);
@@ -70,8 +71,8 @@ export async function approveUser(params: ApproveUserParams) {
 export async function rejectUser(params: RejectUserParams) {
   const { targetUserId, approverId, reason } = params;
 
-  if (!targetUserId) throw new Error("ID do usuario alvo é obrigatório.");
-  if (!approverId) throw new Error("ID do aprovador é obrigatório.");
+  if (!targetUserId) throw new Error("ID do usuario alvo e obrigatorio.");
+  if (!approverId) throw new Error("ID do aprovador e obrigatorio.");
 
   const userRef = doc(firebaseDb, "users", targetUserId);
   const snap = await getDoc(userRef);
@@ -99,17 +100,39 @@ export async function rejectUser(params: RejectUserParams) {
 export async function updateUserRole(params: UpdateUserRoleParams) {
   const { targetUserId, approverId, newRole } = params;
 
-  if (!targetUserId) throw new Error("ID do usuario alvo é obrigatório.");
-  if (!approverId) throw new Error("ID do aprovador é obrigatório.");
+  if (!targetUserId) throw new Error("ID do usuario alvo e obrigatorio.");
+  if (!approverId) throw new Error("ID do aprovador e obrigatorio.");
 
   const userRef = doc(firebaseDb, "users", targetUserId);
   const snap = await getDoc(userRef);
-
   if (!snap.exists()) {
     throw new Error("Usuario nao encontrado para alteracao de papel.");
   }
 
+  const approverRef = doc(firebaseDb, "users", approverId);
+  const approverSnap = await getDoc(approverRef);
+  if (!approverSnap.exists()) {
+    throw new Error("Aprovador nao encontrado.");
+  }
+
   const existing = snap.data() as User;
+  const approver = approverSnap.data() as User;
+
+  if (approver.papel !== "administrador" && approver.papel !== "coordenador") {
+    throw new Error("Apenas coordenador ou administrador podem alterar papeis.");
+  }
+  if (approver.papel === "coordenador") {
+    if (newRole === "administrador") {
+      throw new Error("Coordenador nao pode definir administrador.");
+    }
+    if (existing.papel === "administrador") {
+      throw new Error("Coordenador nao pode alterar administrador.");
+    }
+  }
+  if (approver.papel === "administrador" && approverId === targetUserId && newRole !== "administrador") {
+    throw new Error("Admin nao pode alterar o proprio papel para fora de administrador.");
+  }
+
   const now = serverTimestamp();
 
   const payload: Partial<User> = {
@@ -125,8 +148,8 @@ export async function updateUserRole(params: UpdateUserRoleParams) {
 }
 
 /**
- * Lista IDs de coordenadores e administradores para acionar notifica��es.
- * Observa��ǜo: requer permiss��es de leitura/listagem em /users.
+ * Lista IDs de coordenadores e administradores para acionar notificacoes.
+ * Observacao: requer permissoes de leitura/listagem em /users.
  */
 export async function listCoordinatorsAndAdminsIds(): Promise<string[]> {
   const colRef = collection(firebaseDb, "users");
@@ -140,8 +163,8 @@ export async function listCoordinatorsAndAdminsIds(): Promise<string[]> {
 }
 
 /**
- * Lista IDs de todos os usu��rios aprovados (para broadcast de aulas/devocionais/not��cias).
- * Observa��ǜo: apenas coord/admin devem usar para evitar leitura ampla por perfis restritos.
+ * Lista IDs de todos os usuarios aprovados (para broadcast de aulas/devocionais/noticias).
+ * Observacao: apenas coord/admin devem usar para evitar leitura ampla por perfis restritos.
  */
 export async function listApprovedUsersIds(): Promise<string[]> {
   const colRef = collection(firebaseDb, "users");
@@ -209,7 +232,7 @@ export async function searchUsers(filters: UserSearchFilters): Promise<User[]> {
     return list.filter((u) => {
       const nome = u.nome?.toLowerCase?.() || "";
       const email = (u as any).email?.toLowerCase?.() || "";
-      const tel = u.telefone?.toLowerCase?.() || "";
+      const tel = (u.telefone as any)?.toLowerCase?.() || "";
       return (
         nome.includes(term) ||
         email.includes(term) ||

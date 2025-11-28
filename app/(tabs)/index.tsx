@@ -1,4 +1,4 @@
-// app/(tabs)/index.tsx - Home principal com componentes reutilizáveis
+// app/(tabs)/index.tsx - Home principal
 import { useEffect, useMemo, useState } from "react";
 import {
   View,
@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
   Pressable,
   ScrollView,
-  Image,
 } from "react-native";
 import { useRouter } from "expo-router";
 
@@ -27,6 +26,8 @@ import { AulaCard } from "../../components/cards/AulaCard";
 import { DevocionalCard } from "../../components/cards/DevocionalCard";
 import { Header } from "../../components/ui/Header";
 import { useTheme } from "../../hooks/useTheme";
+
+/* Ajustes fase de testes — Home, notificações, gestão de papéis e permissões */
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -124,35 +125,11 @@ export default function HomeScreen() {
   }
 
   const nome = user?.nome || firebaseUser.email || "Usuario";
-  const status = user?.status || "vazio";
-
   const isProfessor = papel === "professor";
   const isCoordenador = papel === "coordenador";
   const isAdmin = papel === "administrador";
 
   const primeiroNome = nome.split(" ")[0] || nome;
-  const photoUrl = (user as any)?.photoURL || firebaseUser.photoURL || "";
-  const initials = nome
-    .split(" ")
-    .filter((n) => n)
-    .map((n) => n[0]?.toUpperCase?.() || "")
-    .slice(0, 2)
-    .join("") || "U";
-
-  function papelDisplay() {
-    switch (papel) {
-      case "aluno":
-        return "Aluno";
-      case "professor":
-        return "Professor";
-      case "coordenador":
-        return "Coordenador";
-      case "administrador":
-        return "Administrador";
-      default:
-        return "Desconhecido";
-    }
-  }
 
   function bannerSubtitle() {
     if (isProfessor) return "Veja suas aulas reservadas e devocionais.";
@@ -169,9 +146,6 @@ export default function HomeScreen() {
       console.error("Erro ao sair:", error);
     }
   }
-
-  const showSummaryNotifications =
-    isApproved && typeof unreadCount === "number" && unreadCount >= 0;
 
   return (
     <ScrollView
@@ -201,48 +175,6 @@ export default function HomeScreen() {
         }
       />
 
-      <Card>
-        <View style={styles.profileRow}>
-          {photoUrl ? (
-            <Image source={{ uri: photoUrl }} style={styles.avatar} />
-          ) : (
-            <View style={styles.avatarPlaceholder}>
-              <Text style={styles.avatarInitials}>{initials}</Text>
-            </View>
-          )}
-          <View style={{ flex: 1, gap: 4 }}>
-            <Text style={styles.welcome}>Olá, {primeiroNome}</Text>
-            <Text style={styles.infoLine}>{papelDisplay()}</Text>
-            <AppButton
-              title="Ver perfil"
-              variant="outline"
-              fullWidth={false}
-              onPress={() => router.push("/(tabs)/profile" as any)}
-            />
-          </View>
-        </View>
-      </Card>
-
-      {showSummaryNotifications ? (
-        <Card
-          title="Notificações"
-          subtitle={`Você tem ${unreadCount} não lida(s).`}
-          footer={
-            <AppButton
-              title="Ver todas"
-              variant="outline"
-              fullWidth={false}
-              onPress={() => router.push("/notifications" as any)}
-            />
-          }
-          style={styles.cardWarning}
-        >
-          <Text style={styles.cardText}>
-            Fique atento aos avisos e aprovações.
-          </Text>
-        </Card>
-      ) : null}
-
       <Card
         title="Devocional do Dia"
         subtitle="Aprofunde-se na Palavra diariamente."
@@ -268,7 +200,7 @@ export default function HomeScreen() {
       </Card>
 
       <Card
-        title="Próximas aulas"
+        title="Pr��ximas aulas"
         subtitle="Confira o que vem pela frente."
         footer={
           <AppButton
@@ -297,7 +229,7 @@ export default function HomeScreen() {
       {isProfessor ? (
         <Card
           title="Minhas aulas reservadas"
-          subtitle="Acompanhe as aulas que você ministrará."
+          subtitle="Acompanhe as aulas que voc�� ministrar��."
           footer={
             <AppButton
               title="Ver todas"
@@ -310,7 +242,7 @@ export default function HomeScreen() {
           {isLoadingMyLessons ? (
             <ActivityIndicator color={themeSettings?.cor_info || "#facc15"} />
           ) : myLessons.length === 0 ? (
-            <EmptyState title="Você ainda não tem aulas reservadas." />
+            <EmptyState title="Voc�� ainda n��o tem aulas reservadas." />
           ) : (
             myLessons.map((lesson) => (
               <AulaCard
@@ -351,38 +283,6 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
     gap: 12,
   },
-  profileRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-  },
-  avatarPlaceholder: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: "#1f2937",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarInitials: {
-    color: "#e5e7eb",
-    fontWeight: "700",
-    fontSize: 18,
-  },
-  welcome: {
-    color: "#9ca3af",
-    fontSize: 14,
-  },
-  infoLine: {
-    color: "#9ca3af",
-    marginTop: 2,
-    fontSize: 13,
-  },
   bellContainer: {
     position: "relative",
     padding: 10,
@@ -408,14 +308,6 @@ const styles = StyleSheet.create({
     color: "#f8fafc",
     fontSize: 10,
     fontWeight: "700",
-  },
-  cardWarning: {
-    backgroundColor: "#451a03",
-    borderColor: "#92400e",
-  },
-  cardText: {
-    color: "#d1d5db",
-    fontSize: 13,
   },
   footer: {
     marginTop: 12,

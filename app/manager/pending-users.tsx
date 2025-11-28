@@ -1,4 +1,5 @@
 // app/manager/pending-users.tsx
+/* Ajustes fase de testes — Home, notificações, gestão de papéis e permissões */
 import { useEffect, useMemo, useState } from "react";
 import {
   View,
@@ -38,22 +39,23 @@ export default function PendingUsersScreen() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
-  const isCoordinatorOrAdmin = useMemo(
-    () => role === "coordenador" || role === "administrador",
+  const isApprover = useMemo(
+    () =>
+      role === "professor" || role === "coordenador" || role === "administrador",
     [role]
   );
 
   // Guard de acesso
   useEffect(() => {
     if (isInitializing) return;
-    if (!isAuthenticated || !isCoordinatorOrAdmin) {
+    if (!isAuthenticated || !isApprover) {
       router.replace("/");
     }
-  }, [isAuthenticated, isCoordinatorOrAdmin, isInitializing, router]);
+  }, [isAuthenticated, isApprover, isInitializing, router]);
 
   // Snapshot em tempo real de usuarios pendentes
   useEffect(() => {
-    if (!isCoordinatorOrAdmin) return;
+    if (!isApprover) return;
 
     const usersRef = collection(firebaseDb, "users");
     const q = query(usersRef, where("status", "==", "pendente"));
@@ -78,7 +80,7 @@ export default function PendingUsersScreen() {
     );
 
     return () => unsub();
-  }, [isCoordinatorOrAdmin]);
+  }, [isApprover]);
 
   const handleApprove = async (targetUserId: string) => {
     if (!currentUser) return;
@@ -181,7 +183,7 @@ export default function PendingUsersScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>Aprovacao de usuarios</Text>
       <Text style={styles.subtitle}>
-        Apenas coordenadores e administradores podem aprovar ou rejeitar cadastros.
+        Professores, coordenadores e administradores podem aprovar ou rejeitar cadastros.
       </Text>
 
       {pendingUsers.length === 0 ? (

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -9,13 +9,32 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { useAuth } from "../../../hooks/useAuth";
+import { firebaseDb } from "../../../lib/firebase";
+
+/* Ajustes fase de testes — Home, notificações, gestão de papéis e permissões */
 
 export default function ManageHubScreen() {
   const router = useRouter();
   const { firebaseUser, user, isInitializing } = useAuth();
   const papel = user?.papel || "aluno";
-  const allowed = ["coordenador", "administrador"].includes(papel);
+  const allowed = ["professor", "coordenador", "administrador"].includes(papel);
+  const isCoordinatorOrAdmin = useMemo(
+    () => papel === "coordenador" || papel === "administrador",
+    [papel]
+  );
+  const [pendingCount, setPendingCount] = useState<number>(0);
+
+  useEffect(() => {
+    if (!allowed) return;
+    const usersRef = collection(firebaseDb, "users");
+    const q = query(usersRef, where("status", "==", "pendente"));
+    const unsub = onSnapshot(q, (snapshot) => {
+      setPendingCount(snapshot.size);
+    });
+    return () => unsub();
+  }, [allowed]);
 
   useEffect(() => {
     if (!isInitializing && !firebaseUser) {
@@ -41,25 +60,27 @@ export default function ManageHubScreen() {
   }
 
   if (!allowed) {
-    Alert.alert("Sem permissão", "Você não tem acesso à área de gestão.");
+    Alert.alert("Sem permissao", "Voce nao tem acesso a area de gestao.");
     router.replace("/(tabs)");
     return null;
   }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Área de Gestão</Text>
+      <Text style={styles.title}>Area de Gestao</Text>
       <Text style={styles.subtitle}>
-        Atalhos de coordenação/administrador para aprovações e gestão.
+        Atalhos de coordenacao/administrador/professor para aprovacoes e gestao.
       </Text>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Aprovações</Text>
+        <Text style={styles.cardTitle}>Aprovacoes</Text>
         <Pressable
           style={styles.button}
           onPress={() => router.push("/manager/pending-users" as any)}
         >
-          <Text style={styles.buttonText}>Aprovar usuários</Text>
+          <Text style={styles.buttonText}>
+            {`Aprovar usuarios (${pendingCount})`}
+          </Text>
         </Pressable>
         <Pressable
           style={styles.button}
@@ -67,29 +88,39 @@ export default function ManageHubScreen() {
         >
           <Text style={styles.buttonText}>Aprovar reservas de aula</Text>
         </Pressable>
+        {isCoordinatorOrAdmin ? (
+          <Pressable
+            style={styles.button}
+            onPress={() => router.push("/manage/user-roles" as any)}
+          >
+            <Text style={styles.buttonText}>Gerir papeis de usuario</Text>
+          </Pressable>
+        ) : null}
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Conteúdo</Text>
-        <Pressable
-          style={styles.button}
-          onPress={() => router.push("/admin/lessons/new" as any)}
-        >
-          <Text style={styles.buttonText}>Criar nova aula</Text>
-        </Pressable>
-        <Pressable
-          style={styles.button}
-          onPress={() => router.push("/admin/devotionals/new" as any)}
-        >
-          <Text style={styles.buttonText}>Criar devocional</Text>
-        </Pressable>
-        <Pressable
-          style={styles.button}
-          onPress={() => router.push("/news/my-news" as any)}
-        >
-          <Text style={styles.buttonText}>Gerenciar notícias</Text>
-        </Pressable>
-      </View>
+      {isCoordinatorOrAdmin ? (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Conteudo</Text>
+          <Pressable
+            style={styles.button}
+            onPress={() => router.push("/admin/lessons/new" as any)}
+          >
+            <Text style={styles.buttonText}>Criar nova aula</Text>
+          </Pressable>
+          <Pressable
+            style={styles.button}
+            onPress={() => router.push("/admin/devotionals/new" as any)}
+          >
+            <Text style={styles.buttonText}>Criar devocional</Text>
+          </Pressable>
+          <Pressable
+            style={styles.button}
+            onPress={() => router.push("/news/my-news" as any)}
+          >
+            <Text style={styles.buttonText}>Gerenciar noticias</Text>
+          </Pressable>
+        </View>
+      ) : null}
     </ScrollView>
   );
 }
