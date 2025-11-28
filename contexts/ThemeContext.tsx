@@ -189,7 +189,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         );
       }
     } catch (err) {
-      console.error("Erro ao carregar tema do Firestore:", err);
+      const code = (err as any)?.code || "";
+      const isPermission =
+        code === "permission-denied" ||
+        String(err).toLowerCase().includes("missing or insufficient permissions");
+
+      if (isPermission) {
+        // Usuário sem permissão para ler configurações remotas (ex.: não-admin).
+        // Mantemos os valores padrão/cache e evitamos quebrar o app.
+        console.warn("Tema remoto nao lido: sem permissao. Usando default/cache.");
+      } else {
+        console.error("Erro ao carregar tema do Firestore:", err);
+      }
     } finally {
       setIsThemeLoading(false);
     }
