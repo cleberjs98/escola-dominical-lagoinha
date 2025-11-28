@@ -7,7 +7,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
+  TextInput,
 } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { createUserWithEmailAndPassword } from "firebase/auth";
@@ -22,27 +22,29 @@ import {
   isNonEmpty,
   isValidDateLike,
   isValidEmail,
-  isValidPassword,
   isValidPhone,
+  validateStrongPassword,
 } from "../../utils/validation";
 import { sanitizeText } from "../../utils/sanitize";
 
 type FormErrors = Partial<{
-  nome: string;
+  firstName: string;
+  lastName: string;
   email: string;
   password: string;
   confirmPassword: string;
   dataNascimento: string;
+  codigoPais: string;
   telefone: string;
 }>;
 
-const COUNTRY_CODES = [
-  { label: "+55 Brasil", value: "+55" },
-  { label: "+351 Portugal", value: "+351" },
-  { label: "+353 Irlanda", value: "+353" },
-  { label: "+44 Reino Unido", value: "+44" },
-  { label: "+1 EUA/Canada", value: "+1" },
-];
+const countryCodeToFlag: Record<string, string> = {
+  "353": "🇮🇪",
+  "55": "🇧🇷",
+  "351": "🇵🇹",
+  "44": "🇬🇧",
+  "1": "🇺🇸",
+};
 
 function formatDateInput(value: string): string {
   const digits = value.replace(/\D/g, "").slice(0, 8);
@@ -76,22 +78,22 @@ export default function RegisterScreen() {
   const router = useRouter();
   const { themeSettings } = useTheme();
 
-  const [nome, setNome] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [dataNascimento, setDataNascimento] = useState("");
-  const [codigoPais, setCodigoPais] = useState(COUNTRY_CODES[0].value);
+  const [codigoPais, setCodigoPais] = useState("55");
   const [telefone, setTelefone] = useState("");
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showCodes, setShowCodes] = useState(false);
 
   const corFundo = themeSettings?.cor_fundo || "#020617";
 
-  const selectedCodeLabel = useMemo(() => {
-    const found = COUNTRY_CODES.find((c) => c.value === codigoPais);
-    return found?.label || codigoPais;
+  const flag = useMemo(() => {
+    const digits = codigoPais.replace(/\D/g, "");
+    return countryCodeToFlag[digits] || "🏳️";
   }, [codigoPais]);
 
   function handleDateChange(value: string) {
@@ -105,28 +107,37 @@ export default function RegisterScreen() {
 
   function validate(): { ok: boolean; normalizedDate?: string } {
     const validationErrors: FormErrors = {};
-    const trimmedName = sanitizeText(nome).trim();
+    const trimmedFirstName = sanitizeText(firstName).trim();
+    const trimmedLastName = sanitizeText(lastName).trim();
     const trimmedEmail = email.trim();
     const trimmedPassword = password.trim();
     const trimmedConfirm = confirmPassword.trim();
     const trimmedDate = dataNascimento.trim();
     const normalizedDate = normalizeDateToISO(trimmedDate);
     const phoneDigits = telefone.replace(/\D/g, "");
+    const codeDigits = codigoPais.replace(/\D/g, "");
 
-    if (!isNonEmpty(trimmedName, 3)) {
-      validationErrors.nome = "Informe seu nome completo.";
+    if (!isNonEmpty(trimmedFirstName, 1)) {
+      validationErrors.firstName = "Informe seu nome.";
+    }
+    if (!isNonEmpty(trimmedLastName, 1)) {
+      validationErrors.lastName = "Informe seu sobrenome.";
     }
     if (!isValidEmail(trimmedEmail)) {
       validationErrors.email = "Informe um email valido.";
     }
-    if (!isValidPassword(trimmedPassword)) {
-      validationErrors.password = "A senha deve ter pelo menos 8 caracteres.";
+    const strongPasswordError = validateStrongPassword(trimmedPassword);
+    if (strongPasswordError) {
+      validationErrors.password = strongPasswordError;
     }
     if (trimmedPassword !== trimmedConfirm) {
       validationErrors.confirmPassword = "As senhas nao conferem.";
     }
     if (!isNonEmpty(trimmedDate) || !isValidDateLike(trimmedDate) || !normalizedDate) {
       validationErrors.dataNascimento = "Data deve estar no formato dd/mm/aaaa.";
+    }
+    if (!isNonEmpty(codeDigits)) {
+      validationErrors.codigoPais = "Informe o codigo do pais.";
     }
     if (!isValidPhone(phoneDigits)) {
       validationErrors.telefone = "Informe um telefone com ao menos 9 digitos.";
@@ -150,15 +161,22 @@ export default function RegisterScreen() {
       );
 
       const uid = cred.user.uid;
-      const sanitizedName = sanitizeText(nome).trim();
+      const sanitizedFirst = sanitizeText(firstName).trim();
+      const sanitizedLast = sanitizeText(lastName).trim();
+      const codeDigits = codigoPais.replace(/\D/g, "");
       const phoneDigits = telefone.replace(/\D/g, "");
-      const fullPhone = `${codigoPais}${phoneDigits}`; // salvamos telefone completo (codigo + numero) no campo `telefone`
+      const fullPhone = `+${codeDigits}${phoneDigits}`; // salvamos telefone completo (codigo + numero) no campo `telefone_completo`
+      const fullName = `${sanitizedFirst} ${sanitizedLast}`.trim();
 
       await setDoc(doc(firebaseDb, "users", uid), {
         id: uid,
-        nome: sanitizedName,
+        nome: sanitizedFirst,
+        sobrenome: sanitizedLast,
+        nome_completo: fullName,
         email: trimmedEmail,
-        telefone: fullPhone,
+        codigo_pais: codeDigits,
+        telefone: phoneDigits,
+        telefone_completo: fullPhone,
         data_nascimento: normalizedDate,
         papel: "aluno",
         status: "pendente",
@@ -208,12 +226,21 @@ export default function RegisterScreen() {
           >
             <View style={styles.form}>
               <AppInput
-                label="Nome completo"
+                label="Nome"
                 placeholder="Seu nome"
-                value={nome}
-                onChangeText={setNome}
+                value={firstName}
+                onChangeText={setFirstName}
                 autoCapitalize="words"
-                error={errors.nome}
+                error={errors.firstName}
+              />
+
+              <AppInput
+                label="Sobrenome"
+                placeholder="Seu sobrenome"
+                value={lastName}
+                onChangeText={setLastName}
+                autoCapitalize="words"
+                error={errors.lastName}
               />
 
               <AppInput
@@ -255,50 +282,36 @@ export default function RegisterScreen() {
 
               <Text style={styles.label}>Telefone</Text>
               <View style={styles.phoneRow}>
-                <Pressable
-                  style={styles.codeSelector}
-                  onPress={() => setShowCodes((prev) => !prev)}
-                >
+                <View style={styles.codeSelector}>
                   <Text style={styles.codeLabel}>Codigo</Text>
-                  <Text style={styles.codeValue}>{selectedCodeLabel}</Text>
-                </Pressable>
-                <AppInput
-                  style={styles.phoneInput}
-                  placeholder="Apenas numeros"
-                  keyboardType="phone-pad"
-                  value={telefone}
-                  onChangeText={handlePhoneChange}
-                />
+                  <View style={styles.codeInputRow}>
+                    <Text style={styles.flag}>{flag}</Text>
+                    <Text style={styles.plus}>+</Text>
+                    <TextInput
+                      style={styles.codeTextInput}
+                      keyboardType="number-pad"
+                      value={codigoPais}
+                      onChangeText={(v) => setCodigoPais(v.replace(/[^\d]/g, ""))}
+                      placeholder="55"
+                      placeholderTextColor="#6b7280"
+                    />
+                  </View>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <AppInput
+                    style={styles.phoneInput}
+                    placeholder="Apenas numeros"
+                    keyboardType="phone-pad"
+                    value={telefone}
+                    onChangeText={handlePhoneChange}
+                  />
+                </View>
               </View>
+              {errors.codigoPais ? (
+                <Text style={styles.errorText}>{errors.codigoPais}</Text>
+              ) : null}
               {errors.telefone ? (
                 <Text style={styles.errorText}>{errors.telefone}</Text>
-              ) : null}
-
-              {showCodes ? (
-                <View style={styles.codeList}>
-                  {COUNTRY_CODES.map((item) => (
-                    <Pressable
-                      key={item.value}
-                      style={[
-                        styles.codeOption,
-                        item.value === codigoPais && styles.codeOptionActive,
-                      ]}
-                      onPress={() => {
-                        setCodigoPais(item.value);
-                        setShowCodes(false);
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.codeOptionText,
-                          item.value === codigoPais && styles.codeOptionTextActive,
-                        ]}
-                      >
-                        {item.label}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
               ) : null}
 
               <AppButton
@@ -359,38 +372,28 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginBottom: 2,
   },
-  codeValue: {
+  codeInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  flag: {
+    fontSize: 18,
+  },
+  codeTextInput: {
     color: "#e5e7eb",
-    fontWeight: "600",
-  },
-  phoneInput: {
-    flex: 1,
-  },
-  codeList: {
-    borderWidth: 1,
-    borderColor: "#1f2937",
-    borderRadius: 10,
-    backgroundColor: "#0f172a",
-    marginTop: -4,
-    marginBottom: 8,
-    overflow: "hidden",
-  },
-  codeOption: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    fontSize: 14,
+    minWidth: 50,
+    paddingVertical: 2,
     borderBottomWidth: 1,
     borderBottomColor: "#1f2937",
   },
-  codeOptionActive: {
-    backgroundColor: "#13233e",
-  },
-  codeOptionText: {
+  plus: {
     color: "#e5e7eb",
-    fontSize: 14,
+    fontSize: 16,
   },
-  codeOptionTextActive: {
-    fontWeight: "700",
-    color: "#22c55e",
+  phoneInput: {
+    flex: 1,
   },
   linksRow: {
     flexDirection: "row",

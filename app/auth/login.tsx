@@ -10,7 +10,7 @@ import { Card } from "../../components/ui/Card";
 import { AppInput } from "../../components/ui/AppInput";
 import { AppButton } from "../../components/ui/AppButton";
 import { useTheme } from "../../hooks/useTheme";
-import { isValidEmail, isValidPassword } from "../../utils/validation";
+import { isNonEmpty, isValidEmail } from "../../utils/validation";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -25,8 +25,8 @@ export default function LoginScreen() {
       Alert.alert("Erro", "Informe um email valido.");
       return false;
     }
-    if (!isValidPassword(password)) {
-      Alert.alert("Erro", "A senha deve ter pelo menos 8 caracteres.");
+    if (!isNonEmpty(password)) {
+      Alert.alert("Erro", "Informe sua senha.");
       return false;
     }
     return true;
@@ -53,8 +53,12 @@ export default function LoginScreen() {
         await setDoc(userRef, {
           id: uid,
           nome: cred.user.displayName || trimmedEmail,
+          sobrenome: "",
+          nome_completo: cred.user.displayName || trimmedEmail,
           email: cred.user.email || trimmedEmail,
+          codigo_pais: null,
           telefone: null,
+          telefone_completo: null,
           data_nascimento: null,
           papel: "aluno",
           status: "pendente",
