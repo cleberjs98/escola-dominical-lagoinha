@@ -27,7 +27,7 @@ import { DevocionalCard } from "../../components/cards/DevocionalCard";
 import { Header } from "../../components/ui/Header";
 import { useTheme } from "../../hooks/useTheme";
 
-/* Ajustes fase de testes — Home, notificações, gestão de papéis e permissões */
+/* Ajustes fase de testes - Home, notificacoes, gestao de papeis e permissoes */
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -200,7 +200,7 @@ export default function HomeScreen() {
       </Card>
 
       <Card
-        title="Pr��ximas aulas"
+        title="Proximas aulas"
         subtitle="Confira o que vem pela frente."
         footer={
           <AppButton
@@ -229,7 +229,7 @@ export default function HomeScreen() {
       {isProfessor ? (
         <Card
           title="Minhas aulas reservadas"
-          subtitle="Acompanhe as aulas que voc�� ministrar��."
+          subtitle="Acompanhe as aulas que voce ministrara."
           footer={
             <AppButton
               title="Ver todas"
@@ -242,7 +242,7 @@ export default function HomeScreen() {
           {isLoadingMyLessons ? (
             <ActivityIndicator color={themeSettings?.cor_info || "#facc15"} />
           ) : myLessons.length === 0 ? (
-            <EmptyState title="Voc�� ainda n��o tem aulas reservadas." />
+            <EmptyState title="Voce ainda nao tem aulas reservadas." />
           ) : (
             myLessons.map((lesson) => (
               <AulaCard
