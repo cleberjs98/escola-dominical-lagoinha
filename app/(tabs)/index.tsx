@@ -159,19 +159,17 @@ export default function HomeScreen() {
         title={`Bem-vindo(a), ${primeiroNome}`}
         subtitle={bannerSubtitle()}
         rightContent={
-          isApproved ? (
-            <Pressable
-              style={styles.bellContainer}
-              onPress={() => router.push("/notifications" as any)}
-            >
-              <Text style={styles.bellIcon}>{"\uD83D\uDD14"}</Text>
-              {unreadCount ? (
-                <View style={styles.badgeBubble}>
-                  <Text style={styles.badgeBubbleText}>{unreadCount}</Text>
-                </View>
-              ) : null}
-            </Pressable>
-          ) : null
+          <Pressable
+            style={styles.bellContainer}
+            onPress={() => router.push("/notifications" as any)}
+          >
+            <Text style={styles.bellIcon}>{"\uD83D\uDD14"}</Text>
+            {unreadCount ? (
+              <View style={styles.badgeBubble}>
+                <Text style={styles.badgeBubbleText}>{unreadCount}</Text>
+              </View>
+            ) : null}
+          </Pressable>
         }
       />
 

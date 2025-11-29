@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Tabs, useRouter } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useAuth } from "../../hooks/useAuth";
+
+/* Ajustes fase de testes - Home, notificacoes, gestao de papeis e permissoes */
 
 function TabIcon({ label }: { label: string }) {
   return <Text style={{ color: "#e5e7eb", fontSize: 12 }}>{label}</Text>;
@@ -13,8 +15,10 @@ export default function TabsLayout() {
   const papel = user?.papel || "aluno";
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const canSeeNews = ["professor", "coordenador", "administrador"].includes(papel);
-  const canSeeManage = ["coordenador", "administrador"].includes(papel);
+  const canApproveUsers = useMemo(
+    () => ["professor", "coordenador", "administrador"].includes(papel),
+    [papel]
+  );
   const isAdmin = papel === "administrador";
 
   return (
@@ -26,7 +30,7 @@ export default function TabsLayout() {
           headerTintColor: "#e5e7eb",
           headerRight: () => (
             <Pressable style={styles.menuButton} onPress={() => setMenuOpen(true)}>
-              <Text style={styles.menuText}>☰</Text>
+              <Text style={styles.menuText}>≡</Text>
             </Pressable>
           ),
           tabBarStyle: { backgroundColor: "#0b1224", borderTopColor: "#1f2937" },
@@ -35,24 +39,45 @@ export default function TabsLayout() {
         }}
       >
         <Tabs.Screen
-          name="lessons"
-          options={{
-            title: "Aulas",
-            tabBarIcon: () => <TabIcon label="📚" />,
-          }}
-        />
-        <Tabs.Screen
           name="index"
           options={{
             title: "Home",
-            tabBarIcon: () => <TabIcon label="🏠" />,
+            tabBarIcon: () => <TabIcon label="Home" />,
+          }}
+        />
+        <Tabs.Screen
+          name="lessons"
+          options={{
+            title: "Aulas",
+            tabBarIcon: () => <TabIcon label="Aulas" />,
           }}
         />
         <Tabs.Screen
           name="devotionals"
           options={{
             title: "Devocionais",
-            tabBarIcon: () => <TabIcon label="📖" />,
+            tabBarIcon: () => <TabIcon label="Devoc" />,
+          }}
+        />
+        <Tabs.Screen
+          name="news"
+          options={{
+            title: "Noticias",
+            tabBarIcon: () => <TabIcon label="News" />,
+          }}
+        />
+        <Tabs.Screen
+          name="manage"
+          options={{
+            title: "Gerenciar",
+            tabBarIcon: () => <TabIcon label="Manage" />,
+          }}
+        />
+        <Tabs.Screen
+          name="profile"
+          options={{
+            title: "Perfil",
+            tabBarIcon: () => <TabIcon label="Perfil" />,
           }}
         />
       </Tabs>
@@ -63,30 +88,21 @@ export default function TabsLayout() {
           <View style={styles.drawer}>
             <Text style={styles.drawerTitle}>Menu</Text>
             <MenuItem label="Perfil" onPress={() => handleNavigate("/(tabs)/profile")} />
-            {canSeeNews && (
-              <MenuItem label="Notícias" onPress={() => handleNavigate("/(tabs)/news")} />
-            )}
-            <MenuItem label="Notificações" onPress={() => handleNavigate("/notifications")} />
-            {canSeeManage && (
-              <MenuItem label="Gerenciar" onPress={() => handleNavigate("/(tabs)/manage")} />
+            <MenuItem label="Notificacoes" onPress={() => handleNavigate("/notifications")} />
+            <MenuItem label="Noticias" onPress={() => handleNavigate("/(tabs)/news")} />
+            <MenuItem label="Gerenciar" onPress={() => handleNavigate("/(tabs)/manage")} />
+            {/* Opcao de aprovacao de usuarios para professor, coordenador e administrador */}
+            {canApproveUsers && (
+              <MenuItem
+                label="Aprovar usuarios"
+                onPress={() => handleNavigate("/manage/pending-users")}
+              />
             )}
             {isAdmin && (
               <MenuItem label="Dashboard Admin" onPress={() => handleNavigate("/admin/dashboard")} />
             )}
-            {canSeeManage && (
-              <>
-                <MenuItem
-                  label="Aprovar usuários"
-                  onPress={() => handleNavigate("/manager/pending-users")}
-                />
-                <MenuItem
-                  label="Aprovar reservas"
-                  onPress={() => handleNavigate("/manager/pending-reservations")}
-                />
-              </>
-            )}
-            <MenuItem label="Minhas notícias" onPress={() => handleNavigate("/news/my-news")} />
-            <MenuItem label="Criar notícia" onPress={() => handleNavigate("/news/new")} />
+            <MenuItem label="Minhas noticias" onPress={() => handleNavigate("/news/my-news")} />
+            <MenuItem label="Criar noticia" onPress={() => handleNavigate("/news/new")} />
           </View>
         </View>
       )}
