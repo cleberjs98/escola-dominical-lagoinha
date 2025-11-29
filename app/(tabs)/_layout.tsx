@@ -1,13 +1,9 @@
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Tabs, useRouter } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useAuth } from "../../hooks/useAuth";
 
 /* Ajustes fase de testes - Home, notificacoes, gestao de papeis e permissoes */
-
-function TabIcon({ label }: { label: string }) {
-  return <Text style={{ color: "#e5e7eb", fontSize: 12 }}>{label}</Text>;
-}
 
 export default function TabsLayout() {
   const router = useRouter();
@@ -39,45 +35,27 @@ export default function TabsLayout() {
         }}
       >
         <Tabs.Screen
-          name="index"
-          options={{
-            title: "Home",
-            tabBarIcon: () => <TabIcon label="Home" />,
-          }}
-        />
-        <Tabs.Screen
           name="lessons"
           options={{
             title: "Aulas",
-            tabBarIcon: () => <TabIcon label="Aulas" />,
+            tabBarLabel: "Aulas",
+            tabBarIcon: () => <Text style={styles.emoji}>📖</Text>,
+          }}
+        />
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: "Home",
+            tabBarLabel: "Home",
+            tabBarIcon: () => <Text style={styles.emoji}>🏠</Text>,
           }}
         />
         <Tabs.Screen
           name="devotionals"
           options={{
-            title: "Devocionais",
-            tabBarIcon: () => <TabIcon label="Devoc" />,
-          }}
-        />
-        <Tabs.Screen
-          name="news"
-          options={{
-            title: "Noticias",
-            tabBarIcon: () => <TabIcon label="News" />,
-          }}
-        />
-        <Tabs.Screen
-          name="manage"
-          options={{
-            title: "Gerenciar",
-            tabBarIcon: () => <TabIcon label="Manage" />,
-          }}
-        />
-        <Tabs.Screen
-          name="profile"
-          options={{
-            title: "Perfil",
-            tabBarIcon: () => <TabIcon label="Perfil" />,
+            title: "Devocional",
+            tabBarLabel: "Devocional",
+            tabBarIcon: () => <Text style={styles.emoji}>🙏🏼</Text>,
           }}
         />
       </Tabs>
@@ -95,7 +73,7 @@ export default function TabsLayout() {
             {canApproveUsers && (
               <MenuItem
                 label="Aprovar usuarios"
-                onPress={() => handleNavigate("/manage/pending-users")}
+                onPress={() => handleNavigate("/manager/pending-users")}
               />
             )}
             {isAdmin && (
@@ -168,5 +146,8 @@ const styles = StyleSheet.create({
     color: "#cbd5e1",
     fontSize: 14,
     fontWeight: "600",
+  },
+  emoji: {
+    fontSize: 16,
   },
 });
