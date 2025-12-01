@@ -23,8 +23,10 @@ export default function NewLessonScreen() {
   const [biblicalReference, setBiblicalReference] = useState("");
   const [date, setDate] = useState("");
   const [dateError, setDateError] = useState<string | null>(null);
-  const [publishAt, setPublishAt] = useState("");
-  const [publishAtError, setPublishAtError] = useState<string | null>(null);
+  const [publishDate, setPublishDate] = useState("");
+  const [publishHour, setPublishHour] = useState("");
+  const [publishDateError, setPublishDateError] = useState<string | null>(null);
+  const [publishHourError, setPublishHourError] = useState<string | null>(null);
   const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -72,11 +74,11 @@ export default function NewLessonScreen() {
     return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
   }
 
-  function isValidDateTimeDDMMYYYYHHMM(value: string): boolean {
-    if (!/^\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}$/.test(value)) return false;
-    const [datePart, timePart] = value.split(/\s+/);
-    const [d, m, y] = datePart.split("/").map((v) => Number(v));
-    const [hh, mm] = timePart.split(":").map((v) => Number(v));
+  function isValidPublishDateTime(dateStr: string, hourStr: string): boolean {
+    if (!isValidDateDDMMYYYY(dateStr)) return false;
+    if (!/^\d{2}:\d{2}$/.test(hourStr)) return false;
+    const [d, m, y] = dateStr.split("/").map((v) => Number(v));
+    const [hh, mm] = hourStr.split(":").map((v) => Number(v));
     if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return false;
     const dt = new Date(y, m - 1, d, hh, mm, 0);
     return (
@@ -88,35 +90,33 @@ export default function NewLessonScreen() {
     );
   }
 
-  function toISODateTime(value: string): string | null {
-    if (!isValidDateTimeDDMMYYYYHHMM(value)) return null;
-    const [datePart, timePart] = value.split(/\s+/);
-    const [d, m, y] = datePart.split("/").map((v) => v.padStart(2, "0"));
-    const [hh, mm] = timePart.split(":").map((v) => v.padStart(2, "0"));
+  function toISODateTime(dateStr: string, hourStr: string): string | null {
+    if (!isValidPublishDateTime(dateStr, hourStr)) return null;
+    const [d, m, y] = dateStr.split("/").map((v) => v.padStart(2, "0"));
+    const [hh, mm] = hourStr.split(":").map((v) => v.padStart(2, "0"));
     return `${y}-${m}-${d}T${hh}:${mm}:00Z`;
   }
 
-  function formatPublishAtInput(value: string) {
-    const cleaned = value.replace(/[^\d\s:]/g, "");
-    const parts = cleaned.split(/\s+/);
-    const digitsDate = (parts[0] || "").replace(/\D/g, "").slice(0, 8);
-    const timePart = (parts[1] || "").replace(/\D/g, "").slice(0, 4);
+  function formatPublishDateInput(value: string) {
+    const digits = value.replace(/\D/g, "").slice(0, 8);
+    const p1 = digits.slice(0, 2);
+    const p2 = digits.slice(2, 4);
+    const p3 = digits.slice(4, 8);
+    let formatted = p1;
+    if (p2) formatted = `${p1}/${p2}`;
+    if (p3) formatted = `${p1}/${p2}/${p3}`;
+    setPublishDate(formatted);
+    setPublishDateError(null);
+  }
 
-    const d1 = digitsDate.slice(0, 2);
-    const d2 = digitsDate.slice(2, 4);
-    const d3 = digitsDate.slice(4, 8);
-    let dateFormatted = d1;
-    if (d2) dateFormatted = `${d1}/${d2}`;
-    if (d3) dateFormatted = `${d1}/${d2}/${d3}`;
-
-    const t1 = timePart.slice(0, 2);
-    const t2 = timePart.slice(2, 4);
-    let timeFormatted = t1;
-    if (t2) timeFormatted = `${t1}:${t2}`;
-
-    const final = timeFormatted ? `${dateFormatted} ${timeFormatted}` : dateFormatted;
-    setPublishAt(final.trim());
-    setPublishAtError(null);
+  function formatPublishHourInput(value: string) {
+    const digits = value.replace(/\D/g, "").slice(0, 4);
+    const h = digits.slice(0, 2);
+    const m = digits.slice(2, 4);
+    let formatted = h;
+    if (m) formatted = `${h}:${m}`;
+    setPublishHour(formatted);
+    setPublishHourError(null);
   }
 
   function validateForm() {
@@ -170,7 +170,8 @@ export default function NewLessonScreen() {
       setTitle("");
       setBiblicalReference("");
       setDate("");
-      setPublishAt("");
+      setPublishDate("");
+      setPublishHour("");
       setDescription("");
       router.push("/lessons" as any);
     } catch (error) {
@@ -191,13 +192,14 @@ export default function NewLessonScreen() {
       setDateError("Data inválida. Use dd/mm/aaaa.");
       return;
     }
-    const isoPublishAt = toISODateTime(publishAt.trim());
+    const isoPublishAt = toISODateTime(publishDate.trim(), publishHour.trim());
     if (!isoPublishAt) {
-      setPublishAtError("Informe data e hora válidas para publicação (dd/mm/aaaa hh:mm).");
+      setPublishDateError("Informe data e hora válidas (dd/mm/aaaa e hh:mm).");
+      setPublishHourError("Informe data e hora válidas (dd/mm/aaaa e hh:mm).");
       return;
     }
     if (new Date(isoPublishAt).getTime() < Date.now()) {
-      setPublishAtError("Publicação não pode ser no passado.");
+      setPublishHourError("Publicação não pode ser no passado.");
       return;
     }
 
@@ -217,7 +219,8 @@ export default function NewLessonScreen() {
       setTitle("");
       setBiblicalReference("");
       setDate("");
-      setPublishAt("");
+      setPublishDate("");
+      setPublishHour("");
       setDescription("");
       router.push("/lessons" as any);
     } catch (error) {
@@ -255,7 +258,8 @@ export default function NewLessonScreen() {
       setTitle("");
       setBiblicalReference("");
       setDate("");
-      setPublishAt("");
+      setPublishDate("");
+      setPublishHour("");
       setDescription("");
       router.push("/lessons" as any);
     } catch (error) {
@@ -305,12 +309,20 @@ export default function NewLessonScreen() {
           error={dateError || undefined}
         />
         <AppInput
-          label="Publicar automaticamente em"
-          placeholder="dd/mm/aaaa hh:mm"
-          value={publishAt}
-          keyboardType="numbers-and-punctuation"
-          onChangeText={formatPublishAtInput}
-          error={publishAtError || undefined}
+          label="Publicar automaticamente em (data)"
+          placeholder="dd/mm/aaaa"
+          value={publishDate}
+          keyboardType="number-pad"
+          onChangeText={formatPublishDateInput}
+          error={publishDateError || undefined}
+        />
+        <AppInput
+          label="Hora da publicação"
+          placeholder="hh:mm"
+          value={publishHour}
+          keyboardType="number-pad"
+          onChangeText={formatPublishHourInput}
+          error={publishHourError || undefined}
         />
 
         <RichTextEditor
@@ -328,7 +340,7 @@ export default function NewLessonScreen() {
             disabled={isSubmitting}
           />
           <AppButton
-            title={isSubmitting ? "Agendando..." : "Criar e agendar"}
+            title={isSubmitting ? "Agendando..." : "Criar aula"}
             variant="secondary"
             onPress={handleSchedule}
             disabled={isSubmitting}
