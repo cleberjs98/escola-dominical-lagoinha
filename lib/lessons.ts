@@ -33,6 +33,8 @@ type CreateLessonParams = {
   descricao_base: string;
   data_aula: Lesson["data_aula"];
   data_publicacao_auto?: Lesson["data_publicacao_auto"];
+  referencia_biblica?: string | null;
+  publish_at?: Lesson["publish_at"];
   criado_por_id: string;
   status: LessonStatus;
   publishNow?: boolean;
@@ -44,6 +46,8 @@ export async function createLesson(params: CreateLessonParams) {
     descricao_base,
     data_aula,
     data_publicacao_auto = null,
+    referencia_biblica = null,
+    publish_at = null,
     criado_por_id,
     status,
     publishNow = false,
@@ -51,6 +55,8 @@ export async function createLesson(params: CreateLessonParams) {
 
   const safeTitle = sanitizeText(titulo);
   const safeDescription = sanitizeText(descricao_base);
+  const safeReference = referencia_biblica ? sanitizeText(referencia_biblica) : null;
+  const safePublishAt = publish_at || null;
 
   const colRef = collection(firebaseDb, "aulas");
   const now = serverTimestamp();
@@ -58,16 +64,18 @@ export async function createLesson(params: CreateLessonParams) {
   const payload: Omit<Lesson, "id"> = {
     titulo: safeTitle,
     descricao_base: safeDescription,
+    referencia_biblica: safeReference,
     data_aula,
     data_publicacao_auto,
+    publish_at: safePublishAt,
     status,
     criado_por_id,
     professor_reservado_id: null,
     complemento_professor: null,
     created_at: now as any,
     updated_at: now as any,
-    publicado_em: publishNow ? (now as any) : null,
-    rascunho_salvo_em: null,
+    publicado_em: status === "publicada" || publishNow ? (now as any) : null,
+    rascunho_salvo_em: status === "rascunho" ? (now as any) : null,
   };
 
   const docRef = await addDoc(colRef, payload);
