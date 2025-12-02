@@ -1,32 +1,132 @@
-import { useEffect, useState } from "react";
-import { View, Text, StyleSheet, FlatList, ActivityIndicator } from "react-native";
+import { useEffect, useState, useMemo } from "react";
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert } from "react-native";
 import { useRouter } from "expo-router";
-
-import { listPublishedLessons } from "../../../lib/lessons";
-import type { Lesson } from "../../../types/lesson";
+import { useAuth } from "../../../hooks/useAuth";
+import { useTheme } from "../../../hooks/useTheme";
 import { Card } from "../../../components/ui/Card";
 import { AppButton } from "../../../components/ui/AppButton";
+import {
+  listLessonsByStatusAndVisibility,
+  listLessonsForProfessorPreparation,
+  listLessonsForManager,
+} from "../../../lib/lessons";
+import type { Lesson, LessonStatus } from "../../../types/lesson";
 
-export default function LessonsTabScreen() {
+type Section = {
+  title: string;
+  data: Lesson[];
+  emptyMessage: string;
+};
+
+export default function LessonsScreen() {
   const router = useRouter();
-  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const { themeSettings } = useTheme();
+  const { firebaseUser, user, isInitializing } = useAuth();
+
+  const role = user?.papel;
+  const uid = firebaseUser?.uid || "";
+  const isAluno = role === "aluno";
+  const isProfessor = role === "professor";
+  const isCoordinator = role === "coordenador";
+  const isAdmin = role === "administrador";
+
+  const [published, setPublished] = useState<Lesson[]>([]);
+  const [prepProfessor, setPrepProfessor] = useState<Lesson[]>([]);
+  const [draftsManager, setDraftsManager] = useState<Lesson[]>([]);
+  const [prepManager, setPrepManager] = useState<Lesson[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!firebaseUser || isInitializing) return;
+
     async function load() {
       try {
-        const data = await listPublishedLessons();
-        setLessons(data);
+        setIsLoading(true);
+        setErrorMsg(null);
+
+        // Publicadas (visíveis para todos os papéis)
+        const publishedList = await listLessonsByStatusAndVisibility();
+        setPublished(publishedList);
+
+        if (isProfessor) {
+          const prep = await listLessonsForProfessorPreparation(uid);
+          setPrepProfessor(prep);
+        }
+
+        if (isCoordinator || isAdmin) {
+          const { drafts, preparation } = await listLessonsForManager();
+          setDraftsManager(drafts);
+          setPrepManager(preparation);
+        }
       } catch (error) {
         console.error("Erro ao carregar aulas:", error);
+        setErrorMsg("Não foi possível carregar as aulas. Tente novamente mais tarde.");
       } finally {
         setIsLoading(false);
       }
     }
-    load();
-  }, []);
 
-  if (isLoading) {
+    load();
+  }, [firebaseUser, isInitializing, isProfessor, isCoordinator, isAdmin, uid]);
+
+  const sections: Section[] = useMemo(() => {
+    if (isAluno) {
+      return [
+        {
+          title: "Aulas publicadas",
+          data: published,
+          emptyMessage: "Nenhuma aula publicada no momento.",
+        },
+      ];
+    }
+
+    if (isProfessor) {
+      return [
+        {
+          title: "Minhas aulas disponíveis",
+          data: prepProfessor,
+          emptyMessage: "Você ainda não tem aulas em preparação.",
+        },
+        {
+          title: "Aulas publicadas",
+          data: published,
+          emptyMessage: "Nenhuma aula publicada no momento.",
+        },
+      ];
+    }
+
+    if (isCoordinator || isAdmin) {
+      return [
+        {
+          title: "Rascunhos",
+          data: draftsManager,
+          emptyMessage: "Nenhum rascunho no momento.",
+        },
+        {
+          title: "Aulas disponíveis",
+          data: prepManager,
+          emptyMessage: "Nenhuma aula em preparação.",
+        },
+        {
+          title: "Aulas publicadas",
+          data: published,
+          emptyMessage: "Nenhuma aula publicada no momento.",
+        },
+      ];
+    }
+
+    // fallback padrão
+    return [
+      {
+        title: "Aulas publicadas",
+        data: published,
+        emptyMessage: "Nenhuma aula publicada no momento.",
+      },
+    ];
+  }, [isAluno, isProfessor, isCoordinator, isAdmin, published, prepProfessor, draftsManager, prepManager]);
+
+  if (isInitializing || isLoading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#facc15" />
@@ -36,37 +136,57 @@ export default function LessonsTabScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <FlatList
-        data={lessons}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-        ListHeaderComponent={
-          <Text style={styles.title}>Aulas publicadas</Text>
-        }
-        ListEmptyComponent={
-          <Card>
-            <Text style={styles.emptyText}>Nenhuma aula publicada no momento.</Text>
-          </Card>
-        }
-        renderItem={({ item }) => (
-          <Card
-            title={item.titulo}
-            subtitle={`Data: ${formatDate(item.data_aula)} • Status: ${item.status}`}
-            footer={
-              <AppButton
-                title="Ver detalhes"
-                variant="outline"
-                fullWidth={false}
-                onPress={() => router.push(`/lessons/${item.id}` as any)}
-              />
-            }
-          >
-            <Text style={styles.desc}>{item.descricao_base}</Text>
-          </Card>
-        )}
-      />
-    </View>
+    <ScrollView
+      style={[
+        styles.container,
+        { backgroundColor: themeSettings?.cor_fundo || "#020617" },
+      ]}
+      contentContainerStyle={styles.content}
+    >
+      {errorMsg ? (
+        <View style={styles.errorBox}>
+          <Text style={styles.errorText}>{errorMsg}</Text>
+        </View>
+      ) : null}
+
+      {sections.map((section) => (
+        <View key={section.title} style={styles.section}>
+          <Text style={styles.sectionTitle}>{section.title}</Text>
+          {section.data.length === 0 ? (
+            <Text style={styles.empty}>{section.emptyMessage}</Text>
+          ) : (
+            section.data.map((lesson) => (
+              <Card
+                key={lesson.id}
+                title={lesson.titulo}
+                subtitle={`Data: ${formatDate(lesson.data_aula)} • Status: ${lesson.status}`}
+                footer={
+                  <View style={styles.cardFooter}>
+                    <AppButton
+                      title="Ver detalhes"
+                      variant="outline"
+                      fullWidth={false}
+                      onPress={() => router.push(`/lessons/${lesson.id}` as any)}
+                    />
+                    {(isCoordinator || isAdmin) ? (
+                      <AppButton
+                        title="Editar"
+                        variant="secondary"
+                        fullWidth={false}
+                        onPress={() => router.push(`/admin/lessons/${lesson.id}` as any)}
+                        style={styles.editButton}
+                      />
+                    ) : null}
+                  </View>
+                }
+              >
+                <Text style={styles.desc}>{lesson.descricao_base}</Text>
+              </Card>
+            ))
+          )}
+        </View>
+      ))}
+    </ScrollView>
   );
 }
 
@@ -80,11 +200,11 @@ function formatDate(value: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#020617",
   },
-  listContent: {
+  content: {
     padding: 12,
-    gap: 8,
+    paddingBottom: 32,
+    gap: 12,
   },
   center: {
     flex: 1,
@@ -96,17 +216,38 @@ const styles = StyleSheet.create({
     color: "#e5e7eb",
     marginTop: 12,
   },
-  title: {
+  errorBox: {
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: "#451a03",
+    borderWidth: 1,
+    borderColor: "#92400e",
+  },
+  errorText: {
+    color: "#fbbf24",
+  },
+  section: {
+    gap: 8,
+  },
+  sectionTitle: {
     color: "#e5e7eb",
     fontSize: 18,
     fontWeight: "700",
-    marginBottom: 8,
   },
-  emptyText: {
+  empty: {
     color: "#cbd5e1",
+    fontSize: 14,
   },
   desc: {
     color: "#cbd5e1",
     marginTop: 6,
+  },
+  cardFooter: {
+    flexDirection: "row",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  editButton: {
+    minWidth: 100,
   },
 });

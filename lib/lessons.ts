@@ -200,11 +200,7 @@ export async function listLessonsForCoordinator(): Promise<Lesson[]> {
 
 export async function listPublishedLessons(): Promise<Lesson[]> {
   const colRef = collection(firebaseDb, "aulas");
-  const q = query(
-    colRef,
-    where("status", "==", "publicada"),
-    orderBy("data_aula", "desc")
-  );
+  const q = query(colRef, where("status", "==", "publicada"), orderBy("data_aula", "desc"));
   const snap = await getDocs(q);
 
   const list: Lesson[] = [];
@@ -213,6 +209,44 @@ export async function listPublishedLessons(): Promise<Lesson[]> {
     list.push({ id: docSnap.id, ...data });
   });
   return list;
+}
+
+// Lista considerando publish_at (publicada ou agendada já liberada)
+export async function listLessonsByStatusAndVisibility(): Promise<Lesson[]> {
+  const colRef = collection(firebaseDb, "aulas");
+  // duas queries: publicadas e agendadas com publish_at <= now
+  const now = new Date();
+  const publishedQuery = query(colRef, where("status", "==", "publicada"), orderBy("data_aula", "desc"));
+  const scheduledQuery = query(
+    colRef,
+    where("status", "==", "publicada_agendada"),
+    orderBy("publish_at", "desc")
+  );
+
+  const [pubSnap, schedSnap] = await Promise.all([getDocs(publishedQuery), getDocs(scheduledQuery)]);
+  const list: Lesson[] = [];
+
+  pubSnap.forEach((docSnap) => {
+    const data = docSnap.data() as Omit<Lesson, "id">;
+    list.push({ id: docSnap.id, ...data });
+  });
+
+  schedSnap.forEach((docSnap) => {
+    const data = docSnap.data() as Omit<Lesson, "id">;
+    const publishAt = (data as any).publish_at;
+    const publishDate =
+      publishAt?.toDate?.() ??
+      (typeof publishAt === "string" ? new Date(publishAt) : null);
+    if (publishDate && publishDate.getTime() <= now.getTime()) {
+      list.push({ id: docSnap.id, ...data });
+    }
+  });
+
+  return list.sort((a, b) => {
+    const da = (a.data_aula as any)?.toDate?.() ?? new Date(a.data_aula as any);
+    const db = (b.data_aula as any)?.toDate?.() ?? new Date(b.data_aula as any);
+    return db.getTime() - da.getTime();
+  });
 }
 
 export async function listNextPublishedLessons(max: number): Promise<Lesson[]> {
@@ -254,6 +288,95 @@ export async function listLessonsForProfessor(
     list.push({ id: docSnap.id, ...data });
   });
   return list;
+}
+
+// Aulas em preparação para professor (sem rascunho), próprias ou reservadas
+export async function listLessonsForProfessorPreparation(
+  professorId: string
+): Promise<Lesson[]> {
+  const colRef = collection(firebaseDb, "aulas");
+  const statuses: LessonStatus[] = [
+    "disponivel",
+    "pendente_reserva",
+    "reservada",
+    "publicada_agendada",
+  ];
+
+  const q = query(colRef, where("status", "in", statuses));
+  const snap = await getDocs(q);
+  const now = Date.now();
+  const list: Lesson[] = [];
+
+  snap.forEach((docSnap) => {
+    const data = docSnap.data() as Omit<Lesson, "id">;
+    const isMine =
+      data.professor_reservado_id === professorId ||
+      data.criado_por_id === professorId;
+    if (!isMine) return;
+    // aplica visibilidade de publish_at para agendadas
+    if (data.status === "publicada_agendada") {
+      const publishAt = (data as any).publish_at;
+      const ts =
+        publishAt?.toDate?.()?.getTime?.() ??
+        (typeof publishAt === "string" ? Date.parse(publishAt) : now);
+      if (ts > now) {
+        // ainda não liberada, mas professor pode ver
+        list.push({ id: docSnap.id, ...data });
+        return;
+      }
+    }
+    list.push({ id: docSnap.id, ...data });
+  });
+
+  // ordena por data_aula asc (mais próximas primeiro)
+  return list.sort((a, b) => {
+    const da = (a.data_aula as any)?.toDate?.() ?? new Date(a.data_aula as any);
+    const db = (b.data_aula as any)?.toDate?.() ?? new Date(b.data_aula as any);
+    return da.getTime() - db.getTime();
+  });
+}
+
+// Manager (coord/admin) - separa rascunhos e preparação
+export async function listLessonsForManager(): Promise<{
+  drafts: Lesson[];
+  preparation: Lesson[];
+}> {
+  const colRef = collection(firebaseDb, "aulas");
+  const statusesPrep: LessonStatus[] = [
+    "disponivel",
+    "pendente_reserva",
+    "reservada",
+    "publicada_agendada",
+  ];
+
+  const draftsSnap = await getDocs(query(colRef, where("status", "==", "rascunho")));
+  const prepSnap = await getDocs(query(colRef, where("status", "in", statusesPrep)));
+
+  const drafts: Lesson[] = [];
+  draftsSnap.forEach((docSnap) => {
+    const data = docSnap.data() as Omit<Lesson, "id">;
+    drafts.push({ id: docSnap.id, ...data });
+  });
+
+  const preparation: Lesson[] = [];
+  prepSnap.forEach((docSnap) => {
+    const data = docSnap.data() as Omit<Lesson, "id">;
+    preparation.push({ id: docSnap.id, ...data });
+  });
+
+  drafts.sort((a, b) => {
+    const ua = (a.updated_at as any)?.toDate?.()?.getTime?.() ?? Date.now();
+    const ub = (b.updated_at as any)?.toDate?.()?.getTime?.() ?? Date.now();
+    return ub - ua;
+  });
+
+  preparation.sort((a, b) => {
+    const da = (a.data_aula as any)?.toDate?.() ?? new Date(a.data_aula as any);
+    const db = (b.data_aula as any)?.toDate?.() ?? new Date(b.data_aula as any);
+    return da.getTime() - db.getTime();
+  });
+
+  return { drafts, preparation };
 }
 
 // ---------- Busca de aulas ----------
