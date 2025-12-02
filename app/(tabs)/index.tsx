@@ -87,8 +87,8 @@ export default function HomeScreen() {
       if (papel !== "professor") return;
       try {
         setIsLoadingMyLessons(true);
-        const lessons = await listLessonsForProfessor(firebaseUser.uid);
-        setMyLessons(lessons);
+        const sections = await listLessonsForProfessor(firebaseUser.uid);
+        setMyLessons(sections.mine);
       } catch (error) {
         console.error("Erro ao carregar aulas do professor:", error);
       } finally {

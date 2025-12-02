@@ -1,94 +1,145 @@
-// app/lessons/[lessonId].tsx - detalhe da aula com UI compartilhada
 import { useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  ActivityIndicator,
-  Alert,
-  ScrollView,
-  Linking,
-} from "react-native";
+import { View, Text, StyleSheet, ActivityIndicator, Alert, ScrollView } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { doc, getDoc } from "firebase/firestore";
+import { Timestamp } from "firebase/firestore";
 
 import { useAuth } from "../../hooks/useAuth";
-import { firebaseDb } from "../../lib/firebase";
-import { getLessonById } from "../../lib/lessons";
-import type { Lesson } from "../../types/lesson";
-import type { User } from "../../types/user";
-import { listSupportMaterialsForReference } from "../../lib/materials";
-import type { SupportMaterial } from "../../types/material";
-import { SupportMaterialItem } from "../../components/SupportMaterialItem";
-import { Card } from "../../components/ui/Card";
-import { AppButton } from "../../components/ui/AppButton";
-import { EmptyState } from "../../components/ui/EmptyState";
-import { StatusBadge } from "../../components/ui/StatusBadge";
 import { useTheme } from "../../hooks/useTheme";
+import { AppButton } from "../../components/ui/AppButton";
+import { Card } from "../../components/ui/Card";
+import { RichTextEditor } from "../../components/editor/RichTextEditor";
+import type { Lesson } from "../../types/lesson";
+import {
+  approveReservation,
+  getLessonById,
+  publishLessonNow,
+  rejectReservation,
+  reserveLesson,
+  updateProfessorComplement,
+} from "../../lib/lessons";
+import { formatDateTime, formatTimestampToDateInput } from "../../utils/publishAt";
+import { useUserById } from "../../hooks/useUserById";
+import { LessonMaterialsSection } from "../../components/lessons/LessonMaterialsSection";
+
+type Role = "aluno" | "professor" | "coordenador" | "administrador" | undefined;
 
 export default function LessonDetailsScreen() {
   const router = useRouter();
   const { lessonId } = useLocalSearchParams<{ lessonId: string }>();
   const { firebaseUser, user, isInitializing } = useAuth();
   const { themeSettings } = useTheme();
+  const role = user?.papel as Role;
+  const uid = firebaseUser?.uid || "";
 
   const [lesson, setLesson] = useState<Lesson | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [professor, setProfessor] = useState<User | null>(null);
-  const [materials, setMaterials] = useState<SupportMaterial[]>([]);
-  const [isLoadingMaterials, setIsLoadingMaterials] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [complement, setComplement] = useState("");
+  const [savingComplement, setSavingComplement] = useState(false);
+  const [publishing, setPublishing] = useState(false);
 
   useEffect(() => {
-    if (isInitializing) return;
-    if (!firebaseUser) {
-      router.replace("/auth/login" as any);
-      return;
-    }
-    if (user?.status !== "aprovado") {
-      router.replace("/auth/pending" as any);
-      return;
-    }
+    if (!firebaseUser || isInitializing) return;
+    void loadLesson();
+  }, [firebaseUser, isInitializing, lessonId]);
 
-    async function load() {
-      try {
-        setIsLoading(true);
-        const data = await getLessonById(lessonId);
-        if (!data) {
-          Alert.alert("Erro", "Aula não encontrada.");
-          router.replace("/lessons" as any);
-          return;
-        }
-        setLesson(data);
-
-        if (data.professor_reservado_id) {
-          const profRef = doc(firebaseDb, "users", data.professor_reservado_id);
-          const profSnap = await getDoc(profRef);
-          if (profSnap.exists()) {
-            setProfessor(profSnap.data() as User);
-          }
-        }
-
-        try {
-          setIsLoadingMaterials(true);
-          const mats = await listSupportMaterialsForReference("aula", lessonId);
-          setMaterials(mats);
-        } catch (err) {
-          console.error("Erro ao carregar materiais da aula:", err);
-        } finally {
-          setIsLoadingMaterials(false);
-        }
-      } catch (error) {
-        console.error("Erro ao carregar aula:", error);
-        Alert.alert("Erro", "Não foi possível carregar a aula.");
-      } finally {
-        setIsLoading(false);
+  async function loadLesson() {
+    try {
+      setLoading(true);
+      const data = await getLessonById(lessonId);
+      if (!data) {
+        Alert.alert("Erro", "Aula não encontrada.");
+        router.replace("/lessons" as any);
+        return;
       }
+      setLesson(data);
+      setComplement(data.complemento_professor || "");
+    } catch (err) {
+      console.error("Erro ao carregar aula:", err);
+      Alert.alert("Erro", "Não foi possível carregar a aula.");
+      router.replace("/lessons" as any);
+    } finally {
+      setLoading(false);
     }
+  }
 
-    load();
-  }, [firebaseUser, isInitializing, lessonId, router, user?.status]);
+  const bg = themeSettings?.cor_fundo || "#020617";
 
-  if (isInitializing || isLoading) {
+  const isAdmin = role === "administrador" || role === "coordenador";
+  const isProfessor = role === "professor";
+  const isStudent = role === "aluno";
+  const isOwnerProfessor =
+    lesson?.professor_reservado_id && lesson.professor_reservado_id === uid;
+  const { user: reservedProfessor } = useUserById(lesson?.professor_reservado_id);
+
+  const professorNome = reservedProfessor
+    ? reservedProfessor.nome_completo ||
+      `${reservedProfessor.nome || ""} ${reservedProfessor.sobrenome || ""}`.trim() ||
+      reservedProfessor.nome ||
+      "Professor reservado"
+    : null;
+
+  async function handleReserve() {
+    if (!lesson) return;
+    try {
+      await reserveLesson(lesson.id, uid);
+      Alert.alert("Reserva", "Reserva enviada para aprovação.");
+      router.replace("/lessons" as any);
+    } catch (err) {
+      Alert.alert("Erro", (err as Error)?.message || "Não foi possível reservar.");
+    }
+  }
+
+  async function handleApprove() {
+    if (!lesson) return;
+    try {
+      await approveReservation(lesson.id, uid);
+      Alert.alert("Aprovado", "Reserva aprovada.");
+      router.replace("/lessons" as any);
+    } catch (err) {
+      Alert.alert("Erro", "Não foi possível aprovar.");
+    }
+  }
+
+  async function handleReject() {
+    if (!lesson) return;
+    try {
+      await rejectReservation(lesson.id, uid);
+      Alert.alert("Rejeitado", "Reserva rejeitada.");
+      router.replace("/lessons" as any);
+    } catch (err) {
+      Alert.alert("Erro", "Não foi possível rejeitar.");
+    }
+  }
+
+  async function handlePublishNow() {
+    if (!lesson) return;
+    try {
+      setPublishing(true);
+      await publishLessonNow(lesson.id, uid);
+      Alert.alert("Publicado", "Aula publicada.");
+      router.replace("/lessons" as any);
+    } catch (err) {
+      Alert.alert("Erro", "Não foi possível publicar agora.");
+    } finally {
+      setPublishing(false);
+    }
+  }
+
+  async function handleSaveComplement() {
+    if (!lesson) return;
+    try {
+      setSavingComplement(true);
+      await updateProfessorComplement(lesson.id, uid, complement);
+      Alert.alert("Salvo", "Complemento salvo.");
+      router.replace("/lessons" as any);
+    } catch (err) {
+      Alert.alert("Erro", (err as Error)?.message || "Não foi possível salvar.");
+    } finally {
+      setSavingComplement(false);
+    }
+  }
+
+  if (isInitializing || loading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#facc15" />
@@ -101,81 +152,120 @@ export default function LessonDetailsScreen() {
     return (
       <View style={styles.center}>
         <Text style={styles.loadingText}>Aula não encontrada.</Text>
-        <AppButton title="Voltar" variant="outline" onPress={() => router.replace("/lessons" as any)} />
       </View>
     );
   }
 
-  const professorNome =
-    professor?.nome || professor?.email || lesson.professor_reservado_id || "Professor não definido";
-
-  function openMaterial(material: SupportMaterial) {
-    const url = material.url_externa;
-    if (url) {
-      Linking.openURL(url).catch((err) => {
-        console.error("Erro ao abrir link:", err);
-        Alert.alert("Erro", "Não foi possível abrir o material.");
-      });
-      return;
-    }
-    Alert.alert("Material sem link", "Este material não possui URL acessível.");
-  }
+  const dataAulaStr = formatTimestampToDateInput(lesson.data_aula as Timestamp);
+  const publishAtStr = lesson.publish_at ? formatDateTime((lesson.publish_at as Timestamp).toDate()) : "-";
 
   return (
-    <ScrollView
-      style={[
-        styles.container,
-        { backgroundColor: themeSettings?.cor_fundo || "#020617" },
-      ]}
-      contentContainerStyle={styles.content}
-    >
-      <Card
-        title={lesson.titulo}
-        subtitle={`Data da aula: ${String(lesson.data_aula)}`}
-        footer={<StatusBadge status={lesson.status} variant="lesson" />}
-      >
-        {lesson.professor_reservado_id ? (
-          <Text style={styles.subtitleSmall}>Professor: {professorNome}</Text>
-        ) : null}
-      </Card>
+    <ScrollView style={[styles.container, { backgroundColor: bg }]} contentContainerStyle={styles.content}>
+      <Card title={lesson.titulo} subtitle={`Status: ${lesson.status}`}>
+        <Text style={styles.label}>Referência bíblica</Text>
+        <Text style={styles.value}>{lesson.referencia_biblica}</Text>
 
-      <Card title="Descrição base">
-        <Text style={styles.cardText}>{lesson.descricao_base}</Text>
-      </Card>
+        <Text style={styles.label}>Data da aula</Text>
+        <Text style={styles.value}>{dataAulaStr}</Text>
 
-      <Card title="Complemento do professor">
+        <Text style={styles.label}>Publicação automática</Text>
+        <Text style={styles.value}>{publishAtStr}</Text>
+
+        <Text style={styles.label}>Descrição base</Text>
+        <Text style={styles.value}>{lesson.descricao_base}</Text>
+
         {lesson.complemento_professor ? (
-          <Text style={styles.cardText}>{lesson.complemento_professor}</Text>
-        ) : (
-          <Text style={styles.cardTextMuted}>
-            O professor ainda não adicionou complementos para esta aula.
-          </Text>
-        )}
-      </Card>
+          <>
+            <Text style={styles.label}>Complemento do professor</Text>
+            <Text style={styles.value}>{lesson.complemento_professor}</Text>
+          </>
+        ) : null}
 
-      <Card title="Materiais de apoio">
-        {isLoadingMaterials ? (
-          <ActivityIndicator size="small" color="#facc15" />
-        ) : materials.length === 0 ? (
-          <EmptyState title="Nenhum material de apoio disponível para esta aula." />
-        ) : (
-          materials.map((m) => (
-            <SupportMaterialItem
-              key={m.id}
-              material={m}
-              onPress={() => openMaterial(m)}
-              previewImage
+        {(lesson.status === "pendente_reserva" || lesson.status === "reservada") &&
+        lesson.professor_reservado_id ? (
+          <>
+            <Text style={styles.label}>Professor reservado</Text>
+            <Text style={styles.value}>
+              {professorNome || "Professor reservado"}
+            </Text>
+          </>
+        ) : null}
+
+        <LessonMaterialsSection
+          lessonId={lesson.id}
+          canUpload={Boolean(
+            isProfessor &&
+              isOwnerProfessor &&
+              (lesson.status === "reservada" || lesson.status === "publicada")
+          )}
+          currentUserId={uid}
+        />
+
+        <View style={styles.actions}>
+          {isAdmin ? (
+          <>
+            <AppButton
+              title="Editar"
+              variant="secondary"
+              onPress={() => router.push({ pathname: "/admin/lessons/[lessonId]", params: { lessonId } } as any)}
             />
-          ))
-        )}
-      </Card>
+              {lesson.status !== "publicada" ? (
+                <AppButton
+                  title={publishing ? "Publicando..." : "Publicar agora"}
+                  variant="primary"
+                  onPress={handlePublishNow}
+                  disabled={publishing}
+                />
+              ) : null}
+              {lesson.status === "pendente_reserva" ? (
+                <View style={styles.actionsRow}>
+                  <AppButton title="Aprovar reserva" variant="primary" onPress={handleApprove} />
+                  <AppButton title="Rejeitar reserva" variant="secondary" onPress={handleReject} />
+                </View>
+              ) : null}
+            </>
+          ) : null}
 
-      <AppButton
-        title="Voltar"
-        variant="outline"
-        fullWidth={false}
-        onPress={() => router.replace("/lessons" as any)}
-      />
+          {isProfessor ? (
+            <>
+              {lesson.status === "disponivel" ? (
+                <AppButton title="Reservar aula" variant="primary" onPress={handleReserve} />
+              ) : null}
+
+              {lesson.status === "pendente_reserva" && isOwnerProfessor ? (
+                <Text style={styles.helper}>Aguardando aprovação da coordenação.</Text>
+              ) : null}
+
+              {lesson.status === "reservada" && isOwnerProfessor ? (
+                <>
+                  <RichTextEditor
+                    value={complement}
+                    onChange={setComplement}
+                    placeholder="Escreva seu complemento para a aula..."
+                    minHeight={140}
+                  />
+                  <View style={styles.actionsRow}>
+                    <AppButton
+                      title={savingComplement ? "Salvando..." : "Salvar complemento"}
+                      variant="secondary"
+                      onPress={handleSaveComplement}
+                      disabled={savingComplement}
+                    />
+                    <AppButton
+                      title={publishing ? "Publicando..." : "Publicar agora"}
+                      variant="primary"
+                      onPress={handlePublishNow}
+                      disabled={publishing}
+                    />
+                  </View>
+                </>
+              ) : null}
+            </>
+          ) : null}
+
+          {isStudent ? <Text style={styles.helper}>Conteúdo disponível para alunos.</Text> : null}
+        </View>
+      </Card>
     </ScrollView>
   );
 }
@@ -185,9 +275,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingHorizontal: 16,
-    paddingTop: 56,
-    paddingBottom: 24,
+    padding: 16,
     gap: 12,
   },
   center: {
@@ -195,22 +283,29 @@ const styles = StyleSheet.create({
     backgroundColor: "#020617",
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 16,
   },
   loadingText: {
     color: "#e5e7eb",
     marginTop: 12,
   },
-  subtitleSmall: {
+  label: {
     color: "#9ca3af",
-    fontSize: 13,
+    marginTop: 8,
   },
-  cardText: {
+  value: {
+    color: "#e5e7eb",
+  },
+  actions: {
+    marginTop: 16,
+    gap: 8,
+  },
+  actionsRow: {
+    flexDirection: "row",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  helper: {
     color: "#cbd5e1",
-    fontSize: 14,
-  },
-  cardTextMuted: {
-    color: "#94a3b8",
-    fontSize: 13,
+    marginTop: 6,
   },
 });

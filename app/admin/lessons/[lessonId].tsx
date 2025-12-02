@@ -1,246 +1,276 @@
-// app/admin/lessons/[lessonId].tsx - edição de aula com componentes reutilizáveis
-import { useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, Alert, ScrollView, ActivityIndicator } from "react-native";
+import { useEffect, useState } from "react";
+import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { Timestamp } from "firebase/firestore";
 
 import { useAuth } from "../../../hooks/useAuth";
-import { getLessonById, updateLesson } from "../../../lib/lessons";
-import type { LessonStatus, Lesson } from "../../../types/lesson";
-import { Card } from "../../../components/ui/Card";
+import { useTheme } from "../../../hooks/useTheme";
 import { AppInput } from "../../../components/ui/AppInput";
 import { AppButton } from "../../../components/ui/AppButton";
 import { RichTextEditor } from "../../../components/editor/RichTextEditor";
-import { StatusBadge } from "../../../components/ui/StatusBadge";
-import { useTheme } from "../../../hooks/useTheme";
+import {
+  createPublishStringsFromTimestamp,
+  formatTimestampToDateInput,
+  formatTimestampToDateTimeInput,
+  maskDate,
+  maskDateTime,
+  parseDateTimeToTimestamp,
+} from "../../../utils/publishAt";
+import {
+  deleteLesson,
+  getLessonById,
+  publishLessonNow,
+  setLessonStatus,
+  updateLessonFields,
+} from "../../../lib/lessons";
+import type { Lesson, LessonStatus } from "../../../types/lesson";
 
-const AUTOSAVE_DELAY = 3000; // ms
+type FormErrors = {
+  data?: string;
+  publish?: string;
+};
 
 export default function EditLessonScreen() {
   const router = useRouter();
   const { lessonId } = useLocalSearchParams<{ lessonId: string }>();
   const { firebaseUser, user, isInitializing } = useAuth();
   const { themeSettings } = useTheme();
+  const papel = user?.papel;
+  const canDelete = papel === "administrador" || papel === "coordenador";
 
   const [lesson, setLesson] = useState<Lesson | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
   const [titulo, setTitulo] = useState("");
+  const [referencia, setReferencia] = useState("");
   const [dataAula, setDataAula] = useState("");
-  const [dataPublicacaoAuto, setDataPublicacaoAuto] = useState("");
+  const [publishAt, setPublishAt] = useState("");
   const [descricao, setDescricao] = useState("");
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
-  const [isSavingDraft, setIsSavingDraft] = useState(false);
-  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
-  const autosaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Guard + carregar aula
   useEffect(() => {
     if (isInitializing) return;
-
     if (!firebaseUser) {
       router.replace("/auth/login" as any);
       return;
     }
-
     const papel = user?.papel;
     if (papel !== "coordenador" && papel !== "administrador") {
       Alert.alert("Sem permissão", "Apenas coordenador/admin podem editar aulas.");
-      router.replace("/" as any);
+      router.replace("/lessons" as any);
       return;
     }
-
-    async function load() {
-      try {
-        const data = await getLessonById(lessonId);
-        if (!data) {
-          Alert.alert("Erro", "Aula não encontrada.");
-          router.replace("/" as any);
-          return;
-        }
-        setLesson(data);
-        setTitulo(data.titulo);
-        setDataAula(typeof data.data_aula === "string" ? data.data_aula : "");
-        setDataPublicacaoAuto(
-          typeof data.data_publicacao_auto === "string" ? data.data_publicacao_auto : ""
-        );
-        setDescricao(data.descricao_base);
-      } catch (error) {
-        console.error("Erro ao carregar aula:", error);
-        Alert.alert("Erro", "Não foi possível carregar a aula.");
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
-    load();
+    void loadLesson();
   }, [firebaseUser, isInitializing, lessonId, router, user?.papel]);
 
-  function validate() {
+  async function loadLesson() {
+    try {
+      setLoading(true);
+      const data = await getLessonById(lessonId);
+      if (!data) {
+        Alert.alert("Erro", "Aula não encontrada.");
+        router.replace("/lessons" as any);
+        return;
+      }
+      setLesson(data);
+      setTitulo(data.titulo);
+      setReferencia(data.referencia_biblica || "");
+      setDescricao(data.descricao_base);
+      setDataAula(formatTimestampToDateInput(data.data_aula as Timestamp));
+      setPublishAt(formatTimestampToDateTimeInput(data.publish_at as Timestamp | null) || "");
+    } catch (err) {
+      console.error("Erro ao carregar aula:", err);
+      Alert.alert("Erro", "Não foi possível carregar a aula.");
+      router.replace("/lessons" as any);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function validateBase(): boolean {
+    const newErrors: FormErrors = {};
     if (!titulo.trim()) {
-      Alert.alert("Erro", "Informe o título da aula.");
+      Alert.alert("Erro", "Informe o título.");
       return false;
     }
     if (!dataAula.trim()) {
-      Alert.alert("Erro", "Informe a data da aula.");
+      newErrors.data = "Informe a data da aula (dd/mm/aaaa).";
+      setErrors(newErrors);
       return false;
     }
-    if (!descricao.trim()) {
-      Alert.alert("Erro", "Informe a descrição base.");
-      return false;
-    }
+    setErrors(newErrors);
     return true;
   }
 
-  async function handleSave(status: LessonStatus, publishNow = false, archive = false) {
-    if (!validate() || !lesson) return;
+  function validatePublishAt(): boolean {
+    if (!publishAt.trim()) return true;
+    const parsed = parseDateTimeToTimestamp(publishAt.trim());
+    if (!parsed) {
+      setErrors((prev) => ({ ...prev, publish: "Data/hora inválida (dd/mm/aaaa hh:mm)." }));
+      return false;
+    }
+    setErrors((prev) => ({ ...prev, publish: undefined }));
+    return true;
+  }
 
+  function redirect() {
+    router.replace("/lessons" as any);
+  }
+
+  async function handleSave(statusChange?: LessonStatus) {
+    if (!lesson || !firebaseUser) return;
+    if (!validateBase() || !validatePublishAt()) return;
     try {
-      setIsSubmitting(true);
-      const dataPub = dataPublicacaoAuto.trim() || null;
-
-      await updateLesson({
-        lessonId: lesson.id,
+      setSubmitting(true);
+      await updateLessonFields(lesson.id, {
         titulo: titulo.trim(),
+        referencia_biblica: referencia.trim(),
         descricao_base: descricao.trim(),
-        data_aula: dataAula.trim(),
-        data_publicacao_auto: dataPub,
-        status: archive ? ("arquivada" as LessonStatus) : status,
-        setPublishedNow: publishNow,
-        clearPublished: !publishNow && status !== "publicada",
-        setDraftSavedNow: status === "rascunho",
+        data_aula_text: dataAula.trim(),
+        publish_at_text: publishAt.trim() || null,
+        status: statusChange,
       });
-
-      Alert.alert("Sucesso", "Aula atualizada.");
-    } catch (error: any) {
-      console.error("Erro ao atualizar aula:", error);
-      Alert.alert("Erro", error?.message || "Falha ao atualizar aula.");
+      Alert.alert("Sucesso", "Aula salva.");
+      redirect();
+    } catch (err) {
+      console.error("Erro ao salvar aula:", err);
+      Alert.alert("Erro", (err as Error)?.message || "Não foi possível salvar.");
     } finally {
-      setIsSubmitting(false);
+      setSubmitting(false);
     }
   }
 
-  // Auto-save rascunho
-  useEffect(() => {
-    if (!lesson) return;
-
-    if (autosaveTimeoutRef.current) {
-      clearTimeout(autosaveTimeoutRef.current);
-    }
-    autosaveTimeoutRef.current = setTimeout(() => {
-      void handleAutoSave();
-    }, AUTOSAVE_DELAY);
-
-    return () => {
-      if (autosaveTimeoutRef.current) clearTimeout(autosaveTimeoutRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [titulo, dataAula, dataPublicacaoAuto, descricao]);
-
-  async function handleAutoSave() {
-    if (!lesson) return;
+  async function handlePublish() {
+    if (!lesson || !firebaseUser) return;
     try {
-      setIsSavingDraft(true);
-      await updateLesson({
-        lessonId: lesson.id,
-        titulo: titulo.trim(),
-        descricao_base: descricao.trim(),
-        data_aula: dataAula.trim(),
-        data_publicacao_auto: dataPublicacaoAuto.trim() || null,
-        status: lesson.status,
-        setDraftSavedNow: true,
-      });
-      setLastSavedAt(new Date());
-    } catch (error) {
-      console.error("Erro ao salvar rascunho:", error);
+      setSubmitting(true);
+      await publishLessonNow(lesson.id, firebaseUser.uid);
+      Alert.alert("Publicado", "Aula publicada.");
+      redirect();
+    } catch (err) {
+      Alert.alert("Erro", "Não foi possível publicar.");
     } finally {
-      setIsSavingDraft(false);
+      setSubmitting(false);
     }
   }
 
-  if (isLoading) {
+  async function handleDelete() {
+    if (!lesson) return;
+    Alert.alert("Excluir aula", "Deseja excluir esta aula?", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Excluir",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            console.log("[Lessons] handleDeleteLesson chamado para", lesson.id);
+            setDeleting(true);
+            await deleteLesson(lesson.id);
+            Alert.alert("Excluída", "Aula excluída com sucesso.");
+            redirect();
+          } catch (err) {
+            console.error("[Lessons] Erro ao excluir aula:", err);
+            Alert.alert("Erro", "Não foi possível excluir a aula. Tente novamente.");
+          } finally {
+            setDeleting(false);
+          }
+        },
+      },
+    ]);
+  }
+
+  if (isInitializing || loading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#facc15" />
-        <Text style={styles.loadingText}>Carregando aula...</Text>
+        <Text style={styles.loadingText}>Carregando...</Text>
       </View>
     );
   }
 
   return (
     <ScrollView
-      style={[
-        styles.container,
-        { backgroundColor: themeSettings?.cor_fundo || "#020617" },
-      ]}
+      style={[styles.container, { backgroundColor: themeSettings?.cor_fundo || "#020617" }]}
       contentContainerStyle={styles.content}
     >
-      <Card
-        title="Editar aula"
-        subtitle={lesson ? `Status atual: ${lesson.status}` : undefined}
-        footer={lesson ? <StatusBadge status={lesson.status} variant="lesson" /> : null}
-      >
-        <AppInput
-          label="Título da aula"
-          placeholder="Ex.: Aula sobre Romanos 8"
-          value={titulo}
-          onChangeText={setTitulo}
-        />
-        <AppInput
-          label="Data da aula"
-          placeholder="YYYY-MM-DD ou DD/MM/YYYY"
-          value={dataAula}
-          onChangeText={setDataAula}
-        />
-        <AppInput
-          label="Data de publicação automática (opcional)"
-          placeholder="YYYY-MM-DD ou DD/MM/YYYY"
-          value={dataPublicacaoAuto}
-          onChangeText={setDataPublicacaoAuto}
-        />
-        <RichTextEditor
-          value={descricao}
-          onChange={setDescricao}
-          placeholder="Digite a descrição base da aula..."
-          minHeight={160}
-        />
+      <Text style={styles.title}>Editar aula</Text>
+      <Text style={styles.helper}>Status atual: {lesson?.status}</Text>
 
-        <View style={styles.actions}>
-          <AppButton
-            title={isSubmitting || isSavingDraft ? "Salvando..." : "Salvar rascunho"}
-            variant="secondary"
-            onPress={() => handleSave("rascunho", false, false)}
-            disabled={isSubmitting || isSavingDraft}
-          />
-          <AppButton
-            title={isSubmitting ? "Enviando..." : "Marcar disponível"}
-            variant="primary"
-            onPress={() => handleSave("disponivel", false, false)}
-            disabled={isSubmitting}
-          />
-        </View>
+      <AppInput label="Título" value={titulo} onChangeText={setTitulo} />
+      <AppInput
+        label="Referência bíblica"
+        value={referencia}
+        onChangeText={setReferencia}
+        placeholder="Ex.: Romanos 8"
+      />
+      <AppInput
+        label="Data da aula"
+        placeholder="dd/mm/aaaa"
+        value={dataAula}
+        keyboardType="number-pad"
+        onChangeText={(v) => {
+          setDataAula(maskDate(v));
+          setErrors((prev) => ({ ...prev, data: undefined }));
+        }}
+        error={errors.data}
+      />
+      <AppInput
+        label="Publicar automaticamente em"
+        placeholder="dd/mm/aaaa hh:mm"
+        value={publishAt}
+        keyboardType="number-pad"
+        onChangeText={(v) => {
+          setPublishAt(maskDateTime(v));
+          setErrors((prev) => ({ ...prev, publish: undefined }));
+        }}
+        error={errors.publish}
+        helperText="Digite ddmmaaaa hh:mm ou deixe vazio."
+      />
+      <RichTextEditor
+        value={descricao}
+        onChange={setDescricao}
+        placeholder="Descrição base da aula..."
+        minHeight={180}
+      />
 
-        <View style={[styles.actions, { marginTop: 8 }]}>
+      <View style={styles.actions}>
+        <AppButton
+          title={submitting ? "Salvando..." : "Salvar alterações"}
+          variant="secondary"
+          onPress={() => handleSave()}
+          disabled={submitting}
+        />
+        <AppButton
+          title={submitting ? "Salvando..." : "Salvar como rascunho"}
+          variant="secondary"
+          onPress={() => handleSave("rascunho")}
+          disabled={submitting}
+        />
+        <AppButton
+          title={submitting ? "Salvando..." : "Disponibilizar para professores"}
+          variant="secondary"
+          onPress={() => handleSave("disponivel")}
+          disabled={submitting}
+        />
+        <AppButton
+          title={submitting ? "Publicando..." : "Publicar agora"}
+          variant="primary"
+          onPress={handlePublish}
+          disabled={submitting}
+        />
+        {canDelete ? (
           <AppButton
-            title={isSubmitting ? "Publicando..." : "Publicar agora"}
-            variant="secondary"
-            onPress={() => handleSave("publicada", true, false)}
-            disabled={isSubmitting}
-          />
-          <AppButton
-            title="Arquivar aula"
+            title={deleting ? "Excluindo..." : "Excluir aula"}
             variant="outline"
-            onPress={() => handleSave("publicada", false, true)}
-            disabled={isSubmitting}
+            onPress={() => {
+              console.log("[Lessons] Botão excluir clicado");
+              void handleDelete();
+            }}
+            disabled={submitting || deleting}
           />
-        </View>
-
-        {isSavingDraft ? (
-          <Text style={styles.savingText}>Salvando rascunho...</Text>
-        ) : lastSavedAt ? (
-          <Text style={styles.savingText}>Rascunho salvo {lastSavedAt.toLocaleTimeString()}</Text>
         ) : null}
-      </Card>
+      </View>
     </ScrollView>
   );
 }
@@ -250,9 +280,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingHorizontal: 16,
-    paddingTop: 56,
-    paddingBottom: 24,
+    padding: 16,
     gap: 12,
   },
   center: {
@@ -265,13 +293,16 @@ const styles = StyleSheet.create({
     color: "#e5e7eb",
     marginTop: 12,
   },
+  title: {
+    color: "#e5e7eb",
+    fontSize: 20,
+    fontWeight: "700",
+  },
+  helper: {
+    color: "#cbd5e1",
+  },
   actions: {
-    flexDirection: "row",
     gap: 8,
     marginTop: 12,
-  },
-  savingText: {
-    color: "#9ca3af",
-    marginTop: 6,
   },
 });

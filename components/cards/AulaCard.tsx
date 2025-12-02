@@ -4,6 +4,7 @@ import type { Lesson } from "../../types/lesson";
 import { Card } from "../ui/Card";
 import { StatusBadge } from "../ui/StatusBadge";
 import { useTheme } from "../../hooks/useTheme";
+import { formatTimestamp } from "../../utils/date";
 
 type Props = {
   lesson: Lesson;
@@ -23,7 +24,9 @@ export function AulaCard({ lesson, onPress, showStatus = true, style }: Props) {
         <Text style={[styles.title, { color: textColor }]}>{lesson.titulo}</Text>
         {showStatus ? <StatusBadge status={lesson.status} variant="lesson" /> : null}
       </View>
-      <Text style={[styles.meta, { color: muted }]}>Data: {lesson.data_aula}</Text>
+      <Text style={[styles.meta, { color: muted }]}>
+        Data: {formatTimestamp((lesson as any).data_aula)}
+      </Text>
       {lesson.professor_reservado_id ? (
         <Text style={[styles.meta, { color: muted }]}>
           Professor reservado: {lesson.professor_reservado_id}

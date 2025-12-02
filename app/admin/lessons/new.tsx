@@ -1,272 +1,118 @@
 import { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Alert, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
-
 import { useAuth } from "../../../hooks/useAuth";
-import { createLesson } from "../../../lib/lessons";
-import { LessonStatus } from "../../../types/lesson";
-import { Card } from "../../../components/ui/Card";
+import { useTheme } from "../../../hooks/useTheme";
 import { AppInput } from "../../../components/ui/AppInput";
 import { AppButton } from "../../../components/ui/AppButton";
 import { RichTextEditor } from "../../../components/editor/RichTextEditor";
-import { useTheme } from "../../../hooks/useTheme";
-import { isNonEmpty } from "../../../utils/validation";
-
-/* Ajustes fase de testes - Home, notificacoes, gestao de papeis e permissoes */
+import { maskDate, maskDateTime, parseDateTimeToTimestamp } from "../../../utils/publishAt";
+import { createLessonAvailable, createLessonDraft } from "../../../lib/lessons";
 
 export default function NewLessonScreen() {
   const router = useRouter();
   const { firebaseUser, user, isInitializing } = useAuth();
   const { themeSettings } = useTheme();
 
-  const [title, setTitle] = useState("");
-  const [biblicalReference, setBiblicalReference] = useState("");
-  const [date, setDate] = useState("");
-  const [dateError, setDateError] = useState<string | null>(null);
-  const [publishDate, setPublishDate] = useState("");
-  const [publishHour, setPublishHour] = useState("");
-  const [publishDateError, setPublishDateError] = useState<string | null>(null);
-  const [publishHourError, setPublishHourError] = useState<string | null>(null);
-  const [description, setDescription] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [titulo, setTitulo] = useState("");
+  const [referencia, setReferencia] = useState("");
+  const [dataAula, setDataAula] = useState("");
+  const [publishAt, setPublishAt] = useState("");
+  const [descricao, setDescricao] = useState("");
+  const [errors, setErrors] = useState<{ data?: string; publish?: string }>({});
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (isInitializing) return;
-
     if (!firebaseUser) {
       router.replace("/auth/login" as any);
       return;
     }
-
     const papel = user?.papel;
     if (papel !== "coordenador" && papel !== "administrador") {
       Alert.alert("Sem permissão", "Apenas coordenador/admin podem criar aulas.");
-      router.replace("/" as any);
+      router.replace("/lessons" as any);
     }
   }, [firebaseUser, isInitializing, router, user?.papel]);
 
-  function formatDateInput(value: string) {
-    const digits = value.replace(/\D/g, "").slice(0, 8);
-    const part1 = digits.slice(0, 2);
-    const part2 = digits.slice(2, 4);
-    const part3 = digits.slice(4, 8);
-    let formatted = part1;
-    if (part2) formatted = `${part1}/${part2}`;
-    if (part3) formatted = `${part1}/${part2}/${part3}`;
-    setDate(formatted);
-    setDateError(null);
-  }
-
-  function isValidDateDDMMYYYY(value: string): boolean {
-    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(value)) return false;
-    const [d, m, y] = value.split("/").map((v) => Number(v));
-    const dateObj = new Date(y, m - 1, d);
-    return (
-      dateObj.getFullYear() === y &&
-      dateObj.getMonth() === m - 1 &&
-      dateObj.getDate() === d
-    );
-  }
-
-  function toISODate(value: string): string | null {
-    if (!isValidDateDDMMYYYY(value)) return null;
-    const [d, m, y] = value.split("/");
-    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
-  }
-
-  function isValidPublishDateTime(dateStr: string, hourStr: string): boolean {
-    if (!isValidDateDDMMYYYY(dateStr)) return false;
-    if (!/^\d{2}:\d{2}$/.test(hourStr)) return false;
-    const [d, m, y] = dateStr.split("/").map((v) => Number(v));
-    const [hh, mm] = hourStr.split(":").map((v) => Number(v));
-    if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return false;
-    const dt = new Date(y, m - 1, d, hh, mm, 0);
-    return (
-      dt.getFullYear() === y &&
-      dt.getMonth() === m - 1 &&
-      dt.getDate() === d &&
-      dt.getHours() === hh &&
-      dt.getMinutes() === mm
-    );
-  }
-
-  function toISODateTime(dateStr: string, hourStr: string): string | null {
-    if (!isValidPublishDateTime(dateStr, hourStr)) return null;
-    const [d, m, y] = dateStr.split("/").map((v) => v.padStart(2, "0"));
-    const [hh, mm] = hourStr.split(":").map((v) => v.padStart(2, "0"));
-    return `${y}-${m}-${d}T${hh}:${mm}:00Z`;
-  }
-
-  function formatPublishDateInput(value: string) {
-    const digits = value.replace(/\D/g, "").slice(0, 8);
-    const p1 = digits.slice(0, 2);
-    const p2 = digits.slice(2, 4);
-    const p3 = digits.slice(4, 8);
-    let formatted = p1;
-    if (p2) formatted = `${p1}/${p2}`;
-    if (p3) formatted = `${p1}/${p2}/${p3}`;
-    setPublishDate(formatted);
-    setPublishDateError(null);
-  }
-
-  function formatPublishHourInput(value: string) {
-    const digits = value.replace(/\D/g, "").slice(0, 4);
-    const h = digits.slice(0, 2);
-    const m = digits.slice(2, 4);
-    let formatted = h;
-    if (m) formatted = `${h}:${m}`;
-    setPublishHour(formatted);
-    setPublishHourError(null);
-  }
-
-  function validateForm() {
-    if (!isNonEmpty(title, 3)) {
+  function validateBase(): boolean {
+    const newErrors: { data?: string; publish?: string } = {};
+    if (!titulo.trim()) {
       Alert.alert("Erro", "Informe o título da aula.");
       return false;
     }
-    if (!isNonEmpty(biblicalReference, 2)) {
+    if (!referencia.trim()) {
       Alert.alert("Erro", "Informe a referência bíblica.");
       return false;
     }
-    if (!date.trim()) {
-      setDateError("Informe a data da aula.");
+    if (!dataAula.trim()) {
+      newErrors.data = "Informe a data da aula (dd/mm/aaaa).";
+      setErrors(newErrors);
       return false;
     }
-    if (!isValidDateDDMMYYYY(date.trim())) {
-      setDateError("Data inválida. Use dd/mm/aaaa.");
-      return false;
-    }
-    setDateError(null);
-    if (!isNonEmpty(description, 3)) {
-      Alert.alert("Erro", "Informe a descrição base.");
-      return false;
-    }
+    setErrors(newErrors);
     return true;
   }
 
-  async function handleSaveDraft() {
-    console.log("[CriarAula] handleSaveDraft chamado");
-    if (!firebaseUser) return;
-    if (!validateForm()) return;
-
-    const isoDate = toISODate(date.trim());
-    if (!isoDate) {
-      setDateError("Data inválida. Use dd/mm/aaaa.");
-      return;
+  function ensurePublishAtValid(): boolean {
+    if (!publishAt.trim()) return true;
+    const parsed = parseDateTimeToTimestamp(publishAt.trim());
+    if (!parsed) {
+      setErrors((prev) => ({ ...prev, publish: "Data/hora inválida (dd/mm/aaaa hh:mm)." }));
+      return false;
     }
-
-    try {
-      setIsSubmitting(true);
-      const lessonId = await createLesson({
-        titulo: title.trim(),
-        descricao_base: description.trim(),
-        referencia_biblica: biblicalReference.trim(),
-        data_aula: isoDate,
-        status: LessonStatus.RASCUNHO,
-        criado_por_id: firebaseUser.uid,
-      });
-      console.log("[CriarAula] Rascunho salvo", lessonId);
-      Alert.alert("Sucesso", "Rascunho salvo com sucesso.");
-      setTitle("");
-      setBiblicalReference("");
-      setDate("");
-      setPublishDate("");
-      setPublishHour("");
-      setDescription("");
-      router.push("/lessons" as any);
-    } catch (error) {
-      console.error("[CriarAula] Erro ao salvar rascunho", error);
-      Alert.alert("Erro", "Não foi possível salvar o rascunho. Tente novamente.");
-    } finally {
-      setIsSubmitting(false);
-    }
+    setErrors((prev) => ({ ...prev, publish: undefined }));
+    return true;
   }
 
-  async function handleSchedule() {
-    console.log("[CriarAula] handleSchedule chamado");
-    if (!firebaseUser) return;
-    if (!validateForm()) return;
-
-    const isoDate = toISODate(date.trim());
-    if (!isoDate) {
-      setDateError("Data inválida. Use dd/mm/aaaa.");
-      return;
-    }
-    const isoPublishAt = toISODateTime(publishDate.trim(), publishHour.trim());
-    if (!isoPublishAt) {
-      setPublishDateError("Informe data e hora válidas (dd/mm/aaaa e hh:mm).");
-      setPublishHourError("Informe data e hora válidas (dd/mm/aaaa e hh:mm).");
-      return;
-    }
-    if (new Date(isoPublishAt).getTime() < Date.now()) {
-      setPublishHourError("Publicação não pode ser no passado.");
-      return;
-    }
-
-    try {
-      setIsSubmitting(true);
-      const lessonId = await createLesson({
-        titulo: title.trim(),
-        descricao_base: description.trim(),
-        referencia_biblica: biblicalReference.trim(),
-        data_aula: isoDate,
-        publish_at: isoPublishAt,
-        status: LessonStatus.DISPONIVEL,
-        criado_por_id: firebaseUser.uid,
-      });
-      console.log("[CriarAula] Aula agendada", lessonId);
-      Alert.alert("Sucesso", "Aula criada e agendada para publicação.");
-      setTitle("");
-      setBiblicalReference("");
-      setDate("");
-      setPublishDate("");
-      setPublishHour("");
-      setDescription("");
-      router.push("/lessons" as any);
-    } catch (error) {
-      console.error("[CriarAula] Erro ao agendar publicação", error);
-      Alert.alert("Erro", "Não foi possível agendar a publicação. Tente novamente.");
-    } finally {
-      setIsSubmitting(false);
-    }
+  function clearForm() {
+    setTitulo("");
+    setReferencia("");
+    setDataAula("");
+    setPublishAt("");
+    setDescricao("");
+    setErrors({});
   }
 
-  async function handlePublish() {
-    console.log("[CriarAula] handlePublish chamado");
+  async function handleSubmit(status: "rascunho" | "disponivel") {
     if (!firebaseUser) return;
-    if (!validateForm()) return;
-
-    const isoDate = toISODate(date.trim());
-    if (!isoDate) {
-      setDateError("Data inválida. Use dd/mm/aaaa.");
-      return;
-    }
+    if (!validateBase()) return;
+    if (!ensurePublishAtValid()) return;
 
     try {
-      setIsSubmitting(true);
-      const lessonId = await createLesson({
-        titulo: title.trim(),
-        descricao_base: description.trim(),
-        referencia_biblica: biblicalReference.trim(),
-        data_aula: isoDate,
-        status: LessonStatus.PUBLICADA,
-        criado_por_id: firebaseUser.uid,
-        publishNow: true,
-      });
-      console.log("[CriarAula] Aula publicada", lessonId);
-      Alert.alert("Sucesso", "Aula publicada com sucesso.");
-      setTitle("");
-      setBiblicalReference("");
-      setDate("");
-      setPublishDate("");
-      setPublishHour("");
-      setDescription("");
-      router.push("/lessons" as any);
-    } catch (error) {
-      console.error("[CriarAula] Erro ao publicar", error);
-      Alert.alert("Erro", "Não foi possível publicar a aula. Tente novamente.");
+      setSubmitting(true);
+      if (status === "rascunho") {
+        await createLessonDraft(
+          {
+            titulo: titulo.trim(),
+            referencia_biblica: referencia.trim(),
+            descricao_base: descricao.trim(),
+            data_aula_text: dataAula.trim(),
+            publish_at_text: publishAt.trim() || null,
+          },
+          firebaseUser.uid
+        );
+        Alert.alert("Sucesso", "Aula salva como rascunho.");
+      } else {
+        await createLessonAvailable(
+          {
+            titulo: titulo.trim(),
+            referencia_biblica: referencia.trim(),
+            descricao_base: descricao.trim(),
+            data_aula_text: dataAula.trim(),
+            publish_at_text: publishAt.trim() || null,
+          },
+          firebaseUser.uid
+        );
+        Alert.alert("Sucesso", "Aula criada e disponibilizada para os professores.");
+      }
+      clearForm();
+      router.replace("/lessons" as any);
+    } catch (err) {
+      console.error("Erro ao salvar aula:", err);
+      Alert.alert("Erro", (err as Error)?.message || "Não foi possível salvar a aula.");
     } finally {
-      setIsSubmitting(false);
+      setSubmitting(false);
     }
   }
 
@@ -281,78 +127,66 @@ export default function NewLessonScreen() {
 
   return (
     <ScrollView
-      style={[
-        styles.container,
-        { backgroundColor: themeSettings?.cor_fundo || "#020617" },
-      ]}
+      style={[styles.container, { backgroundColor: themeSettings?.cor_fundo || "#020617" }]}
       contentContainerStyle={styles.content}
     >
-      <Card title="Criar aula" subtitle="Preencha os campos básicos e escolha a ação.">
-        <AppInput
-          label="Título da aula"
-          placeholder="Ex.: Aula sobre Romanos 8"
-          value={title}
-          onChangeText={setTitle}
-        />
-        <AppInput
-          label="Referência bíblica"
-          placeholder="Ex.: Mateus 5"
-          value={biblicalReference}
-          onChangeText={setBiblicalReference}
-        />
-        <AppInput
-          label="Data da aula"
-          placeholder="dd/mm/aaaa"
-          value={date}
-          keyboardType="number-pad"
-          onChangeText={formatDateInput}
-          error={dateError || undefined}
-        />
-        <AppInput
-          label="Publicar automaticamente em (data)"
-          placeholder="dd/mm/aaaa"
-          value={publishDate}
-          keyboardType="number-pad"
-          onChangeText={formatPublishDateInput}
-          error={publishDateError || undefined}
-        />
-        <AppInput
-          label="Hora da publicação"
-          placeholder="hh:mm"
-          value={publishHour}
-          keyboardType="number-pad"
-          onChangeText={formatPublishHourInput}
-          error={publishHourError || undefined}
-        />
+      <Text style={styles.title}>Criar aula</Text>
+      <AppInput
+        label="Título da aula"
+        placeholder="Ex.: Aula sobre Romanos 8"
+        value={titulo}
+        onChangeText={setTitulo}
+      />
+      <AppInput
+        label="Referência bíblica"
+        placeholder="Ex.: Romanos 8"
+        value={referencia}
+        onChangeText={setReferencia}
+      />
+      <AppInput
+        label="Data da aula"
+        placeholder="dd/mm/aaaa"
+        keyboardType="number-pad"
+        value={dataAula}
+        onChangeText={(v) => {
+          setDataAula(maskDate(v));
+          setErrors((prev) => ({ ...prev, data: undefined }));
+        }}
+        error={errors.data}
+      />
+      <AppInput
+        label="Publicar automaticamente em (opcional)"
+        placeholder="dd/mm/aaaa hh:mm"
+        keyboardType="number-pad"
+        value={publishAt}
+        onChangeText={(v) => {
+          setPublishAt(maskDateTime(v));
+          setErrors((prev) => ({ ...prev, publish: undefined }));
+        }}
+        error={errors.publish}
+        helperText="Digite ddmmaaaa hh:mm. Deixe vazio para não agendar."
+      />
+      <RichTextEditor
+        value={descricao}
+        onChange={setDescricao}
+        placeholder="Descrição base da aula..."
+        minHeight={180}
+      />
 
-        <RichTextEditor
-          value={description}
-          onChange={setDescription}
-          placeholder="Digite a descrição base da aula..."
-          minHeight={180}
+      <View style={styles.actions}>
+        <AppButton
+          title={submitting ? "Salvando..." : "Salvar rascunho"}
+          variant="secondary"
+          onPress={() => handleSubmit("rascunho")}
+          disabled={submitting}
         />
-
-        <View style={styles.actionsColumn}>
-          <AppButton
-            title={isSubmitting ? "Salvando..." : "Salvar rascunho"}
-            variant="secondary"
-            onPress={handleSaveDraft}
-            disabled={isSubmitting}
-          />
-          <AppButton
-            title={isSubmitting ? "Agendando..." : "Criar aula"}
-            variant="secondary"
-            onPress={handleSchedule}
-            disabled={isSubmitting}
-          />
-          <AppButton
-            title={isSubmitting ? "Publicando..." : "Publicar agora"}
-            variant="primary"
-            onPress={handlePublish}
-            disabled={isSubmitting}
-          />
-        </View>
-      </Card>
+        <AppButton
+          title={submitting ? "Criando..." : "Criar aula disponível"}
+          variant="primary"
+          onPress={() => handleSubmit("disponivel")}
+          disabled={submitting}
+        />
+      </View>
     </ScrollView>
   );
 }
@@ -362,9 +196,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingHorizontal: 16,
-    paddingTop: 56,
-    paddingBottom: 24,
+    padding: 16,
     gap: 12,
   },
   center: {
@@ -377,7 +209,12 @@ const styles = StyleSheet.create({
     color: "#e5e7eb",
     marginTop: 12,
   },
-  actionsColumn: {
+  title: {
+    color: "#e5e7eb",
+    fontSize: 20,
+    fontWeight: "700",
+  },
+  actions: {
     gap: 8,
     marginTop: 12,
   },

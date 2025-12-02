@@ -7,55 +7,57 @@ if (!admin.apps.length) {
 }
 
 const db = admin.firestore();
+const collectionName = "aulas";
 
 export const publishScheduledLessons = onSchedule("every 1 minutes", async () => {
-  const now = new Date();
-  const statuses = ["disponivel", "publicacao_agendada"];
+  const now = admin.firestore.Timestamp.now();
+  const statuses = ["disponivel", "reservada"];
+  const lessonsRef = db.collection(collectionName);
 
-  const lessonsRef = db.collection("aulas");
-
-  // Firestore limita combinações de filtros; fazemos duas consultas simples e unimos resultados.
   const snapshots = await Promise.all(
     statuses.map((status) =>
-      lessonsRef.where("status", "==", status).where("publish_at", "!=", null).get()
+      lessonsRef
+        .where("status", "==", status)
+        .where("publish_at", "<=", now)
+        .orderBy("publish_at", "asc")
+        .get()
     )
   );
 
+  let processed = 0;
   const updates: Promise<unknown>[] = [];
-  let candidates = 0;
-  let published = 0;
 
   for (const snap of snapshots) {
-    candidates += snap.size;
     snap.forEach((docSnap) => {
-      const data = docSnap.data() as any;
-      const publishAtString = data.publish_at as string | null;
-
-      if (!publishAtString || typeof publishAtString !== "string") {
-        logger.warn("publish_at ausente ou invalido", { id: docSnap.id });
-        return;
+      const data = docSnap.data();
+      const rawPublish = data.publish_at as admin.firestore.Timestamp | string | null;
+      let publishAt: admin.firestore.Timestamp | null = null;
+      if (rawPublish) {
+        if (typeof rawPublish === "string") {
+          const parsed = new Date(rawPublish);
+          if (!Number.isNaN(parsed.getTime())) {
+            publishAt = admin.firestore.Timestamp.fromDate(parsed);
+          }
+        } else if (rawPublish.toMillis) {
+          publishAt = rawPublish;
+        }
       }
+      if (!publishAt) return;
+      if (publishAt.toMillis() > now.toMillis()) return;
 
-      const publishAt = new Date(publishAtString);
-      if (isNaN(publishAt.getTime())) {
-        logger.error("publish_at mal formatado", { id: docSnap.id, publish_at: publishAtString });
-        return;
-      }
-
-      if (publishAt.getTime() <= now.getTime()) {
-        const update: FirebaseFirestore.UpdateData<FirebaseFirestore.DocumentData> = {
-          status: "publicada",
-          publicado_em: admin.firestore.FieldValue.serverTimestamp(),
-          data_publicacao_auto: admin.firestore.FieldValue.serverTimestamp(),
-          updated_at: admin.firestore.FieldValue.serverTimestamp(),
-        };
-        updates.push(
-          docSnap.ref.update(update).catch((err) => {
-            logger.error("Falha ao publicar aula agendada", { id: docSnap.id, err });
+      processed += 1;
+      updates.push(
+        docSnap.ref
+          .update({
+            status: "publicada",
+            publicado_em: admin.firestore.FieldValue.serverTimestamp(),
+            publicado_por_id: "system-auto",
+            publish_at: null,
+            data_publicacao_auto: data.data_publicacao_auto || formatDateTime(publishAt.toDate()),
+            updated_at: admin.firestore.FieldValue.serverTimestamp(),
           })
-        );
-        published += 1;
-      }
+          .catch((err) => logger.error("Falha ao publicar agendada", { id: docSnap.id, err }))
+      );
     });
   }
 
@@ -63,9 +65,15 @@ export const publishScheduledLessons = onSchedule("every 1 minutes", async () =>
     await Promise.all(updates);
   }
 
-  logger.info("publishScheduledLessons concluida", {
-    candidatos: candidates,
-    publicados: published,
-    horario: now.toISOString(),
+  logger.info("publishScheduledLessons concluída", {
+    processadas: processed,
+    horario: now.toDate().toISOString(),
   });
 });
+
+function formatDateTime(date: Date): string {
+  const pad = (n: number) => `${n}`.padStart(2, "0");
+  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} ${pad(
+    date.getHours()
+  )}:${pad(date.getMinutes())}`;
+}

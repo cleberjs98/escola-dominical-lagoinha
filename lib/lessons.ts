@@ -1,509 +1,345 @@
-// lib/lessons.ts
+// Serviço central de aulas: criação, reserva, publicação, listagens e helpers de data.
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
-  limit,
   orderBy,
   query,
+  QuerySnapshot,
   serverTimestamp,
+  Timestamp,
   updateDoc,
   where,
+  DocumentData,
 } from "firebase/firestore";
-import { firebaseDb } from "./firebase";
 import type { Lesson, LessonStatus } from "../types/lesson";
-import { listApprovedUsersIds } from "./users";
-import { createNotification } from "./notifications";
-import {
-  NotificationReferenceType,
-  NotificationType,
-} from "../types/notification";
 import { sanitizeText } from "../utils/sanitize";
+import { firebaseDb } from "./firebase";
+import {
+  formatDateTime,
+  formatTimestampToDateInput,
+  formatTimestampToDateTimeInput,
+  parseDateTimeToTimestamp,
+  parseDateToTimestamp,
+} from "../utils/publishAt";
 
-/**
- * Índices recomendados (criar no console do Firestore):
- * - Collection "aulas" ordenada por data_aula (orderBy data_aula).
- * - Collection "aulas" filtrando status + orderBy data_aula (status, data_aula).
- */
-
-type CreateLessonParams = {
+type LessonInput = {
   titulo: string;
+  referencia_biblica: string;
   descricao_base: string;
-  data_aula: Lesson["data_aula"];
-  data_publicacao_auto?: Lesson["data_publicacao_auto"];
-  referencia_biblica?: string | null;
-  publish_at?: Lesson["publish_at"];
-  criado_por_id: string;
-  status: LessonStatus;
-  publishNow?: boolean;
+  data_aula_text: string;
+  publish_at_text?: string | null;
 };
 
-export async function createLesson(params: CreateLessonParams) {
-  const {
-    titulo,
-    descricao_base,
-    data_aula,
-    data_publicacao_auto = null,
-    referencia_biblica = null,
-    publish_at = null,
-    criado_por_id,
-    status,
-    publishNow = false,
-  } = params;
+type LessonUpdateInput = Partial<LessonInput> & {
+  status?: LessonStatus;
+  professor_reservado_id?: string | null;
+  complemento_professor?: string | null;
+};
 
-  const safeTitle = sanitizeText(titulo);
-  const safeDescription = sanitizeText(descricao_base);
-  const safeReference = referencia_biblica ? sanitizeText(referencia_biblica) : null;
-  const safePublishAt = publish_at || null;
+type ListSectionsAdmin = {
+  drafts: Lesson[];
+  available: Lesson[];
+  pendingOrReserved: Lesson[];
+  published: Lesson[];
+};
 
-  const colRef = collection(firebaseDb, "aulas");
-  const now = serverTimestamp();
+type ListSectionsProfessor = {
+  available: Lesson[];
+  mine: Lesson[];
+  published: Lesson[];
+};
 
-  const payload: Omit<Lesson, "id"> = {
-    titulo: safeTitle,
-    descricao_base: safeDescription,
-    referencia_biblica: safeReference,
-    data_aula,
-    data_publicacao_auto,
-    publish_at: safePublishAt,
-    status,
-    criado_por_id,
-    professor_reservado_id: null,
-    complemento_professor: null,
-    created_at: now as any,
-    updated_at: now as any,
-    publicado_em: status === "publicada" || publishNow ? (now as any) : null,
-    rascunho_salvo_em: status === "rascunho" ? (now as any) : null,
+const collectionName = "aulas";
+
+function parseDataAula(text: string): Timestamp {
+  const parsed = parseDateToTimestamp(text);
+  if (!parsed) throw new Error("Data da aula inválida. Use dd/mm/aaaa.");
+  return parsed;
+}
+
+function parsePublishAt(text?: string | null): {
+  publish_at: Timestamp | null;
+  data_publicacao_auto: string | null;
+} {
+  if (!text) return { publish_at: null, data_publicacao_auto: null };
+  const parsed = parseDateTimeToTimestamp(text);
+  if (!parsed) throw new Error("Data/hora de publicação automática inválida (dd/mm/aaaa hh:mm).");
+  return { publish_at: parsed.timestamp, data_publicacao_auto: parsed.display };
+}
+
+function basePayload(input: LessonInput) {
+  const dataAula = parseDataAula(input.data_aula_text);
+  const publishData = parsePublishAt(input.publish_at_text);
+  return {
+    titulo: sanitizeText(input.titulo),
+    referencia_biblica: sanitizeText(input.referencia_biblica),
+    descricao_base: sanitizeText(input.descricao_base),
+    data_aula: dataAula,
+    publish_at: publishData.publish_at,
+    data_publicacao_auto: publishData.data_publicacao_auto,
   };
+}
 
-  const docRef = await addDoc(colRef, payload);
-  if (status === "publicada" || publishNow) {
-    void notifyLessonPublished(docRef.id, titulo);
-  }
+export async function createLessonDraft(input: LessonInput, criadoPorId: string) {
+  console.log("[lessons] createLessonDraft");
+  return createLessonWithStatus(input, "rascunho", criadoPorId);
+}
+
+export async function createLessonAvailable(input: LessonInput, criadoPorId: string) {
+  console.log("[lessons] createLessonAvailable");
+  return createLessonWithStatus(input, "disponivel", criadoPorId);
+}
+
+async function createLessonWithStatus(
+  input: LessonInput,
+  status: LessonStatus,
+  criadoPorId: string
+) {
+  const payload = basePayload(input);
+  const colRef = collection(firebaseDb, collectionName);
+  const now = serverTimestamp();
+  const docRef = await addDoc(colRef, {
+    ...payload,
+    status,
+    criado_por_id: criadoPorId,
+    professor_reservado_id: null,
+    reservado_em: null,
+    reserva_aprovada_por_id: null,
+    reserva_aprovada_em: null,
+    reserva_motivo_rejeicao: null,
+    publicado_em: null,
+    publicado_por_id: null,
+    complemento_professor: null,
+    created_at: now,
+    updated_at: now,
+  } as Omit<Lesson, "id">);
   return docRef.id;
 }
 
-type CreateLessonDraftParams = {
-  titulo: string;
-  descricao_base: string;
-  data_aula: Lesson["data_aula"];
-  data_publicacao_auto?: Lesson["data_publicacao_auto"];
-  criado_por_id: string;
-};
+export async function updateLessonFields(lessonId: string, input: LessonUpdateInput) {
+  console.log("[lessons] updateLessonFields", lessonId);
+  const ref = doc(firebaseDb, collectionName, lessonId);
+  const updates: Partial<Lesson> = {};
 
-export async function createLessonDraft(params: CreateLessonDraftParams) {
-  return createLesson({ ...params, status: "rascunho" as LessonStatus });
+  if (input.titulo !== undefined) updates.titulo = sanitizeText(input.titulo);
+  if (input.referencia_biblica !== undefined) {
+    updates.referencia_biblica = sanitizeText(input.referencia_biblica);
+  }
+  if (input.descricao_base !== undefined) {
+    updates.descricao_base = sanitizeText(input.descricao_base);
+  }
+  if (input.data_aula_text !== undefined) {
+    updates.data_aula = parseDataAula(input.data_aula_text);
+  }
+  if (input.publish_at_text !== undefined) {
+    const publishData = parsePublishAt(input.publish_at_text);
+    updates.publish_at = publishData.publish_at;
+    updates.data_publicacao_auto = publishData.data_publicacao_auto;
+  }
+  if (input.status) updates.status = input.status;
+  if (input.professor_reservado_id !== undefined) {
+    updates.professor_reservado_id = input.professor_reservado_id;
+  }
+  if (input.complemento_professor !== undefined) {
+    updates.complemento_professor = sanitizeText(input.complemento_professor);
+  }
+
+  updates.updated_at = serverTimestamp() as any;
+  await updateDoc(ref, updates as any);
 }
 
-type UpdateLessonBaseParams = {
-  lessonId: string;
-  titulo?: string;
-  descricao_base?: string;
-  data_aula?: Lesson["data_aula"];
-  data_publicacao_auto?: Lesson["data_publicacao_auto"];
-  rascunho_salvo_em?: Lesson["rascunho_salvo_em"];
-};
-
-export async function updateLessonBase(params: UpdateLessonBaseParams) {
-  const { lessonId, ...updates } = params;
-  const ref = doc(firebaseDb, "aulas", lessonId);
-
-  const payload: Partial<Lesson> = {
-    ...updates,
+export async function setLessonStatus(lessonId: string, status: LessonStatus) {
+  console.log("[lessons] setLessonStatus", lessonId, status);
+  const ref = doc(firebaseDb, collectionName, lessonId);
+  await updateDoc(ref, {
+    status,
     updated_at: serverTimestamp() as any,
-  };
-
-  if (payload.titulo) payload.titulo = sanitizeText(payload.titulo as any);
-  if (payload.descricao_base) {
-    payload.descricao_base = sanitizeText(payload.descricao_base as any);
-  }
-
-  await updateDoc(ref, payload as any);
+  });
 }
 
-type UpdateLessonParams = {
-  lessonId: string;
-  titulo?: string;
-  descricao_base?: string;
-  data_aula?: Lesson["data_aula"];
-  data_publicacao_auto?: Lesson["data_publicacao_auto"];
-  status?: LessonStatus;
-  setPublishedNow?: boolean;
-  clearPublished?: boolean;
-  setDraftSavedNow?: boolean;
-};
+export async function reserveLesson(lessonId: string, professorId: string) {
+  console.log("[lessons] reserveLesson", lessonId);
+  const ref = doc(firebaseDb, collectionName, lessonId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error("Aula não encontrada.");
+  const data = snap.data() as Lesson;
+  if (data.status !== "disponivel") throw new Error("Aula não está disponível para reserva.");
+  if (data.professor_reservado_id) throw new Error("Aula já possui professor reservado.");
 
-export async function updateLesson(params: UpdateLessonParams) {
-  const { lessonId, setPublishedNow, clearPublished, setDraftSavedNow, ...fields } =
-    params;
-  const ref = doc(firebaseDb, "aulas", lessonId);
-  let publishedNow = setPublishedNow === true || fields.status === "publicada";
-
-  const payload: Partial<Lesson> = {
-    ...fields,
+  await updateDoc(ref, {
+    status: "pendente_reserva",
+    professor_reservado_id: professorId,
+    reservado_em: serverTimestamp() as any,
+    reserva_aprovada_por_id: null,
+    reserva_aprovada_em: null,
+    reserva_motivo_rejeicao: null,
     updated_at: serverTimestamp() as any,
-  };
+  });
+}
 
-  if (payload.titulo) payload.titulo = sanitizeText(payload.titulo as any);
-  if (payload.descricao_base) {
-    payload.descricao_base = sanitizeText(payload.descricao_base as any);
+export async function approveReservation(lessonId: string, approverId: string) {
+  console.log("[lessons] approveReservation", lessonId);
+  const ref = doc(firebaseDb, collectionName, lessonId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error("Aula não encontrada.");
+  const data = snap.data() as Lesson;
+  if (data.status !== "pendente_reserva") throw new Error("Reserva não está pendente.");
+  await updateDoc(ref, {
+    status: "reservada",
+    reserva_aprovada_por_id: approverId,
+    reserva_aprovada_em: serverTimestamp() as any,
+    updated_at: serverTimestamp() as any,
+  });
+}
+
+export async function rejectReservation(lessonId: string, approverId: string, motivo?: string) {
+  console.log("[lessons] rejectReservation", lessonId);
+  const ref = doc(firebaseDb, collectionName, lessonId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error("Aula não encontrada.");
+  const data = snap.data() as Lesson;
+  if (data.status !== "pendente_reserva") throw new Error("Reserva não está pendente.");
+  await updateDoc(ref, {
+    status: "disponivel",
+    professor_reservado_id: null,
+    reservado_em: null,
+    reserva_aprovada_por_id: approverId,
+    reserva_aprovada_em: serverTimestamp() as any,
+    reserva_motivo_rejeicao: motivo ? sanitizeText(motivo) : null,
+    updated_at: serverTimestamp() as any,
+  });
+}
+
+export async function publishLessonNow(lessonId: string, userId: string) {
+  console.log("[lessons] publishLessonNow", lessonId);
+  const ref = doc(firebaseDb, collectionName, lessonId);
+  await updateDoc(ref, {
+    status: "publicada",
+    publicado_em: serverTimestamp() as any,
+    publicado_por_id: userId,
+    publish_at: null,
+    data_publicacao_auto: null,
+    updated_at: serverTimestamp() as any,
+  });
+}
+
+// Exclusão única de aula (coleção "aulas")
+export async function deleteLesson(lessonId: string): Promise<void> {
+  console.log("[LessonsService] deleteLesson called for", lessonId);
+  const ref = doc(firebaseDb, collectionName, lessonId);
+  try {
+    await deleteDoc(ref);
+    console.log("[LessonsService] deleteLesson success", lessonId);
+  } catch (error) {
+    console.error("[LessonsService] deleteLesson error", error);
+    throw error;
   }
+}
 
-  if (setPublishedNow) {
-    payload.publicado_em = serverTimestamp() as any;
-    publishedNow = true;
-  } else if (clearPublished) {
-    payload.publicado_em = null as any;
+export async function updateProfessorComplement(
+  lessonId: string,
+  professorId: string,
+  texto: string
+) {
+  console.log("[lessons] updateProfessorComplement", lessonId);
+  const ref = doc(firebaseDb, collectionName, lessonId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error("Aula não encontrada.");
+  const data = snap.data() as Lesson;
+  if (data.professor_reservado_id !== professorId || data.status !== "reservada") {
+    throw new Error("Você não pode editar esta aula.");
   }
-
-  if (setDraftSavedNow) {
-    payload.rascunho_salvo_em = serverTimestamp() as any;
-  }
-
-  await updateDoc(ref, payload as any);
-
-  if (publishedNow) {
-    const currentTitle =
-      fields.titulo ??
-      (await getDoc(ref)).data()?.titulo ??
-      "Aula publicada";
-    void notifyLessonPublished(lessonId, currentTitle as string);
-  }
+  await updateDoc(ref, {
+    complemento_professor: sanitizeText(texto),
+    updated_at: serverTimestamp() as any,
+  });
 }
 
 export async function getLessonById(lessonId: string): Promise<Lesson | null> {
-  const ref = doc(firebaseDb, "aulas", lessonId);
+  const ref = doc(firebaseDb, collectionName, lessonId);
   const snap = await getDoc(ref);
-
-  if (!snap.exists()) {
-    return null;
-  }
-
-  const data = snap.data() as Omit<Lesson, "id">;
-  return { id: snap.id, ...data };
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...(snap.data() as Omit<Lesson, "id">) };
 }
 
-export async function listLessonsForCoordinator(): Promise<Lesson[]> {
-  const colRef = collection(firebaseDb, "aulas");
-  const q = query(colRef, orderBy("data_aula"));
-  const snap = await getDocs(q);
-
+function mapList(snapshots: QuerySnapshot<DocumentData>): Lesson[] {
   const list: Lesson[] = [];
-  snap.forEach((docSnap) => {
+  snapshots.forEach((docSnap) => {
     const data = docSnap.data() as Omit<Lesson, "id">;
     list.push({ id: docSnap.id, ...data });
   });
   return list;
+}
+
+export async function listLessonsForAdminCoordinator(): Promise<ListSectionsAdmin> {
+  const colRef = collection(firebaseDb, collectionName);
+  const [draftsSnap, availableSnap, pendingSnap, reservedSnap, publishedSnap] = await Promise.all([
+    getDocs(query(colRef, where("status", "==", "rascunho"), orderBy("data_aula", "asc"))),
+    getDocs(query(colRef, where("status", "==", "disponivel"), orderBy("data_aula", "asc"))),
+    getDocs(query(colRef, where("status", "==", "pendente_reserva"), orderBy("data_aula", "asc"))),
+    getDocs(query(colRef, where("status", "==", "reservada"), orderBy("data_aula", "asc"))),
+    getDocs(query(colRef, where("status", "==", "publicada"), orderBy("data_aula", "desc"))),
+  ]);
+
+  return {
+    drafts: mapList(draftsSnap),
+    available: mapList(availableSnap),
+    pendingOrReserved: [...mapList(pendingSnap), ...mapList(reservedSnap)],
+    published: mapList(publishedSnap),
+  };
+}
+
+export async function listLessonsForProfessor(
+  professorId: string
+): Promise<ListSectionsProfessor> {
+  const colRef = collection(firebaseDb, collectionName);
+  const [availableSnap, mineSnap, publishedSnap] = await Promise.all([
+    getDocs(query(colRef, where("status", "==", "disponivel"), orderBy("data_aula", "asc"))),
+    getDocs(
+      query(
+        colRef,
+        where("professor_reservado_id", "==", professorId),
+        where("status", "in", ["pendente_reserva", "reservada"])
+      )
+    ),
+    getDocs(query(colRef, where("status", "==", "publicada"), orderBy("data_aula", "desc"))),
+  ]);
+
+  return {
+    available: mapList(availableSnap),
+    mine: mapList(mineSnap),
+    published: mapList(publishedSnap),
+  };
 }
 
 export async function listPublishedLessons(): Promise<Lesson[]> {
-  const colRef = collection(firebaseDb, "aulas");
-  const q = query(colRef, where("status", "==", "publicada"), orderBy("data_aula", "desc"));
-  const snap = await getDocs(q);
-
-  const list: Lesson[] = [];
-  snap.forEach((docSnap) => {
-    const data = docSnap.data() as Omit<Lesson, "id">;
-    list.push({ id: docSnap.id, ...data });
-  });
-  return list;
+  const colRef = collection(firebaseDb, collectionName);
+  const snap = await getDocs(query(colRef, where("status", "==", "publicada"), orderBy("data_aula", "desc")));
+  return mapList(snap);
 }
 
-// Lista considerando publish_at (publicada ou agendada já liberada)
-export async function listLessonsByStatusAndVisibility(): Promise<Lesson[]> {
-  const colRef = collection(firebaseDb, "aulas");
-  // duas queries: publicadas e agendadas com publish_at <= now
-  const now = new Date();
-  const publishedQuery = query(colRef, where("status", "==", "publicada"), orderBy("data_aula", "desc"));
-  const scheduledQuery = query(
-    colRef,
-    where("status", "==", "publicada_agendada"),
-    orderBy("publish_at", "desc")
-  );
-
-  const [pubSnap, schedSnap] = await Promise.all([getDocs(publishedQuery), getDocs(scheduledQuery)]);
-  const list: Lesson[] = [];
-
-  pubSnap.forEach((docSnap) => {
-    const data = docSnap.data() as Omit<Lesson, "id">;
-    list.push({ id: docSnap.id, ...data });
-  });
-
-  schedSnap.forEach((docSnap) => {
-    const data = docSnap.data() as Omit<Lesson, "id">;
-    const publishAt = (data as any).publish_at;
-    const publishDate =
-      publishAt?.toDate?.() ??
-      (typeof publishAt === "string" ? new Date(publishAt) : null);
-    if (publishDate && publishDate.getTime() <= now.getTime()) {
-      list.push({ id: docSnap.id, ...data });
-    }
-  });
-
-  return list.sort((a, b) => {
-    const da = (a.data_aula as any)?.toDate?.() ?? new Date(a.data_aula as any);
-    const db = (b.data_aula as any)?.toDate?.() ?? new Date(b.data_aula as any);
-    return db.getTime() - da.getTime();
-  });
-}
-
-export async function listNextPublishedLessons(max: number): Promise<Lesson[]> {
-  const colRef = collection(firebaseDb, "aulas");
-  const q = query(
-    colRef,
-    where("status", "==", "publicada"),
-    orderBy("data_aula", "asc"),
-    limit(max)
-  );
-  const snap = await getDocs(q);
-
-  const list: Lesson[] = [];
-  snap.forEach((docSnap) => {
-    const data = docSnap.data() as Omit<Lesson, "id">;
-    list.push({ id: docSnap.id, ...data });
-  });
-  return list;
-}
-
-/**
- * Lista aulas reservadas/publicadas de um professor.
- * Observação: se precisar filtrar status, ajustamos no futuro; hoje mantemos as retornadas.
- */
-export async function listLessonsForProfessor(
-  professorId: string
-): Promise<Lesson[]> {
-  const colRef = collection(firebaseDb, "aulas");
-  const q = query(
-    colRef,
-    where("professor_reservado_id", "==", professorId),
-    orderBy("data_aula", "asc")
-  );
-  const snap = await getDocs(q);
-
-  const list: Lesson[] = [];
-  snap.forEach((docSnap) => {
-    const data = docSnap.data() as Omit<Lesson, "id">;
-    list.push({ id: docSnap.id, ...data });
-  });
-  return list;
-}
-
-// Aulas em preparação para professor (sem rascunho), próprias ou reservadas
-export async function listLessonsForProfessorPreparation(
-  professorId: string
-): Promise<Lesson[]> {
-  const colRef = collection(firebaseDb, "aulas");
-  const statuses: LessonStatus[] = [
-    "disponivel",
-    "pendente_reserva",
-    "reservada",
-    "publicada_agendada",
-  ];
-
-  const q = query(colRef, where("status", "in", statuses));
-  const snap = await getDocs(q);
-  const now = Date.now();
-  const list: Lesson[] = [];
-
-  snap.forEach((docSnap) => {
-    const data = docSnap.data() as Omit<Lesson, "id">;
-    const isMine =
-      data.professor_reservado_id === professorId ||
-      data.criado_por_id === professorId;
-    if (!isMine) return;
-    // aplica visibilidade de publish_at para agendadas
-    if (data.status === "publicada_agendada") {
-      const publishAt = (data as any).publish_at;
-      const ts =
-        publishAt?.toDate?.()?.getTime?.() ??
-        (typeof publishAt === "string" ? Date.parse(publishAt) : now);
-      if (ts > now) {
-        // ainda não liberada, mas professor pode ver
-        list.push({ id: docSnap.id, ...data });
-        return;
-      }
-    }
-    list.push({ id: docSnap.id, ...data });
-  });
-
-  // ordena por data_aula asc (mais próximas primeiro)
-  return list.sort((a, b) => {
-    const da = (a.data_aula as any)?.toDate?.() ?? new Date(a.data_aula as any);
-    const db = (b.data_aula as any)?.toDate?.() ?? new Date(b.data_aula as any);
-    return da.getTime() - db.getTime();
-  });
-}
-
-// Manager (coord/admin) - separa rascunhos e preparação
-export async function listLessonsForManager(): Promise<{
-  drafts: Lesson[];
-  preparation: Lesson[];
-}> {
-  const colRef = collection(firebaseDb, "aulas");
-  const statusesPrep: LessonStatus[] = [
-    "disponivel",
-    "pendente_reserva",
-    "reservada",
-    "publicada_agendada",
-  ];
-
-  const draftsSnap = await getDocs(query(colRef, where("status", "==", "rascunho")));
-  const prepSnap = await getDocs(query(colRef, where("status", "in", statusesPrep)));
-
-  const drafts: Lesson[] = [];
-  draftsSnap.forEach((docSnap) => {
-    const data = docSnap.data() as Omit<Lesson, "id">;
-    drafts.push({ id: docSnap.id, ...data });
-  });
-
-  const preparation: Lesson[] = [];
-  prepSnap.forEach((docSnap) => {
-    const data = docSnap.data() as Omit<Lesson, "id">;
-    preparation.push({ id: docSnap.id, ...data });
-  });
-
-  drafts.sort((a, b) => {
-    const ua = (a.updated_at as any)?.toDate?.()?.getTime?.() ?? Date.now();
-    const ub = (b.updated_at as any)?.toDate?.()?.getTime?.() ?? Date.now();
-    return ub - ua;
-  });
-
-  preparation.sort((a, b) => {
-    const da = (a.data_aula as any)?.toDate?.() ?? new Date(a.data_aula as any);
-    const db = (b.data_aula as any)?.toDate?.() ?? new Date(b.data_aula as any);
-    return da.getTime() - db.getTime();
-  });
-
-  return { drafts, preparation };
-}
-
-// ---------- Busca de aulas ----------
-export type LessonSearchFilters = {
-  titulo?: string;
-  status?: LessonStatus | "todas";
-  dataMinima?: Date | null;
-  professorId?: string | null;
-  somentePublicadas?: boolean;
-  somenteFuturas?: boolean;
-};
-
-export async function searchLessons(filters: LessonSearchFilters): Promise<Lesson[]> {
-  const {
-    titulo,
-    status,
-    dataMinima,
-    professorId,
-    somentePublicadas = true,
-    somenteFuturas = false,
-  } = filters;
-
-  const colRef = collection(firebaseDb, "aulas");
-  const conditions = [];
-  if (status && status !== "todas") {
-    conditions.push(where("status", "==", status));
-  } else if (somentePublicadas) {
-    conditions.push(where("status", "==", "publicada"));
-  }
-  if (professorId) {
-    conditions.push(where("professor_reservado_id", "==", professorId));
-  }
-
-  const q = conditions.length
-    ? query(colRef, ...conditions, orderBy("data_aula", "desc"))
-    : query(colRef, orderBy("data_aula", "desc"));
-
-  const snap = await getDocs(q);
-  const list: Lesson[] = [];
-  const now = Date.now();
-  snap.forEach((docSnap) => {
-    const data = docSnap.data() as Omit<Lesson, "id">;
-    // filtro data futura
-    if (somenteFuturas) {
-      const millis =
-        (data.data_aula as any)?.toMillis?.() ??
-        (typeof data.data_aula === "string" ? Date.parse(data.data_aula) : now);
-      if (millis < now) return;
-    }
-    // filtro data minima
-    if (dataMinima) {
-      const millis =
-        (data.data_aula as any)?.toMillis?.() ??
-        (typeof data.data_aula === "string" ? Date.parse(data.data_aula) : 0);
-      if (millis < dataMinima.getTime()) return;
-    }
-    list.push({ id: docSnap.id, ...data });
-  });
-
-  if (titulo) {
-    const term = titulo.toLowerCase();
-    return list.filter((l) => l.titulo.toLowerCase().includes(term));
-  }
-  return list;
-}
-
-/**
- * Atualiza o complemento do professor em uma aula reservada/publicada.
- * Usa serverTimestamp para rascunho_salvo_em e updated_at.
- */
-export async function updateLessonComplement(
-  lessonId: string,
-  complemento: string
-) {
-  const ref = doc(firebaseDb, "aulas", lessonId);
-  await updateDoc(ref, {
-    complemento_professor: sanitizeText(complemento),
-    rascunho_salvo_em: serverTimestamp() as any,
-    updated_at: serverTimestamp() as any,
-  });
-}
-
-/**
- * Auto-save de rascunho da aula (título, datas, descrição base).
- */
-type SaveLessonDraftParams = {
-  lessonId: string;
-  titulo?: string;
-  descricao_base?: string;
-  data_aula?: Lesson["data_aula"];
-  data_publicacao_auto?: Lesson["data_publicacao_auto"];
-};
-
-export async function saveLessonDraft(params: SaveLessonDraftParams) {
-  const { lessonId, ...updates } = params;
-  const ref = doc(firebaseDb, "aulas", lessonId);
-
-  const payload: Partial<Lesson> = {
-    ...updates,
-    rascunho_salvo_em: serverTimestamp() as any,
-    updated_at: serverTimestamp() as any,
+// Utilitários para preencher formulário com dados existentes
+export function lessonToFormData(lesson: Lesson): LessonInput {
+  return {
+    titulo: lesson.titulo,
+    referencia_biblica: lesson.referencia_biblica || "",
+    descricao_base: lesson.descricao_base,
+    data_aula_text: formatTimestampToDateInput(lesson.data_aula as Timestamp),
+    publish_at_text: formatTimestampToDateTimeInput(lesson.publish_at as Timestamp | null) || "",
   };
-
-  if (payload.titulo) payload.titulo = sanitizeText(payload.titulo as any);
-  if (payload.descricao_base) {
-    payload.descricao_base = sanitizeText(payload.descricao_base as any);
-  }
-
-  await updateDoc(ref, payload as any);
 }
 
-async function notifyLessonPublished(lessonId: string, titulo: string) {
-  try {
-    const userIds = await listApprovedUsersIds();
-    await Promise.all(
-      userIds.map((uid) =>
-        createNotification({
-          usuario_id: uid,
-          tipo: NotificationType.NOVA_AULA,
-          titulo: "Nova aula publicada",
-          mensagem: titulo,
-          tipo_referencia: NotificationReferenceType.AULA,
-          referencia_id: lessonId,
-        })
-      )
-    );
-  } catch (err) {
-    console.error("Erro ao notificar usuários sobre aula publicada:", err);
-  }
+export function createPublishStringsFromTimestamp(ts: Timestamp | null): {
+  publish_at: Timestamp | null;
+  data_publicacao_auto: string | null;
+} {
+  if (!ts) return { publish_at: null, data_publicacao_auto: null };
+  return {
+    publish_at: ts,
+    data_publicacao_auto: formatDateTime(ts.toDate()),
+  };
 }

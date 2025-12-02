@@ -79,7 +79,8 @@ service cloud.firestore {
       allow get, list: if resource.data.status == 'publicada' || isApprovedUser() || isCoordinator() || isAdmin();
       allow create, update: if isCoordinator() || isAdmin();
       allow update: if isAssignedProfessor() && professorFieldsOnly();
-      allow delete: if isAdmin();
+      // Admin ou coordenador podem excluir aulas
+      allow delete: if isAdmin() || isCoordinator();
     }
 
     // Reservas de aula
