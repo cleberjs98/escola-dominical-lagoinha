@@ -1,7 +1,8 @@
-// lib/devotionals.ts
+// lib/devotionals.ts - CRUD e listagem de devocionais
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -9,11 +10,13 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  Timestamp,
   updateDoc,
   where,
 } from "firebase/firestore";
-import { firebaseDb } from "./firebase";
+
 import type { Devotional, DevotionalStatus } from "../types/devotional";
+import { firebaseDb } from "./firebase";
 import { listApprovedUsersIds } from "./users";
 import { createNotification } from "./notifications";
 import {
@@ -22,128 +25,153 @@ import {
 } from "../types/notification";
 import { sanitizeText } from "../utils/sanitize";
 
-/**
- * Índices recomendados (criar no console do Firestore):
- * - Collection "devocionais" orderBy data_devocional.
- * - Collection "devocionais" status + orderBy data_devocional (status, data_devocional).
- */
-
-type CreateDevotionalParams = {
+type BaseDevotionalParams = {
   titulo: string;
-  conteudo_base: string;
-  data_devocional: Devotional["data_devocional"];
+  referencia_biblica: string;
+  devocional_texto: string;
+  data_devocional: string; // entrada DD/MM/YYYY ou YYYY-MM-DD
+  publish_at?: Timestamp | null;
+  data_publicacao_auto?: string | null;
+};
+
+type CreateDevotionalParams = BaseDevotionalParams & {
   criado_por_id: string;
   status: DevotionalStatus;
-  data_publicacao_auto?: Devotional["data_publicacao_auto"];
   publishNow?: boolean;
 };
 
 export async function createDevotional(params: CreateDevotionalParams) {
   const {
     titulo,
-    conteudo_base,
+    referencia_biblica,
+    devocional_texto,
     data_devocional,
+    publish_at,
+    data_publicacao_auto = null,
     criado_por_id,
     status,
-    data_publicacao_auto = null,
     publishNow = false,
   } = params;
 
+  validateRequiredFields({
+    titulo,
+    referencia_biblica,
+    devocional_texto,
+    data_devocional,
+    criado_por_id,
+  });
+  const normalizedDate = normalizeDateToISO(data_devocional);
+  const available = await isDevotionalDateAvailable(normalizedDate);
+  if (!available) {
+    throw new Error("Ja existe devocional para esta data.");
+  }
+
   const safeTitle = sanitizeText(titulo);
-  const safeContent = sanitizeText(conteudo_base);
+  const safeReference = sanitizeText(referencia_biblica);
+  const safeContent = sanitizeText(devocional_texto);
 
-  const colRef = collection(firebaseDb, "devocionais");
-  const now = serverTimestamp();
-
+  const finalStatus = publishNow ? "publicado" : status;
   const payload: Omit<Devotional, "id"> = {
     titulo: safeTitle,
-    conteudo_base: safeContent,
-    data_devocional,
-    data_publicacao_auto,
-    status,
+    referencia_biblica: safeReference,
+    devocional_texto: safeContent,
+    data_devocional: normalizedDate,
+    status: finalStatus,
+    publish_at: publishNow ? null : toTimestampOrNull(publish_at),
+    data_publicacao_auto: publishNow ? null : data_publicacao_auto ?? null,
     criado_por_id,
-    created_at: now as any,
-    updated_at: now as any,
-    publicado_em: publishNow ? (now as any) : null,
-    rascunho_salvo_em: now as any,
+    publicado_em: publishNow ? (serverTimestamp() as any) : null,
+    created_at: serverTimestamp() as any,
+    updated_at: serverTimestamp() as any,
+    rascunho_salvo_em: serverTimestamp() as any,
   };
 
+  const colRef = collection(firebaseDb, "devocionais");
   const docRef = await addDoc(colRef, payload);
-  if (status === "publicado" || publishNow) {
-    void notifyDevotionalPublished(docRef.id, titulo);
+
+  if (finalStatus === "publicado") {
+    void notifyDevotionalPublished(docRef.id, safeTitle);
   }
+
   return docRef.id;
 }
 
-type CreateDevotionalDraftParams = {
-  titulo: string;
-  conteudo_base: string;
-  data_devocional: Devotional["data_devocional"];
-  criado_por_id: string;
-};
-
-export async function createDevotionalDraft(params: CreateDevotionalDraftParams) {
+export async function createDevotionalDraft(
+  params: Omit<CreateDevotionalParams, "status" | "publishNow">
+) {
   return createDevotional({
     ...params,
     status: "rascunho" as DevotionalStatus,
   });
 }
 
-type UpdateDevotionalBaseParams = {
+type UpdateDevotionalParams = Partial<BaseDevotionalParams> & {
   devotionalId: string;
-  titulo?: string;
-  conteudo_base?: string;
-  data_devocional?: Devotional["data_devocional"];
-  data_publicacao_auto?: Devotional["data_publicacao_auto"];
   status?: DevotionalStatus;
   setPublishedNow?: boolean;
-  archive?: boolean;
+  clearSchedule?: boolean;
 };
 
-export async function updateDevotionalBase(params: UpdateDevotionalBaseParams) {
-  const { devotionalId, setPublishedNow, archive, ...updates } = params;
+export async function updateDevotionalBase(params: UpdateDevotionalParams) {
+  const { devotionalId, setPublishedNow, clearSchedule, ...updates } = params;
   const ref = doc(firebaseDb, "devocionais", devotionalId);
 
-  if (updates.data_devocional) {
-    const available = await isDevotionalDateAvailable(
-      updates.data_devocional,
-      devotionalId
-    );
-    if (!available) {
-      throw new Error("Já existe devocional para esta data.");
-    }
-  }
-
   const payload: Partial<Devotional> = {
-    ...updates,
     updated_at: serverTimestamp() as any,
     rascunho_salvo_em: serverTimestamp() as any,
   };
 
-  if (payload.titulo) payload.titulo = sanitizeText(payload.titulo as any);
-  if (payload.conteudo_base) {
-    payload.conteudo_base = sanitizeText(payload.conteudo_base as any);
+  if (updates.titulo !== undefined) {
+    if (!isNonEmpty(updates.titulo)) throw new Error("TÇðtulo obrigatÇrio.");
+    payload.titulo = sanitizeText(updates.titulo);
+  }
+  if (updates.referencia_biblica !== undefined) {
+    if (!isNonEmpty(updates.referencia_biblica)) {
+      throw new Error("ReferÇ£ncia bÇ­blica obrigatÇria.");
+    }
+    payload.referencia_biblica = sanitizeText(updates.referencia_biblica);
+  }
+  if (updates.devocional_texto !== undefined) {
+    if (!isNonEmpty(updates.devocional_texto)) {
+      throw new Error("Devocional obrigatÇrio.");
+    }
+    payload.devocional_texto = sanitizeText(updates.devocional_texto);
+  }
+  if (updates.data_devocional !== undefined) {
+    const normalized = normalizeDateToISO(updates.data_devocional);
+    const available = await isDevotionalDateAvailable(normalized, devotionalId);
+    if (!available) {
+      throw new Error("JÇ­ existe devocional para esta data.");
+    }
+    payload.data_devocional = normalized;
   }
 
-  const shouldNotify =
-    setPublishedNow === true || updates.status === ("publicado" as DevotionalStatus);
+  if (clearSchedule) {
+    payload.publish_at = null;
+    payload.data_publicacao_auto = null;
+  } else {
+    if (updates.publish_at !== undefined) {
+      payload.publish_at = toTimestampOrNull(updates.publish_at);
+    }
+    if (updates.data_publicacao_auto !== undefined) {
+      payload.data_publicacao_auto = updates.data_publicacao_auto ?? null;
+    }
+  }
 
   if (setPublishedNow) {
     payload.status = "publicado" as DevotionalStatus;
+    payload.publish_at = null;
+    payload.data_publicacao_auto = null;
     payload.publicado_em = serverTimestamp() as any;
-  }
-
-  if (archive) {
-    payload.status = "arquivado" as DevotionalStatus;
+  } else if (updates.status) {
+    payload.status = updates.status;
   }
 
   await updateDoc(ref, payload as any);
 
-  if (shouldNotify) {
-    const title =
-      updates.titulo ??
-      (await getDoc(ref)).data()?.titulo ??
-      "Devocional publicado";
+  if (payload.status === "publicado") {
+    const snap = await getDoc(ref);
+    const title = (snap.data() as any)?.titulo ?? payload.titulo ?? "Devocional publicado";
     void notifyDevotionalPublished(devotionalId, title as string);
   }
 }
@@ -152,87 +180,20 @@ export async function publishDevotionalNow(devotionalId: string) {
   const ref = doc(firebaseDb, "devocionais", devotionalId);
   await updateDoc(ref, {
     status: "publicado" as DevotionalStatus,
+    publish_at: null,
+    data_publicacao_auto: null,
     publicado_em: serverTimestamp() as any,
     updated_at: serverTimestamp() as any,
   });
   try {
     const snap = await getDoc(ref);
-    const title = snap.data()?.titulo ?? "Devocional publicado";
+    const title = (snap.data() as any)?.titulo ?? "Devocional publicado";
     void notifyDevotionalPublished(devotionalId, title as string);
   } catch (err) {
-    console.error("Erro ao notificar sobre devocional publicado:", err);
+    console.error("[Devocionais] Erro ao notificar publicaÇõÇœo:", err);
   }
 }
 
-export async function getDevotionalById(
-  devotionalId: string
-): Promise<Devotional | null> {
-  const ref = doc(firebaseDb, "devocionais", devotionalId);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) {
-    return null;
-  }
-  const data = snap.data() as Omit<Devotional, "id">;
-  return { id: snap.id, ...data };
-}
-
-export async function listPublishedDevotionals(): Promise<Devotional[]> {
-  const colRef = collection(firebaseDb, "devocionais");
-  const q = query(
-    colRef,
-    where("status", "==", "publicado"),
-    orderBy("data_devocional", "desc")
-  );
-  const snap = await getDocs(q);
-
-  const list: Devotional[] = [];
-  snap.forEach((docSnap) => {
-    const data = docSnap.data() as Omit<Devotional, "id">;
-    list.push({ id: docSnap.id, ...data });
-  });
-  return list;
-}
-
-export async function getDevotionalOfTheDay(
-  dateValue: Devotional["data_devocional"]
-): Promise<Devotional | null> {
-  // Para uso no “Devocional do dia” na home.
-  // Formato esperado deve combinar com o que foi salvo em data_devocional (ex.: "YYYY-MM-DD" string).
-  const colRef = collection(firebaseDb, "devocionais");
-  const q = query(
-    colRef,
-    where("status", "==", "publicado"),
-    where("data_devocional", "==", dateValue),
-    limit(1)
-  );
-  const snap = await getDocs(q);
-  if (snap.empty) return null;
-  const docSnap = snap.docs[0];
-  const data = docSnap.data() as Omit<Devotional, "id">;
-  return { id: docSnap.id, ...data };
-}
-
-/**
- * Verifica se já existe devocional na mesma data. Pode receber ignoreId para edições.
- */
-export async function isDevotionalDateAvailable(
-  dateValue: Devotional["data_devocional"],
-  ignoreId?: string
-): Promise<boolean> {
-  const colRef = collection(firebaseDb, "devocionais");
-  const q = query(colRef, where("data_devocional", "==", dateValue));
-  const snap = await getDocs(q);
-
-  if (snap.empty) return true;
-  if (!ignoreId) return false;
-
-  const others = snap.docs.filter((docSnap) => docSnap.id !== ignoreId);
-  return others.length === 0;
-}
-
-/**
- * Atalho para ajustar apenas status.
- */
 export async function setDevotionalStatus(
   devotionalId: string,
   status: DevotionalStatus
@@ -244,23 +205,17 @@ export async function setDevotionalStatus(
   };
   if (status === "publicado") {
     payload.publicado_em = serverTimestamp() as any;
+    payload.publish_at = null;
   }
   await updateDoc(ref, payload as any);
 }
 
 export async function archiveDevotional(devotionalId: string) {
-  return setDevotionalStatus(devotionalId, "arquivado" as DevotionalStatus);
+  await deleteDoc(doc(firebaseDb, "devocionais", devotionalId));
 }
 
-/**
- * Auto-save de rascunho do devocional.
- */
-type SaveDevotionalDraftParams = {
+type SaveDevotionalDraftParams = Partial<BaseDevotionalParams> & {
   devotionalId: string;
-  titulo?: string;
-  conteudo_base?: string;
-  data_devocional?: Devotional["data_devocional"];
-  data_publicacao_auto?: Devotional["data_publicacao_auto"];
 };
 
 export async function saveDevotionalDraft(params: SaveDevotionalDraftParams) {
@@ -268,20 +223,74 @@ export async function saveDevotionalDraft(params: SaveDevotionalDraftParams) {
   const ref = doc(firebaseDb, "devocionais", devotionalId);
 
   const payload: Partial<Devotional> = {
-    ...updates,
-    rascunho_salvo_em: serverTimestamp() as any,
     updated_at: serverTimestamp() as any,
+    rascunho_salvo_em: serverTimestamp() as any,
   };
 
-  if (payload.titulo) payload.titulo = sanitizeText(payload.titulo as any);
-  if (payload.conteudo_base) {
-    payload.conteudo_base = sanitizeText(payload.conteudo_base as any);
+  if (updates.titulo !== undefined && isNonEmpty(updates.titulo)) {
+    payload.titulo = sanitizeText(updates.titulo);
+  }
+  if (updates.referencia_biblica !== undefined && isNonEmpty(updates.referencia_biblica)) {
+    payload.referencia_biblica = sanitizeText(updates.referencia_biblica);
+  }
+  if (updates.devocional_texto !== undefined && isNonEmpty(updates.devocional_texto)) {
+    payload.devocional_texto = sanitizeText(updates.devocional_texto);
+  }
+  if (updates.data_devocional !== undefined && isNonEmpty(updates.data_devocional)) {
+    payload.data_devocional = normalizeDateToISO(updates.data_devocional);
+  }
+  if (updates.publish_at !== undefined) {
+    payload.publish_at = toTimestampOrNull(updates.publish_at);
+  }
+  if (updates.data_publicacao_auto !== undefined) {
+    payload.data_publicacao_auto = updates.data_publicacao_auto ?? null;
   }
 
   await updateDoc(ref, payload as any);
 }
 
-// ---------- Busca de devocionais ----------
+export async function getDevotionalById(
+  devotionalId: string
+): Promise<Devotional | null> {
+  const ref = doc(firebaseDb, "devocionais", devotionalId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) {
+    return null;
+  }
+  return convertDocToDevotional(snap.id, snap.data());
+}
+
+export async function listPublishedDevotionals(): Promise<Devotional[]> {
+  const colRef = collection(firebaseDb, "devocionais");
+  const q = query(
+    colRef,
+    where("status", "==", "publicado"),
+    orderBy("data_devocional", "asc")
+  );
+  const snap = await getDocs(q);
+  const list: Devotional[] = [];
+  snap.forEach((docSnap) => {
+    list.push(convertDocToDevotional(docSnap.id, docSnap.data()));
+  });
+  return list;
+}
+
+export async function getDevotionalOfTheDay(
+  dateValue: Devotional["data_devocional"]
+): Promise<Devotional | null> {
+  const colRef = collection(firebaseDb, "devocionais");
+  const q = query(
+    colRef,
+    where("status", "==", "publicado"),
+    where("data_devocional", "==", dateValue),
+    limit(1)
+  );
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+  const docSnap = snap.docs[0];
+  return convertDocToDevotional(docSnap.id, docSnap.data());
+}
+
 export type DevotionalSearchFilters = {
   termo?: string;
   status?: DevotionalStatus | "todas";
@@ -304,20 +313,14 @@ export async function searchDevotionals(
   const snap = await getDocs(q);
   const list: Devotional[] = [];
   snap.forEach((docSnap) => {
-    const data = docSnap.data() as Omit<Devotional, "id">;
-    // data mínima se fornecida (assume string ou Timestamp)
+    const devo = convertDocToDevotional(docSnap.id, docSnap.data());
     if (dataMinima) {
-      const millisDoc =
-        (data.data_devocional as any)?.toMillis?.() ??
-        (typeof data.data_devocional === "string"
-          ? Date.parse(data.data_devocional)
-          : 0);
+      const millisDoc = Date.parse(devo.data_devocional);
       const millisMin =
-        (dataMinima as any)?.toMillis?.() ??
-        (typeof dataMinima === "string" ? Date.parse(dataMinima) : 0);
+        typeof dataMinima === "string" ? Date.parse(dataMinima) : Date.parse(String(dataMinima));
       if (millisDoc < millisMin) return;
     }
-    list.push({ id: docSnap.id, ...data });
+    list.push(devo);
   });
 
   if (termo) {
@@ -325,10 +328,165 @@ export async function searchDevotionals(
     return list.filter(
       (d) =>
         d.titulo.toLowerCase().includes(term) ||
-        d.conteudo_base.toLowerCase().includes(term)
+        d.devocional_texto.toLowerCase().includes(term) ||
+        d.referencia_biblica.toLowerCase().includes(term)
     );
   }
   return list;
+}
+
+export async function listDevotionalsForAdmin(): Promise<{
+  scheduledDrafts: Devotional[];
+  drafts: Devotional[];
+  published: Devotional[];
+}> {
+  const colRef = collection(firebaseDb, "devocionais");
+  const snap = await getDocs(query(colRef, orderBy("data_devocional", "desc")));
+  const scheduledDrafts: Devotional[] = [];
+  const drafts: Devotional[] = [];
+  const published: Devotional[] = [];
+
+  snap.forEach((docSnap) => {
+    const devo = convertDocToDevotional(docSnap.id, docSnap.data());
+    if (devo.status === "publicado") {
+      published.push(devo);
+    } else if (devo.status === "rascunho" && devo.publish_at) {
+      scheduledDrafts.push(devo);
+    } else {
+      drafts.push(devo);
+    }
+  });
+
+  return {
+    scheduledDrafts,
+    drafts,
+    published,
+  };
+}
+
+export async function isDevotionalDateAvailable(
+  dateValue: Devotional["data_devocional"],
+  ignoreId?: string
+): Promise<boolean> {
+  const normalized = normalizeDateToISO(dateValue);
+  const colRef = collection(firebaseDb, "devocionais");
+  const q = query(colRef, where("data_devocional", "==", normalized));
+  const snap = await getDocs(q);
+
+  if (snap.empty) return true;
+  if (!ignoreId) return false;
+
+  const others = snap.docs.filter((docSnap) => docSnap.id !== ignoreId);
+  return others.length === 0;
+}
+
+// Helpers -------------------------------------------------
+
+function convertDocToDevotional(id: string, data: Record<string, any>): Devotional {
+  return {
+    id,
+    titulo: data.titulo ?? "",
+    referencia_biblica: data.referencia_biblica ?? "",
+    devocional_texto: data.devocional_texto ?? data.conteudo_base ?? "",
+    data_devocional: normalizeStoredDate(data.data_devocional),
+    status: (data.status ?? "rascunho") as DevotionalStatus,
+    publish_at: normalizePublishAtValue(data.publish_at),
+    data_publicacao_auto: data.data_publicacao_auto ?? null,
+    criado_por_id: data.criado_por_id ?? "",
+    publicado_em: data.publicado_em ?? null,
+    created_at: data.created_at ?? Timestamp.now(),
+    updated_at: data.updated_at ?? Timestamp.now(),
+    rascunho_salvo_em: data.rascunho_salvo_em ?? null,
+  };
+}
+
+function toTimestampOrNull(value?: Timestamp | null): Timestamp | null {
+  if (!value) return null;
+  return value instanceof Timestamp ? value : null;
+}
+
+function isNonEmpty(value?: string, min = 1): boolean {
+  return typeof value === "string" && value.trim().length >= min;
+}
+
+function normalizeDateToISO(input: string): string {
+  if (!isNonEmpty(input)) {
+    throw new Error("Data do devocional obrigatÇria.");
+  }
+  const normalized = input.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    const date = new Date(normalized);
+    if (Number.isNaN(date.getTime())) throw new Error("Data do devocional invÇ­lida.");
+    return normalized;
+  }
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(normalized);
+  if (match) {
+    const [, dd, mm, yyyy] = match;
+    const day = Number(dd);
+    const month = Number(mm);
+    const year = Number(yyyy);
+    const date = new Date(year, month - 1, day);
+    if (
+      date.getFullYear() !== year ||
+      date.getMonth() !== month - 1 ||
+      date.getDate() !== day
+    ) {
+      throw new Error("Data do devocional invÇ­lida.");
+    }
+    return `${year}-${`${month}`.padStart(2, "0")}-${`${day}`.padStart(2, "0")}`;
+  }
+  throw new Error("Data do devocional invÇ­lida. Use YYYY-MM-DD ou DD/MM/YYYY.");
+}
+
+function normalizeStoredDate(raw: unknown): string {
+  if (typeof raw === "string") {
+    try {
+      return normalizeDateToISO(raw);
+    } catch {
+      return raw;
+    }
+  }
+  if (raw instanceof Timestamp) {
+    const date = raw.toDate();
+    const dd = `${date.getDate()}`.padStart(2, "0");
+    const mm = `${date.getMonth() + 1}`.padStart(2, "0");
+    const yyyy = date.getFullYear();
+    return `${yyyy}-${mm}-${dd}`;
+  }
+  return "";
+}
+
+function normalizePublishAtValue(raw: unknown): Timestamp | null {
+  if (!raw) return null;
+  if (raw instanceof Timestamp) return raw;
+  if (typeof raw === "string") {
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) return null;
+    return Timestamp.fromDate(date);
+  }
+  return null;
+}
+
+function validateRequiredFields(values: {
+  titulo: string;
+  referencia_biblica: string;
+  devocional_texto: string;
+  data_devocional: string;
+  criado_por_id: string;
+}) {
+  if (!isNonEmpty(values.titulo, 3)) {
+    throw new Error("Informe o tÇðtulo do devocional.");
+  }
+  if (!isNonEmpty(values.referencia_biblica, 3)) {
+    throw new Error("Informe a referÇ£ncia bÇ­blica.");
+  }
+  if (!isNonEmpty(values.devocional_texto, 5)) {
+    throw new Error("Informe o devocional.");
+  }
+  normalizeDateToISO(values.data_devocional);
+  if (!isNonEmpty(values.criado_por_id, 6)) {
+    throw new Error("UsuÇ­rio invÇ­lido para criaÇõÇœo do devocional.");
+  }
 }
 
 async function notifyDevotionalPublished(devotionalId: string, titulo: string) {
@@ -347,6 +505,6 @@ async function notifyDevotionalPublished(devotionalId: string, titulo: string) {
       )
     );
   } catch (err) {
-    console.error("Erro ao notificar usuários sobre devocional publicado:", err);
+    console.error("[Devocionais] Erro ao notificar publicaÇõÇœo:", err);
   }
 }

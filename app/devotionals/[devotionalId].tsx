@@ -22,6 +22,7 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { StatusBadge } from "../../components/ui/StatusBadge";
 import { AppButton } from "../../components/ui/AppButton";
 import { useTheme } from "../../hooks/useTheme";
+import { formatDate } from "../../utils/publishAt";
 
 export default function DevotionalDetailsScreen() {
   const router = useRouter();
@@ -50,7 +51,7 @@ export default function DevotionalDetailsScreen() {
         setIsLoading(true);
         const data = await getDevotionalById(devotionalId);
         if (!data) {
-          Alert.alert("Erro", "Devocional não encontrado.");
+          Alert.alert("Erro", "Devocional nÇœo encontrado.");
           router.replace("/devotionals" as any);
           return;
         }
@@ -67,7 +68,7 @@ export default function DevotionalDetailsScreen() {
         }
       } catch (error) {
         console.error("Erro ao carregar devocional:", error);
-        Alert.alert("Erro", "Não foi possível carregar o devocional.");
+        Alert.alert("Erro", "NÇœo foi possÇðvel carregar o devocional.");
       } finally {
         setIsLoading(false);
       }
@@ -88,8 +89,12 @@ export default function DevotionalDetailsScreen() {
   if (!devotional) {
     return (
       <View style={styles.center}>
-        <Text style={styles.loadingText}>Devocional não encontrado.</Text>
-        <AppButton title="Voltar" variant="outline" onPress={() => router.replace("/devotionals" as any)} />
+        <Text style={styles.loadingText}>Devocional nÇœo encontrado.</Text>
+        <AppButton
+          title="Voltar"
+          variant="outline"
+          onPress={() => router.replace("/devotionals" as any)}
+        />
       </View>
     );
   }
@@ -99,11 +104,11 @@ export default function DevotionalDetailsScreen() {
     if (url) {
       Linking.openURL(url).catch((err) => {
         console.error("Erro ao abrir link:", err);
-        Alert.alert("Erro", "Não foi possível abrir o material.");
+        Alert.alert("Erro", "NÇœo foi possÇðvel abrir o material.");
       });
       return;
     }
-    Alert.alert("Material sem link", "Este material não possui URL acessível.");
+    Alert.alert("Material sem link", "Este material nÇœo possui URL acessÇðvel.");
   }
 
   return (
@@ -116,19 +121,19 @@ export default function DevotionalDetailsScreen() {
     >
       <Card
         title={devotional.titulo}
-        subtitle={`Data: ${String(devotional.data_devocional)}`}
+        subtitle={`Data: ${formatDateString(devotional.data_devocional)} • ${devotional.referencia_biblica}`}
         footer={<StatusBadge status={devotional.status} variant="devotional" />}
       />
 
-      <Card title="Conteúdo">
-        <Text style={styles.cardText}>{devotional.conteudo_base}</Text>
+      <Card title="Devocional">
+        <Text style={styles.cardText}>{devotional.devocional_texto}</Text>
       </Card>
 
       <Card title="Materiais de apoio">
         {isLoadingMaterials ? (
           <ActivityIndicator size="small" color="#facc15" />
         ) : materials.length === 0 ? (
-          <EmptyState title="Nenhum material de apoio disponível para este devocional." />
+          <EmptyState title="Nenhum material de apoio disponÇðvel para este devocional." />
         ) : (
           materials.map((mat) => (
             <SupportMaterialItem
@@ -164,3 +169,12 @@ const styles = StyleSheet.create({
   loadingText: { color: "#e5e7eb", marginTop: 12 },
   cardText: { color: "#cbd5e1", fontSize: 14 },
 });
+
+function formatDateString(value: string): string {
+  if (!value) return "";
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(value)) return value;
+  const [year, month, day] = value.split("-");
+  if (!year || !month || !day) return value;
+  const date = new Date(Number(year), Number(month) - 1, Number(day));
+  return formatDate(date);
+}

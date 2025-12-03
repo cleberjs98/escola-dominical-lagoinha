@@ -107,17 +107,23 @@ export default function ManageHubScreen() {
           >
             <Text style={styles.buttonText}>Criar nova aula</Text>
           </Pressable>
-          <Pressable
-            style={styles.button}
-            onPress={() => router.push("/admin/devotionals/new" as any)}
-          >
-            <Text style={styles.buttonText}>Criar devocional</Text>
-          </Pressable>
-          <Pressable
-            style={styles.button}
-            onPress={() => router.push("/news/my-news" as any)}
-          >
-            <Text style={styles.buttonText}>Gerenciar noticias</Text>
+        <Pressable
+          style={styles.button}
+          onPress={() => router.push("/admin/devotionals/new" as any)}
+        >
+          <Text style={styles.buttonText}>Criar devocional</Text>
+        </Pressable>
+        <Pressable
+          style={styles.button}
+          onPress={() => router.push("/admin/devotionals" as any)}
+        >
+          <Text style={styles.buttonText}>Gerenciar devocionais</Text>
+        </Pressable>
+        <Pressable
+          style={styles.button}
+          onPress={() => router.push("/news/my-news" as any)}
+        >
+          <Text style={styles.buttonText}>Gerenciar noticias</Text>
           </Pressable>
         </View>
       ) : null}

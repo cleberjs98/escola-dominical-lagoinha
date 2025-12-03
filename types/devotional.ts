@@ -3,23 +3,21 @@ import type { Timestamp } from "firebase/firestore";
 
 export enum DevotionalStatus {
   RASCUNHO = "rascunho",
-  DISPONIVEL = "disponivel",
   PUBLICADO = "publicado",
-  ARQUIVADO = "arquivado",
 }
 
 export interface Devotional {
   id: string;
   titulo: string;
-  conteudo_base: string;
-  // Para consistência com demais datas do projeto, usamos Timestamp do Firestore.
-  // Se preferir string ISO, alinhe aqui e na escrita/leitura do Firestore.
-  data_devocional: Timestamp | string;
-  data_publicacao_auto?: Timestamp | string | null;
+  referencia_biblica: string;
+  devocional_texto: string;
+  data_devocional: string; // sempre "YYYY-MM-DD"
   status: DevotionalStatus;
+  publish_at: Timestamp | null;
+  data_publicacao_auto: string | null;
   criado_por_id: string;
+  publicado_em: Timestamp | null;
   created_at: Timestamp;
   updated_at: Timestamp;
-  publicado_em?: Timestamp | null;
   rascunho_salvo_em?: Timestamp | null;
 }

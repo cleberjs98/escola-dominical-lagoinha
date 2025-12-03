@@ -7,7 +7,7 @@ type Props = {
   variant?: "user" | "lesson" | "devotional" | "reservation" | "news";
 };
 
-export function StatusBadge({ status, variant }: Props) {
+export function StatusBadge({ status }: Props) {
   const { themeSettings } = useTheme();
   const corSucesso = themeSettings?.cor_sucesso || "#22c55e";
   const corErro = themeSettings?.cor_erro || "#ef4444";
@@ -16,9 +16,10 @@ export function StatusBadge({ status, variant }: Props) {
 
   function getColor() {
     const s = status.toLowerCase();
-    if (["aprovado", "publicada", "aprovada", "ativa"].includes(s)) return corSucesso;
+    if (["aprovado", "publicada", "publicado", "aprovada", "ativa"].includes(s)) return corSucesso;
     if (["rejeitado", "rejeitada", "erro"].includes(s)) return corErro;
-    if (["pendente", "pendente de aprovação", "disponivel"].includes(s)) return corAviso;
+    if (["pendente", "pendente de aprovacao", "disponivel", "rascunho"].includes(s))
+      return corAviso;
     return corInfo;
   }
 
