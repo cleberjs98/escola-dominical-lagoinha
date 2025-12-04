@@ -78,6 +78,7 @@ export default function NewDevotionalScreen() {
     if (!isoDate) return;
 
     try {
+      console.log("[DevotionalNew] handleSaveDraft chamado");
       setIsSubmitting(true);
       const available = await isDevotionalDateAvailable(isoDate);
       if (!available) {
@@ -115,6 +116,7 @@ export default function NewDevotionalScreen() {
     if (!isoDate) return;
 
     try {
+      console.log("[DevotionalNew] handlePublishNow chamado");
       setIsSubmitting(true);
       const available = await isDevotionalDateAvailable(isoDate);
       if (!available) {
@@ -206,6 +208,12 @@ export default function NewDevotionalScreen() {
             disabled={isSubmitting}
           />
           <AppButton
+            title={isSubmitting ? "Disponibilizando..." : "Disponibilizar"}
+            variant="secondary"
+            onPress={handleMakeAvailable}
+            disabled={isSubmitting}
+          />
+          <AppButton
             title={isSubmitting ? "Publicando..." : "Publicar agora"}
             variant="primary"
             onPress={handlePublishNow}
@@ -248,3 +256,41 @@ function toISODate(input: string): string | null {
   if (Number.isNaN(date.getTime())) return null;
   return `${year}-${`${month}`.padStart(2, "0")}-${`${day}`.padStart(2, "0")}`;
 }
+  async function handleMakeAvailable() {
+    if (!firebaseUser) return;
+    if (!validateInputs()) return;
+    const isoDate = toISODate(dataDevocional);
+    if (!isoDate) return;
+
+    try {
+      console.log("[DevotionalNew] handleMakeAvailable chamado");
+      setIsSubmitting(true);
+      const available = await isDevotionalDateAvailable(isoDate);
+      if (!available) {
+        Alert.alert("Atenção", "Já existe um devocional para essa data.");
+        return;
+      }
+
+      const publishInfo = parseDateTimeToTimestamp(publishAtInput);
+
+      await createDevotional({
+        titulo: titulo.trim(),
+        referencia_biblica: referenciaBiblica.trim(),
+        devocional_texto: devocionalTexto.trim(),
+        data_devocional: isoDate,
+        publish_at: publishInfo?.timestamp ?? null,
+        data_publicacao_auto: publishInfo?.display ?? null,
+        criado_por_id: firebaseUser.uid,
+        status: DevotionalStatus.DISPONIVEL,
+      });
+
+      Alert.alert("Sucesso", "Devocional disponibilizado.");
+      resetForm();
+      router.replace("/admin/devotionals" as any);
+    } catch (error) {
+      console.error("[Devocionais][Criar] Erro ao disponibilizar devocional:", error);
+      Alert.alert("Erro", (error as any)?.message || "Não foi possível disponibilizar o devocional.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }

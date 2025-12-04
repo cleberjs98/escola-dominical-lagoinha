@@ -27,6 +27,10 @@ export default function DevotionalsScreen() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    console.log("[DevotionalsTab] tela carregada");
+  }, []);
+
+  useEffect(() => {
     if (isInitializing) return;
     if (!firebaseUser) {
       router.replace("/auth/login" as any);

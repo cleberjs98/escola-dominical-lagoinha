@@ -111,6 +111,7 @@ export default function EditDevotionalScreen() {
     const isoDate = toISODate(dataDevocional);
     if (!isoDate) return;
     try {
+      console.log("[DevotionalEdit] handleSaveEdits");
       setIsSubmitting(true);
       const available = await isDevotionalDateAvailable(isoDate, devotional.id);
       if (!available) {
@@ -143,6 +144,7 @@ export default function EditDevotionalScreen() {
     const isoDate = toISODate(dataDevocional);
     if (!isoDate) return;
     try {
+      console.log("[DevotionalEdit] handleSaveDraft");
       setIsSubmitting(true);
       const available = await isDevotionalDateAvailable(isoDate, devotional.id);
       if (!available) {
@@ -170,10 +172,45 @@ export default function EditDevotionalScreen() {
     }
   }
 
+  async function handleMakeAvailable() {
+    if (!devotional) return;
+    if (!validate()) return;
+    const isoDate = toISODate(dataDevocional);
+    if (!isoDate) return;
+    try {
+      console.log("[DevotionalEdit] handleMakeAvailable");
+      setIsSubmitting(true);
+      const available = await isDevotionalDateAvailable(isoDate, devotional.id);
+      if (!available) {
+        Alert.alert("Atenção", "Já existe um devocional para essa data.");
+        return;
+      }
+      const publishParsed = parseDateTimeToTimestamp(publishAtInput);
+      await updateDevotionalBase({
+        devotionalId: devotional.id,
+        titulo: titulo.trim(),
+        referencia_biblica: referenciaBiblica.trim(),
+        devocional_texto: devocionalTexto.trim(),
+        data_devocional: isoDate,
+        status: DevotionalStatus.DISPONIVEL,
+        publish_at: publishParsed?.timestamp ?? null,
+        data_publicacao_auto: publishParsed?.display ?? null,
+      });
+      Alert.alert("Sucesso", "Devocional disponibilizado.");
+      router.replace("/admin/devotionals" as any);
+    } catch (error) {
+      console.error("[Devocionais][Editar] Erro ao disponibilizar:", error);
+      Alert.alert("Erro", (error as any)?.message || "Não foi possível disponibilizar o devocional.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   async function handlePublishNow() {
     if (!devotional) return;
     if (!validate()) return;
     try {
+      console.log("[DevotionalEdit] handlePublishNow");
       setIsSubmitting(true);
       await publishDevotionalNow(devotional.id);
       await updateDevotionalBase({
@@ -203,6 +240,7 @@ export default function EditDevotionalScreen() {
           style: "destructive",
           onPress: async () => {
             try {
+              console.log("[DevotionalEdit] handleDelete chamado para", devotional.id);
               setIsSubmitting(true);
               await archiveDevotional(devotional.id);
               Alert.alert("Sucesso", "Devocional excluído com sucesso.");
@@ -283,6 +321,12 @@ export default function EditDevotionalScreen() {
             title={isSubmitting ? "Salvando rascunho..." : "Salvar como rascunho"}
             variant="secondary"
             onPress={handleSaveDraft}
+            disabled={isSubmitting}
+          />
+          <AppButton
+            title={isSubmitting ? "Disponibilizando..." : "Disponibilizar"}
+            variant="secondary"
+            onPress={handleMakeAvailable}
             disabled={isSubmitting}
           />
         </View>

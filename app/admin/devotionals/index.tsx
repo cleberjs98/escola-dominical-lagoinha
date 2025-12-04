@@ -58,6 +58,7 @@ export default function AdminDevotionalsScreen() {
 
   async function handlePublishNow(id: string) {
     try {
+      console.log("[Devocionais][Lista] handlePublishNow", id);
       await publishDevotionalNow(id);
       await loadData();
     } catch (error) {
@@ -68,11 +69,23 @@ export default function AdminDevotionalsScreen() {
 
   async function handleDraft(id: string) {
     try {
+      console.log("[Devocionais][Lista] handleDraft", id);
       await setDevotionalStatus(id, DevotionalStatus.RASCUNHO);
       await loadData();
     } catch (error) {
       console.error("[Devocionais][Lista] Erro ao salvar rascunho:", error);
       Alert.alert("Erro", "Não foi possível salvar como rascunho.");
+    }
+  }
+
+  async function handleMakeAvailable(id: string) {
+    try {
+      console.log("[Devocionais][Lista] handleMakeAvailable", id);
+      await setDevotionalStatus(id, DevotionalStatus.DISPONIVEL);
+      await loadData();
+    } catch (error) {
+      console.error("[Devocionais][Lista] Erro ao disponibilizar:", error);
+      Alert.alert("Erro", "Não foi possível disponibilizar o devocional.");
     }
   }
 
@@ -121,6 +134,7 @@ export default function AdminDevotionalsScreen() {
             devotional={devo}
             onEdit={() => router.push(`/admin/devotionals/${devo.id}` as any)}
             onPublishNow={() => handlePublishNow(devo.id)}
+            onMakeAvailable={() => handleMakeAvailable(devo.id)}
             onDelete={() => handleDelete(devo.id)}
             extraBadge="Agendado"
           />
@@ -133,6 +147,7 @@ export default function AdminDevotionalsScreen() {
             devotional={devo}
             onEdit={() => router.push(`/admin/devotionals/${devo.id}` as any)}
             onPublishNow={() => handlePublishNow(devo.id)}
+            onMakeAvailable={() => handleMakeAvailable(devo.id)}
             onDelete={() => handleDelete(devo.id)}
             onSaveDraft={() => handleDraft(devo.id)}
           />
@@ -186,6 +201,7 @@ function DevotionalAdminCard({
   onEdit,
   onPublishNow,
   onSaveDraft,
+  onMakeAvailable,
   onDelete,
   extraBadge,
 }: {
@@ -193,6 +209,7 @@ function DevotionalAdminCard({
   onEdit: () => void;
   onPublishNow?: () => void;
   onSaveDraft?: () => void;
+  onMakeAvailable?: () => void;
   onDelete: () => void;
   extraBadge?: string;
 }) {
@@ -206,6 +223,9 @@ function DevotionalAdminCard({
           <AppButton title="Editar" variant="outline" fullWidth={false} onPress={onEdit} />
           {onPublishNow ? (
             <AppButton title="Publicar agora" variant="primary" fullWidth={false} onPress={onPublishNow} />
+          ) : null}
+          {onMakeAvailable ? (
+            <AppButton title="Disponibilizar" variant="secondary" fullWidth={false} onPress={onMakeAvailable} />
           ) : null}
           {onSaveDraft ? (
             <AppButton title="Salvar rascunho" variant="secondary" fullWidth={false} onPress={onSaveDraft} />

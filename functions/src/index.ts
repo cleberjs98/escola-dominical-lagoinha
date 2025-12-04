@@ -82,10 +82,12 @@ async function processLessons(now: admin.firestore.Timestamp): Promise<number> {
 async function processDevotionals(now: admin.firestore.Timestamp): Promise<number> {
   const devotionalsRef = db.collection(devotionalsCollection);
   const snapshot = await devotionalsRef
-    .where("status", "==", "rascunho")
+    .where("status", "==", "disponivel")
     .where("publish_at", "<=", now)
     .orderBy("publish_at", "asc")
     .get();
+
+  logger.info("[Functions] Publicando devocionais agendados", { encontrados: snapshot.size });
 
   let processed = 0;
   const updates: Promise<unknown>[] = [];

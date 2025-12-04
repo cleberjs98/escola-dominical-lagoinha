@@ -181,7 +181,10 @@ export default function HomeScreen() {
             title="Ver todos"
             variant="outline"
             fullWidth={false}
-            onPress={() => router.push("/devotionals" as any)}
+            onPress={() => {
+              console.log("[Home] Ver todos devocionais clicado");
+              router.push("/(tabs)/devotionals" as any);
+            }}
           />
         }
       >

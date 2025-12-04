@@ -3,6 +3,7 @@ import type { Timestamp } from "firebase/firestore";
 
 export enum DevotionalStatus {
   RASCUNHO = "rascunho",
+  DISPONIVEL = "disponivel",
   PUBLICADO = "publicado",
 }
 
