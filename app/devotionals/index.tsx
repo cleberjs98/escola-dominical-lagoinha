@@ -11,7 +11,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { useTheme } from "../../hooks/useTheme";
 import type { Devotional } from "../../types/devotional";
 import {
-  listPublishedDevotionals, listDevotionalsForAdmin, listAvailableAndPublishedForProfessor,
+  listPublishedDevotionals, listDevotionalsForAdmin, listAvailableAndPublishedForProfessor, listAvailableAndPublishedForProfessor,
   publishDevotionalNow,
   setDevotionalStatus,
   deleteDevotional,
@@ -28,6 +28,7 @@ export default function DevotionalsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [publishedForStudent, setPublishedForStudent] = useState<Devotional[]>([]);
+  const [professorList, setProfessorList] = useState<Devotional[]>([]);
   const [professorList, setProfessorList] = useState<Devotional[]>([]);
   const [adminSections, setAdminSections] = useState<{
     drafts: Devotional[];
@@ -170,9 +171,9 @@ export default function DevotionalsScreen() {
   }
 }
 
-function StudentList({ devotionals, onOpen }: { devotionals: Devotional[]; onOpen: (id: string) => void }) {
+function StudentList({ devotionals, onOpen, emptyMessage = "Nenhum devocional publicado no momento." }: { devotionals: Devotional[]; onOpen: (id: string) => void; emptyMessage?: string }) {
   if (devotionals.length === 0) {
-    return <EmptyState title="Nenhum devocional publicado no momento." />;
+    return <EmptyState title={emptyMessage} />;
   }
   return (
     <>
@@ -348,6 +349,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
 });
+
 
 
 
