@@ -11,8 +11,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { useTheme } from "../../hooks/useTheme";
 import type { Devotional } from "../../types/devotional";
 import {
-  listPublishedDevotionals,
-  listDevotionalsForAdmin,
+  listPublishedDevotionals, listDevotionalsForAdmin, listAvailableAndPublishedForProfessor,
   publishDevotionalNow,
   setDevotionalStatus,
   deleteDevotional,
@@ -29,6 +28,7 @@ export default function DevotionalsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [publishedForStudent, setPublishedForStudent] = useState<Devotional[]>([]);
+  const [professorList, setProfessorList] = useState<Devotional[]>([]);
   const [adminSections, setAdminSections] = useState<{
     drafts: Devotional[];
     available: Devotional[];
@@ -55,11 +55,19 @@ export default function DevotionalsScreen() {
         console.log("[DevotionalsTab] devocionais carregados:", total);
         setAdminSections(sections);
         setPublishedForStudent([]);
+        setProfessorList([]);
+      } else if (role === "professor") {
+        const list = await listAvailableAndPublishedForProfessor();
+        console.log("[DevotionalsTab] devocionais carregados:", list.length);
+        setProfessorList(list);
+        setPublishedForStudent([]);
+        setAdminSections(null);
       } else {
         const published = await listPublishedDevotionals();
         console.log("[DevotionalsTab] devocionais carregados:", published.length);
         setPublishedForStudent(published);
         setAdminSections(null);
+        setProfessorList([]);
       }
     } catch (err) {
       console.error("[DevotionalsTab] erro ao carregar devocionais:", err);
@@ -340,6 +348,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
 });
+
 
 
 

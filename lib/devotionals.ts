@@ -8,10 +8,11 @@ import {
   getDocs,
   orderBy,
   query,
+  where,
+  limit,
   serverTimestamp,
   Timestamp,
   updateDoc,
-  where,
 } from "firebase/firestore";
 
 import type { Devotional } from "../types/devotional";
@@ -130,6 +131,21 @@ export async function listPublishedDevotionals(): Promise<Devotional[]> {
   console.log("[DevotionalsLib] listPublishedDevotionals called");
   const colRef = collection(firebaseDb, COLLECTION);
   const q = query(colRef, where("status", "==", DevotionalStatus.PUBLICADO), orderBy("data_devocional", "desc"));
+  const snap = await getDocs(q);
+  const list: Devotional[] = [];
+  snap.forEach((docSnap) => list.push(convertDoc(docSnap.id, docSnap.data())));
+  return list;
+}
+
+export async function listAvailableAndPublishedForProfessor(limitCount = 50): Promise<Devotional[]> {
+  console.log("[DevotionalsLib] listAvailableAndPublishedForProfessor called");
+  const colRef = collection(firebaseDb, COLLECTION);
+  const q = query(
+    colRef,
+    where("status", "in", [DevotionalStatus.PUBLICADO, DevotionalStatus.DISPONIVEL]),
+    orderBy("data_devocional", "desc"),
+    limit(limitCount)
+  );
   const snap = await getDocs(q);
   const list: Devotional[] = [];
   snap.forEach((docSnap) => list.push(convertDoc(docSnap.id, docSnap.data())));
