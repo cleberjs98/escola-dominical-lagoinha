@@ -11,7 +11,9 @@ import { useAuth } from "../../hooks/useAuth";
 import { useTheme } from "../../hooks/useTheme";
 import type { Devotional } from "../../types/devotional";
 import {
-  listPublishedDevotionals, listDevotionalsForAdmin, listAvailableAndPublishedForProfessor, listAvailableAndPublishedForProfessor,
+  listPublishedDevotionals,
+  listDevotionalsForAdmin,
+  listAvailableAndPublishedForProfessor,
   publishDevotionalNow,
   setDevotionalStatus,
   deleteDevotional,
