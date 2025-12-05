@@ -11,11 +11,8 @@ import {
 import { useRouter } from "expo-router";
 
 import { useAuth } from "../../hooks/useAuth";
-import { getDevotionalOfTheDay } from "../../lib/devotionals";
-import {
-  listLessonsForProfessor,
-  listNextPublishedLessons,
-} from "../../lib/lessons";
+import { getDevotionalOfTheDay, listAvailableAndPublishedForProfessor } from "../../lib/devotionals";
+import { listLessonsForProfessor, listNextPublishedLessons } from "../../lib/lessons";
 import type { Devotional } from "../../types/devotional";
 import type { Lesson } from "../../types/lesson";
 import { useUnreadNotificationsCount } from "../../hooks/useUnreadNotificationsCount";
@@ -62,7 +59,12 @@ export default function HomeScreen() {
         setIsLoadingDevotional(true);
         const today = new Date();
         const dateStr = today.toISOString().slice(0, 10); // "YYYY-MM-DD"
-        const devo = await getDevotionalOfTheDay(dateStr);
+        let devo = await getDevotionalOfTheDay(dateStr);
+        // Se coord/admin/professor não tiver devocional do dia, tenta mostrar o primeiro publicado/disponível
+        if (!devo && (isCoordenador || isAdmin || isProfessor)) {
+          const list = await listAvailableAndPublishedForProfessor();
+          devo = list.length ? list[0] : null;
+        }
         setDevotionalOfDay(devo);
       } catch (error) {
         console.error("Erro ao carregar devocional do dia:", error);
@@ -74,7 +76,23 @@ export default function HomeScreen() {
     async function loadLessons() {
       try {
         setIsLoadingLessons(true);
-        const lessons = await listNextPublishedLessons(3);
+        let lessons: Lesson[] = [];
+        if (isAdmin || isCoordenador) {
+          // coord/admin: reuso listNextPublishedLessons (publicadas); se vazio, deixa vazio mesmo
+          lessons = await listNextPublishedLessons(3);
+        } else if (isProfessor) {
+          const sections = await listLessonsForProfessor(firebaseUser.uid);
+          const merged = [...sections.published, ...sections.available]
+            .sort((a, b) => {
+              const aDate = (a.data_aula as any)?.toDate?.() ?? (a.data_aula as any)?.toDate?.() ?? new Date(a.data_aula as any);
+              const bDate = (b.data_aula as any)?.toDate?.() ?? (b.data_aula as any)?.toDate?.() ?? new Date(b.data_aula as any);
+              return aDate.getTime() - bDate.getTime();
+            })
+            .slice(0, 3);
+          lessons = merged;
+        } else {
+          lessons = await listNextPublishedLessons(3);
+        }
         setNextLessons(lessons);
       } catch (error) {
         console.error("Erro ao carregar aulas:", error);

@@ -31,7 +31,6 @@ export default function DevotionalsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [publishedForStudent, setPublishedForStudent] = useState<Devotional[]>([]);
   const [professorList, setProfessorList] = useState<Devotional[]>([]);
-  const [professorList, setProfessorList] = useState<Devotional[]>([]);
   const [adminSections, setAdminSections] = useState<{
     drafts: Devotional[];
     available: Devotional[];
@@ -113,8 +112,18 @@ export default function DevotionalsScreen() {
           onMakeAvailable={(id) => handleStatus(id, "disponivel")}
           onMakeDraft={(id) => handleStatus(id, "rascunho")}
         />
+      ) : role === "professor" ? (
+        <StudentList
+          devotionals={professorList}
+          onOpen={(id) => router.push(`/devotionals/${id}` as any)}
+          emptyMessage="Nenhum devocional disponível/publicado no momento."
+        />
       ) : (
-        <StudentList devotionals={publishedForStudent} onOpen={(id) => router.push(`/devotionals/${id}` as any)} />
+        <StudentList
+          devotionals={publishedForStudent}
+          onOpen={(id) => router.push(`/devotionals/${id}` as any)}
+          emptyMessage="Nenhum devocional publicado no momento."
+        />
       )}
 
       <View style={styles.actions}>
@@ -351,6 +360,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
 });
+
 
 
 
