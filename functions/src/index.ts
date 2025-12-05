@@ -81,11 +81,8 @@ async function processLessons(now: admin.firestore.Timestamp): Promise<number> {
 
 async function processDevotionals(now: admin.firestore.Timestamp): Promise<number> {
   const devotionalsRef = db.collection(devotionalsCollection);
-  const snapshot = await devotionalsRef
-    .where("status", "==", "disponivel")
-    .where("publish_at", "<=", now)
-    .orderBy("publish_at", "asc")
-    .get();
+  // Consulta apenas por publish_at para evitar índice composto; filtramos status em memória
+  const snapshot = await devotionalsRef.where("publish_at", "<=", now).orderBy("publish_at", "asc").get();
 
   logger.info("[Functions] Publicando devocionais agendados", { encontrados: snapshot.size });
 
@@ -94,6 +91,7 @@ async function processDevotionals(now: admin.firestore.Timestamp): Promise<numbe
 
   snapshot.forEach((docSnap) => {
     const data = docSnap.data();
+    if (data.status !== "disponivel") return;
     const publishAt = normalizePublishAt(data.publish_at);
     if (!publishAt) return;
     if (publishAt.toMillis() > now.toMillis()) return;
@@ -128,6 +126,8 @@ function normalizePublishAt(
     if (Number.isNaN(parsed.getTime())) return null;
     return admin.firestore.Timestamp.fromDate(parsed);
   }
-  if (raw.toMillis) return raw as admin.firestore.Timestamp;
+  if ((raw as any).toMillis && typeof (raw as any).toMillis === "function") {
+    return raw as admin.firestore.Timestamp;
+  }
   return null;
 }

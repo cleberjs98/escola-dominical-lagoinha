@@ -97,16 +97,15 @@ async function processLessons(now) {
 }
 async function processDevotionals(now) {
     const devotionalsRef = db.collection(devotionalsCollection);
-    const snapshot = await devotionalsRef
-        .where("status", "==", "disponivel")
-        .where("publish_at", "<=", now)
-        .orderBy("publish_at", "asc")
-        .get();
+    // Consulta apenas por publish_at para evitar índice composto; filtramos status em memória
+    const snapshot = await devotionalsRef.where("publish_at", "<=", now).orderBy("publish_at", "asc").get();
     firebase_functions_1.logger.info("[Functions] Publicando devocionais agendados", { encontrados: snapshot.size });
     let processed = 0;
     const updates = [];
     snapshot.forEach((docSnap) => {
         const data = docSnap.data();
+        if (data.status !== "disponivel")
+            return;
         const publishAt = normalizePublishAt(data.publish_at);
         if (!publishAt)
             return;
@@ -137,8 +136,9 @@ function normalizePublishAt(raw) {
             return null;
         return admin.firestore.Timestamp.fromDate(parsed);
     }
-    if (raw.toMillis)
+    if (raw.toMillis && typeof raw.toMillis === "function") {
         return raw;
+    }
     return null;
 }
 //# sourceMappingURL=index.js.map
