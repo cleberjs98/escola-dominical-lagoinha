@@ -264,7 +264,7 @@ function AdminCard({
     <View style={styles.adminCard}>
       <Card
         title={devotional.titulo}
-        subtitle={`${devotional.referencia_biblica} â€¢ ${devotional.data_devocional}`}
+        subtitle={`${devotional.referencia_biblica} - ${devotional.data_devocional}`}
         footer={
           <View style={styles.cardActions}>
             <AppButton title="Editar" variant="outline" fullWidth={false} onPress={onEdit} />
