@@ -323,6 +323,20 @@ export async function listPublishedLessons(): Promise<Lesson[]> {
   return mapList(snap);
 }
 
+// Lista aulas disponíveis ou publicadas (ordenadas asc) com limite
+export async function listAvailableAndPublished(limitCount = 3): Promise<Lesson[]> {
+  const colRef = collection(firebaseDb, collectionName);
+  const snap = await getDocs(query(colRef, where("status", "in", ["disponivel", "publicada"]), limit(limitCount * 2)));
+  const list = mapList(snap);
+  return list
+    .sort((a, b) => {
+      const aDate = (a.data_aula as any)?.toDate?.() ?? new Date(a.data_aula as any);
+      const bDate = (b.data_aula as any)?.toDate?.() ?? new Date(b.data_aula as any);
+      return aDate.getTime() - bDate.getTime();
+    })
+    .slice(0, limitCount);
+}
+
 // Lista próximas aulas publicadas (ordenadas por data asc) com limite
 export async function listNextPublishedLessons(limitCount = 3): Promise<Lesson[]> {
   const colRef = collection(firebaseDb, collectionName);

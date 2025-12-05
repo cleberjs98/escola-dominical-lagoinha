@@ -12,7 +12,7 @@ import { useRouter } from "expo-router";
 
 import { useAuth } from "../../hooks/useAuth";
 import { getDevotionalOfTheDay, listAvailableAndPublishedForProfessor } from "../../lib/devotionals";
-import { listLessonsForProfessor, listNextPublishedLessons } from "../../lib/lessons";
+import { listLessonsForProfessor, listNextPublishedLessons, listAvailableAndPublished } from "../../lib/lessons";
 import type { Devotional } from "../../types/devotional";
 import type { Lesson } from "../../types/lesson";
 import { useUnreadNotificationsCount } from "../../hooks/useUnreadNotificationsCount";
@@ -51,21 +51,35 @@ export default function HomeScreen() {
     }
   }, [firebaseUser, isInitializing, router]);
 
+  const nome = user?.nome || firebaseUser?.email || "Usuario";
+  const isProfessor = papel === "professor";
+  const isCoordenador = papel === "coordenador";
+  const isAdmin = papel === "administrador";
+  const primeiroNome = nome.split(" ")[0] || nome;
+
   useEffect(() => {
-    if (!firebaseUser || !isApproved) return;
+    // Admin/Coord podem carregar mesmo sem checar status; demais só se aprovado
+    if (!firebaseUser) return;
+    if (!isApproved && !isCoordenador && !isAdmin) return;
 
     async function loadDevotional() {
       try {
         setIsLoadingDevotional(true);
         const today = new Date();
         const dateStr = today.toISOString().slice(0, 10); // "YYYY-MM-DD"
-        let devo = await getDevotionalOfTheDay(dateStr);
-        // Se coord/admin/professor não tiver devocional do dia, tenta mostrar o primeiro publicado/disponível
-        if (!devo && (isCoordenador || isAdmin || isProfessor)) {
-          const list = await listAvailableAndPublishedForProfessor();
-          devo = list.length ? list[0] : null;
+        const devoToday = await getDevotionalOfTheDay(dateStr);
+        if (devoToday) {
+          setDevotionalOfDay(devoToday);
+          return;
         }
-        setDevotionalOfDay(devo);
+
+        // fallback: primeiro publicado/disponível para admin/coord/professor
+        if (isCoordenador || isAdmin || isProfessor) {
+          const list = await listAvailableAndPublishedForProfessor();
+          setDevotionalOfDay(list.length ? list[0] : null);
+        } else {
+          setDevotionalOfDay(null);
+        }
       } catch (error) {
         console.error("Erro ao carregar devocional do dia:", error);
       } finally {
@@ -78,14 +92,14 @@ export default function HomeScreen() {
         setIsLoadingLessons(true);
         let lessons: Lesson[] = [];
         if (isAdmin || isCoordenador) {
-          // coord/admin: reuso listNextPublishedLessons (publicadas); se vazio, deixa vazio mesmo
-          lessons = await listNextPublishedLessons(3);
+          // coord/admin veem disponíveis + publicadas (próximas)
+          lessons = await listAvailableAndPublished(3);
         } else if (isProfessor) {
           const sections = await listLessonsForProfessor(firebaseUser.uid);
           const merged = [...sections.published, ...sections.available]
             .sort((a, b) => {
-              const aDate = (a.data_aula as any)?.toDate?.() ?? (a.data_aula as any)?.toDate?.() ?? new Date(a.data_aula as any);
-              const bDate = (b.data_aula as any)?.toDate?.() ?? (b.data_aula as any)?.toDate?.() ?? new Date(b.data_aula as any);
+              const aDate = (a.data_aula as any)?.toDate?.() ?? new Date(a.data_aula as any);
+              const bDate = (b.data_aula as any)?.toDate?.() ?? new Date(b.data_aula as any);
               return aDate.getTime() - bDate.getTime();
             })
             .slice(0, 3);
@@ -117,7 +131,7 @@ export default function HomeScreen() {
     loadDevotional();
     loadLessons();
     loadMyLessons();
-  }, [firebaseUser, isApproved, papel]);
+  }, [firebaseUser, isApproved, papel, isCoordenador, isAdmin, isProfessor]);
 
   useEffect(() => {
     if (isApproved) {
@@ -141,13 +155,6 @@ export default function HomeScreen() {
       </View>
     );
   }
-
-  const nome = user?.nome || firebaseUser.email || "Usuario";
-  const isProfessor = papel === "professor";
-  const isCoordenador = papel === "coordenador";
-  const isAdmin = papel === "administrador";
-
-  const primeiroNome = nome.split(" ")[0] || nome;
 
   function bannerSubtitle() {
     if (isProfessor) return "Veja suas aulas reservadas e devocionais.";
