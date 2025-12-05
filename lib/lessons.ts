@@ -7,6 +7,7 @@ import {
   getDoc,
   getDocs,
   orderBy,
+  limit,
   query,
   QuerySnapshot,
   serverTimestamp,
@@ -319,6 +320,15 @@ export async function listLessonsForProfessor(
 export async function listPublishedLessons(): Promise<Lesson[]> {
   const colRef = collection(firebaseDb, collectionName);
   const snap = await getDocs(query(colRef, where("status", "==", "publicada"), orderBy("data_aula", "desc")));
+  return mapList(snap);
+}
+
+// Lista próximas aulas publicadas (ordenadas por data asc) com limite
+export async function listNextPublishedLessons(limitCount = 3): Promise<Lesson[]> {
+  const colRef = collection(firebaseDb, collectionName);
+  const snap = await getDocs(
+    query(colRef, where("status", "==", "publicada"), orderBy("data_aula", "asc"), limit(limitCount))
+  );
   return mapList(snap);
 }
 
