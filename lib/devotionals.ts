@@ -136,6 +136,17 @@ export async function listPublishedDevotionals(): Promise<Devotional[]> {
   return list;
 }
 
+export async function getDevotionalOfTheDay(dateISO: string): Promise<Devotional | null> {
+  // dateISO esperado: "YYYY-MM-DD"
+  const normalized = normalizeDate(dateISO);
+  const colRef = collection(firebaseDb, COLLECTION);
+  const q = query(colRef, where("status", "==", DevotionalStatus.PUBLICADO), where("data_devocional", "==", normalized));
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+  const docSnap = snap.docs[0];
+  return convertDoc(docSnap.id, docSnap.data());
+}
+
 export async function listDevotionalsForAdmin(): Promise<{
   drafts: Devotional[];
   available: Devotional[];
