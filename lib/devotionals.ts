@@ -130,26 +130,22 @@ export async function getDevotionalById(devotionalId: string): Promise<Devotiona
 export async function listPublishedDevotionals(): Promise<Devotional[]> {
   console.log("[DevotionalsLib] listPublishedDevotionals called");
   const colRef = collection(firebaseDb, COLLECTION);
-  const q = query(colRef, where("status", "==", DevotionalStatus.PUBLICADO), orderBy("data_devocional", "desc"));
-  const snap = await getDocs(q);
+  const snap = await getDocs(query(colRef, where("status", "==", DevotionalStatus.PUBLICADO)));
   const list: Devotional[] = [];
   snap.forEach((docSnap) => list.push(convertDoc(docSnap.id, docSnap.data())));
-  return list;
+  // Ordena localmente por data_devocional desc (YYYY-MM-DD)
+  return list.sort((a, b) => (a.data_devocional < b.data_devocional ? 1 : -1));
 }
 
 export async function listAvailableAndPublishedForProfessor(limitCount = 50): Promise<Devotional[]> {
   console.log("[DevotionalsLib] listAvailableAndPublishedForProfessor called");
   const colRef = collection(firebaseDb, COLLECTION);
-  const q = query(
-    colRef,
-    where("status", "in", [DevotionalStatus.PUBLICADO, DevotionalStatus.DISPONIVEL]),
-    orderBy("data_devocional", "desc"),
-    limit(limitCount)
+  const snap = await getDocs(
+    query(colRef, where("status", "in", [DevotionalStatus.PUBLICADO, DevotionalStatus.DISPONIVEL]), limit(limitCount))
   );
-  const snap = await getDocs(q);
   const list: Devotional[] = [];
   snap.forEach((docSnap) => list.push(convertDoc(docSnap.id, docSnap.data())));
-  return list;
+  return list.sort((a, b) => (a.data_devocional < b.data_devocional ? 1 : -1));
 }
 
 export async function getDevotionalOfTheDay(dateISO: string): Promise<Devotional | null> {
