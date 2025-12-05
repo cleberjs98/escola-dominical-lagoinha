@@ -1,31 +1,26 @@
-// app/admin/devotionals/[devotionalId].tsx - edição completa de devocionais
-import { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator } from "react-native";
+﻿// app/admin/devotionals/[devotionalId].tsx - ediÃ§Ã£o de devocional espelhada em aulas
+import React, { useEffect, useState } from "react";
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, Platform } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Timestamp } from "firebase/firestore";
 
-import { useAuth } from "../../../hooks/useAuth";
-import {
-  getDevotionalById,
-  updateDevotionalBase,
-  publishDevotionalNow,
-  isDevotionalDateAvailable,
-  archiveDevotional,
-} from "../../../lib/devotionals";
-import { DevotionalStatus, type Devotional } from "../../../types/devotional";
-import { Card } from "../../../components/ui/Card";
-import { AppInput } from "../../../components/ui/AppInput";
 import { AppButton } from "../../../components/ui/AppButton";
+import { AppInput } from "../../../components/ui/AppInput";
+import { Card } from "../../../components/ui/Card";
 import { RichTextEditor } from "../../../components/editor/RichTextEditor";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
+import { useAuth } from "../../../hooks/useAuth";
 import { useTheme } from "../../../hooks/useTheme";
 import {
-  formatTimestampToDateInput,
-  formatTimestampToDateTimeInput,
-  maskDate,
-  maskDateTime,
-  parseDateTimeToTimestamp,
-} from "../../../utils/publishAt";
+  getDevotionalById,
+  updateDevotional,
+  setDevotionalStatus,
+  publishDevotionalNow,
+  deleteDevotional,
+  isDevotionalDateAvailable,
+} from "../../../lib/devotionals";
+import { DevotionalStatus, type Devotional } from "../../../types/devotional";
+import { maskDate, maskDateTime, parseDateTimeToTimestamp, formatTimestampToDateTimeInput } from "../../../utils/publishAt";
 
 export default function EditDevotionalScreen() {
   const router = useRouter();
@@ -38,9 +33,9 @@ export default function EditDevotionalScreen() {
   const [referenciaBiblica, setReferenciaBiblica] = useState("");
   const [dataDevocional, setDataDevocional] = useState("");
   const [publishAtInput, setPublishAtInput] = useState("");
-  const [devocionalTexto, setDevocionalTexto] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [conteudoBase, setConteudoBase] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (isInitializing) return;
@@ -50,56 +45,55 @@ export default function EditDevotionalScreen() {
     }
     const papel = user?.papel;
     if (papel !== "coordenador" && papel !== "administrador") {
-      Alert.alert("Sem permissão", "Apenas coordenador/admin podem editar devocionais.");
+      Alert.alert("Sem permissÃ£o", "Apenas coordenador/admin podem editar devocionais.");
       router.replace("/" as any);
       return;
     }
-
     void load();
-  }, [firebaseUser, isInitializing, devotionalId, router, user?.papel]);
+  }, [firebaseUser, isInitializing, user?.papel, devotionalId]);
 
   async function load() {
     try {
-      setIsLoading(true);
+      setLoading(true);
       const data = await getDevotionalById(devotionalId);
       if (!data) {
-        Alert.alert("Erro", "Devocional não encontrado.");
-        router.replace("/admin/devotionals" as any);
+        Alert.alert("Erro", "Devocional nÃ£o encontrado.");
+        router.replace("/(tabs)/devotionals" as any);
         return;
       }
       setDevotional(data);
       setTitulo(data.titulo);
       setReferenciaBiblica(data.referencia_biblica);
       setDataDevocional(formatDateInput(data.data_devocional));
-      setDevocionalTexto(data.devocional_texto);
+      setConteudoBase(data.conteudo_base || data.devocional_texto || "");
       setPublishAtInput(formatTimestampToDateTimeInput(data.publish_at as Timestamp | null));
-    } catch (error) {
-      console.error("[Devocionais][Editar] Erro ao carregar devocional:", error);
-      Alert.alert("Erro", "Não foi possível carregar o devocional.");
+    } catch (err) {
+      console.error("[DevotionalEdit] erro ao carregar devocional:", err);
+      Alert.alert("Erro", "NÃ£o foi possÃ­vel carregar o devocional.");
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   }
 
   function validate() {
     if (!titulo.trim()) {
-      Alert.alert("Erro", "Informe o título.");
+      Alert.alert("Erro", "Informe o tÃ­tulo.");
       return false;
     }
     if (!referenciaBiblica.trim()) {
-      Alert.alert("Erro", "Informe a referência bíblica.");
+      Alert.alert("Erro", "Informe a referÃªncia bÃ­blica.");
       return false;
     }
     if (!toISODate(dataDevocional)) {
       Alert.alert("Erro", "Informe a data do devocional em dd/mm/aaaa.");
       return false;
     }
-    if (!devocionalTexto.trim()) {
+    if (!conteudoBase.trim()) {
       Alert.alert("Erro", "Informe o devocional.");
       return false;
     }
     if (publishAtInput.trim() && !parseDateTimeToTimestamp(publishAtInput)) {
-      Alert.alert("Erro", "Data e hora de publicação automática inválidas (use dd/mm/aaaa hh:mm).");
+      Alert.alert("Erro", "Data e hora invÃ¡lidas (dd/mm/aaaa hh:mm).");
       return false;
     }
     return true;
@@ -110,31 +104,33 @@ export default function EditDevotionalScreen() {
     if (!validate()) return;
     const isoDate = toISODate(dataDevocional);
     if (!isoDate) return;
+
     try {
       console.log("[DevotionalEdit] handleSaveEdits");
-      setIsSubmitting(true);
+      setSubmitting(true);
       const available = await isDevotionalDateAvailable(isoDate, devotional.id);
+      console.log("[DevotionalEdit] data available?", available);
       if (!available) {
-        Alert.alert("Atenção", "Já existe um devocional para essa data.");
-        return;
+        console.warn("[DevotionalEdit] já existe devocional nessa data, prosseguindo mesmo assim.");
       }
       const publishParsed = parseDateTimeToTimestamp(publishAtInput);
-      await updateDevotionalBase({
+      await updateDevotional({
         devotionalId: devotional.id,
         titulo: titulo.trim(),
         referencia_biblica: referenciaBiblica.trim(),
-        devocional_texto: devocionalTexto.trim(),
+        conteudo_base: conteudoBase.trim(),
         data_devocional: isoDate,
+        publish_at_text: publishAtInput.trim() || null,
         publish_at: publishParsed?.timestamp ?? null,
         data_publicacao_auto: publishParsed?.display ?? null,
       });
       Alert.alert("Sucesso", "Devocional atualizado.");
-      router.replace("/admin/devotionals" as any);
-    } catch (error) {
-      console.error("[Devocionais][Editar] Erro ao salvar:", error);
-      Alert.alert("Erro", (error as any)?.message || "Não foi possível salvar o devocional.");
+      router.replace("/(tabs)/devotionals" as any);
+    } catch (err) {
+      console.error("[DevotionalEdit] Erro ao salvar:", err);
+      Alert.alert("Erro", (err as any)?.message || "NÃ£o foi possÃ­vel salvar.");
     } finally {
-      setIsSubmitting(false);
+      setSubmitting(false);
     }
   }
 
@@ -145,30 +141,27 @@ export default function EditDevotionalScreen() {
     if (!isoDate) return;
     try {
       console.log("[DevotionalEdit] handleSaveDraft");
-      setIsSubmitting(true);
-      const available = await isDevotionalDateAvailable(isoDate, devotional.id);
-      if (!available) {
-        Alert.alert("Atenção", "Já existe um devocional para essa data.");
-        return;
-      }
+      setSubmitting(true);
       const publishParsed = parseDateTimeToTimestamp(publishAtInput);
-      await updateDevotionalBase({
+      await updateDevotional({
         devotionalId: devotional.id,
         titulo: titulo.trim(),
         referencia_biblica: referenciaBiblica.trim(),
-        devocional_texto: devocionalTexto.trim(),
+        conteudo_base: conteudoBase.trim(),
         data_devocional: isoDate,
         status: DevotionalStatus.RASCUNHO,
+        publish_at_text: publishAtInput.trim() || null,
         publish_at: publishParsed?.timestamp ?? null,
         data_publicacao_auto: publishParsed?.display ?? null,
       });
+      await setDevotionalStatus(devotional.id, DevotionalStatus.RASCUNHO);
       Alert.alert("Sucesso", "Rascunho salvo.");
-      router.replace("/admin/devotionals" as any);
-    } catch (error) {
-      console.error("[Devocionais][Editar] Erro ao salvar rascunho:", error);
-      Alert.alert("Erro", (error as any)?.message || "Não foi possível salvar o rascunho.");
+      router.replace("/(tabs)/devotionals" as any);
+    } catch (err) {
+      console.error("[DevotionalEdit] Erro ao salvar rascunho:", err);
+      Alert.alert("Erro", (err as any)?.message || "NÃ£o foi possÃ­vel salvar.");
     } finally {
-      setIsSubmitting(false);
+      setSubmitting(false);
     }
   }
 
@@ -179,30 +172,27 @@ export default function EditDevotionalScreen() {
     if (!isoDate) return;
     try {
       console.log("[DevotionalEdit] handleMakeAvailable");
-      setIsSubmitting(true);
-      const available = await isDevotionalDateAvailable(isoDate, devotional.id);
-      if (!available) {
-        Alert.alert("Atenção", "Já existe um devocional para essa data.");
-        return;
-      }
+      setSubmitting(true);
       const publishParsed = parseDateTimeToTimestamp(publishAtInput);
-      await updateDevotionalBase({
+      await updateDevotional({
         devotionalId: devotional.id,
         titulo: titulo.trim(),
         referencia_biblica: referenciaBiblica.trim(),
-        devocional_texto: devocionalTexto.trim(),
+        conteudo_base: conteudoBase.trim(),
         data_devocional: isoDate,
         status: DevotionalStatus.DISPONIVEL,
+        publish_at_text: publishAtInput.trim() || null,
         publish_at: publishParsed?.timestamp ?? null,
         data_publicacao_auto: publishParsed?.display ?? null,
       });
+      await setDevotionalStatus(devotional.id, DevotionalStatus.DISPONIVEL);
       Alert.alert("Sucesso", "Devocional disponibilizado.");
-      router.replace("/admin/devotionals" as any);
-    } catch (error) {
-      console.error("[Devocionais][Editar] Erro ao disponibilizar:", error);
-      Alert.alert("Erro", (error as any)?.message || "Não foi possível disponibilizar o devocional.");
+      router.replace("/(tabs)/devotionals" as any);
+    } catch (err) {
+      console.error("[DevotionalEdit] Erro ao disponibilizar:", err);
+      Alert.alert("Erro", (err as any)?.message || "NÃ£o foi possÃ­vel disponibilizar.");
     } finally {
-      setIsSubmitting(false);
+      setSubmitting(false);
     }
   }
 
@@ -211,53 +201,51 @@ export default function EditDevotionalScreen() {
     if (!validate()) return;
     try {
       console.log("[DevotionalEdit] handlePublishNow");
-      setIsSubmitting(true);
-      await publishDevotionalNow(devotional.id);
-      await updateDevotionalBase({
-        devotionalId: devotional.id,
-        publish_at: null,
-        data_publicacao_auto: null,
-      });
+      setSubmitting(true);
+      await publishDevotionalNow(devotional.id, firebaseUser?.uid || "system");
       Alert.alert("Sucesso", "Devocional publicado.");
-      router.replace("/admin/devotionals" as any);
-    } catch (error) {
-      console.error("[Devocionais][Editar] Erro ao publicar agora:", error);
-      Alert.alert("Erro", (error as any)?.message || "Não foi possível publicar o devocional.");
+      router.replace("/(tabs)/devotionals" as any);
+    } catch (err) {
+      console.error("[DevotionalEdit] Erro ao publicar agora:", err);
+      Alert.alert("Erro", (err as any)?.message || "NÃ£o foi possÃ­vel publicar.");
     } finally {
-      setIsSubmitting(false);
+      setSubmitting(false);
     }
   }
 
   async function handleDelete() {
     if (!devotional) return;
-    Alert.alert(
-      "Excluir devocional",
-      "Tem certeza que deseja excluir este devocional? Esta ação não pode ser desfeita.",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Excluir",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              console.log("[DevotionalEdit] handleDelete chamado para", devotional.id);
-              setIsSubmitting(true);
-              await archiveDevotional(devotional.id);
-              Alert.alert("Sucesso", "Devocional excluído com sucesso.");
-              router.replace("/admin/devotionals" as any);
-            } catch (error) {
-              console.error("[Devocionais][Editar] Erro ao excluir:", error);
-              Alert.alert("Erro", (error as any)?.message || "Não foi possível excluir o devocional.");
-            } finally {
-              setIsSubmitting(false);
-            }
-          },
-        },
-      ]
-    );
-  }
+    console.log("[DevotionalEdit] handleDelete click", devotional.id);
 
-  if (isLoading) {
+    const doDelete = async () => {
+      try {
+        setSubmitting(true);
+        await deleteDevotional(devotional.id);
+        Alert.alert("Sucesso", "Devocional excluído.");
+        router.replace("/(tabs)/devotionals" as any);
+      } catch (err) {
+        console.error("[DevotionalEdit] Erro ao excluir:", err);
+        Alert.alert("Erro", (err as any)?.message || "Não foi possível excluir.");
+      } finally {
+        setSubmitting(false);
+      }
+    };
+
+    // Fallback web com confirm nativo
+    if (Platform.OS === "web" && typeof window !== "undefined" && typeof window.confirm === "function") {
+      const ok = window.confirm("Tem certeza que deseja excluir este devocional? Esta ação não pode ser desfeita.");
+      if (ok) {
+        void doDelete();
+      }
+      return;
+    }
+
+    Alert.alert("Excluir devocional", "Esta ação não pode ser desfeita. Deseja excluir?", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Excluir", style: "destructive", onPress: () => void doDelete() },
+    ]);
+  }
+  if (loading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#facc15" />
@@ -268,26 +256,18 @@ export default function EditDevotionalScreen() {
 
   return (
     <ScrollView
-      style={[
-        styles.container,
-        { backgroundColor: themeSettings?.cor_fundo || "#020617" },
-      ]}
+      style={[styles.container, { backgroundColor: themeSettings?.cor_fundo || "#020617" }]}
       contentContainerStyle={styles.content}
     >
       <Card
         title="Editar devocional"
-        subtitle={devotional ? `Status: ${devotional.status}` : undefined}
+        subtitle={devotional ? `Status atual: ${devotional.status}` : undefined}
         footer={devotional ? <StatusBadge status={devotional.status} variant="devotional" /> : null}
       >
+        <AppInput label="TÃ­tulo" placeholder="Ex.: Devocional sobre fÃ©" value={titulo} onChangeText={setTitulo} />
         <AppInput
-          label="Título"
-          placeholder="Ex.: Devocional sobre fé"
-          value={titulo}
-          onChangeText={setTitulo}
-        />
-        <AppInput
-          label="Referência bíblica"
-          placeholder="Ex.: João 3:16"
+          label="ReferÃªncia bÃ­blica"
+          placeholder="Ex.: JoÃ£o 3:16"
           value={referenciaBiblica}
           onChangeText={setReferenciaBiblica}
         />
@@ -304,46 +284,41 @@ export default function EditDevotionalScreen() {
           onChangeText={(text) => setPublishAtInput(maskDateTime(text))}
         />
         <RichTextEditor
-          value={devocionalTexto}
-          onChange={setDevocionalTexto}
+          value={conteudoBase}
+          onChange={setConteudoBase}
           placeholder="Digite o devocional..."
           minHeight={180}
         />
 
         <View style={styles.actions}>
           <AppButton
-            title={isSubmitting ? "Salvando..." : "Salvar edições"}
+            title={submitting ? "Salvando..." : "Salvar edições"}
             variant="primary"
             onPress={handleSaveEdits}
-            disabled={isSubmitting}
+            disabled={submitting}
           />
           <AppButton
-            title={isSubmitting ? "Salvando rascunho..." : "Salvar como rascunho"}
+            title={submitting ? "Salvando rascunho..." : "Salvar como rascunho"}
             variant="secondary"
             onPress={handleSaveDraft}
-            disabled={isSubmitting}
+            disabled={submitting}
           />
           <AppButton
-            title={isSubmitting ? "Disponibilizando..." : "Disponibilizar"}
+            title={submitting ? "Disponibilizando..." : "Disponibilizar"}
             variant="secondary"
             onPress={handleMakeAvailable}
-            disabled={isSubmitting}
+            disabled={submitting}
           />
         </View>
 
         <View style={[styles.actions, { marginTop: 8 }]}>
           <AppButton
-            title={isSubmitting ? "Publicando..." : "Publicar agora"}
+            title={submitting ? "Publicando..." : "Publicar agora"}
             variant="secondary"
             onPress={handlePublishNow}
-            disabled={isSubmitting}
+            disabled={submitting}
           />
-          <AppButton
-            title="Excluir devocional"
-            variant="outline"
-            onPress={handleDelete}
-            disabled={isSubmitting}
-          />
+          <AppButton title="Excluir devocional" variant="outline" onPress={handleDelete} disabled={submitting} />
         </View>
       </Card>
     </ScrollView>
@@ -362,9 +337,7 @@ function formatDateInput(value: string): string {
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(value)) return value;
   const [year, month, day] = value.split("-");
   if (!year || !month || !day) return value;
-  return formatTimestampToDateInput(
-    Timestamp.fromDate(new Date(Number(year), Number(month) - 1, Number(day)))
-  );
+  return `${day.padStart(2, "0")}/${month.padStart(2, "0")}/${year}`;
 }
 
 function toISODate(input: string): string | null {
@@ -377,3 +350,6 @@ function toISODate(input: string): string | null {
   if (Number.isNaN(date.getTime())) return null;
   return `${year}-${`${month}`.padStart(2, "0")}-${`${day}`.padStart(2, "0")}`;
 }
+
+
+

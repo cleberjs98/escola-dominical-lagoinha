@@ -1,20 +1,16 @@
-// app/admin/devotionals/new.tsx - criação de devocional alinhada ao fluxo de aulas
-import { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator } from "react-native";
+// app/admin/devotionals/new.tsx - criação de devocional espelhada no fluxo de aulas
+import React, { useEffect, useState } from "react";
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert } from "react-native";
 import { useRouter } from "expo-router";
 
-import { useAuth } from "../../../hooks/useAuth";
-import {
-  createDevotional,
-  createDevotionalDraft,
-  isDevotionalDateAvailable,
-} from "../../../lib/devotionals";
-import { DevotionalStatus } from "../../../types/devotional";
-import { Card } from "../../../components/ui/Card";
-import { AppInput } from "../../../components/ui/AppInput";
 import { AppButton } from "../../../components/ui/AppButton";
+import { AppInput } from "../../../components/ui/AppInput";
+import { Card } from "../../../components/ui/Card";
 import { RichTextEditor } from "../../../components/editor/RichTextEditor";
+import { useAuth } from "../../../hooks/useAuth";
 import { useTheme } from "../../../hooks/useTheme";
+import { createDevotional, isDevotionalDateAvailable } from "../../../lib/devotionals";
+import { DevotionalStatus } from "../../../types/devotional";
 import { maskDate, maskDateTime, parseDateTimeToTimestamp } from "../../../utils/publishAt";
 
 export default function NewDevotionalScreen() {
@@ -26,10 +22,9 @@ export default function NewDevotionalScreen() {
   const [referenciaBiblica, setReferenciaBiblica] = useState("");
   const [dataDevocional, setDataDevocional] = useState("");
   const [publishAtInput, setPublishAtInput] = useState("");
-  const [devocionalTexto, setDevocionalTexto] = useState("");
+  const [conteudoBase, setConteudoBase] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Guard de acesso
   useEffect(() => {
     if (isInitializing) return;
     if (!firebaseUser) {
@@ -43,105 +38,88 @@ export default function NewDevotionalScreen() {
     }
   }, [firebaseUser, isInitializing, router, user?.papel]);
 
-  function validateInputs() {
+  function validate() {
     if (!titulo.trim()) {
-      Alert.alert("Erro", "Informe o título do devocional.");
+      Alert.alert("Erro", "Informe o título.");
       return false;
     }
     if (!referenciaBiblica.trim()) {
       Alert.alert("Erro", "Informe a referência bíblica.");
       return false;
     }
-    const isoDate = toISODate(dataDevocional);
-    if (!isoDate) {
-      Alert.alert("Erro", "Informe a data do devocional no formato dd/mm/aaaa.");
+    if (!toISODate(dataDevocional)) {
+      Alert.alert("Erro", "Informe a data do devocional em dd/mm/aaaa.");
       return false;
     }
-    if (!devocionalTexto.trim()) {
-      Alert.alert("Erro", "Digite o devocional.");
+    if (!conteudoBase.trim()) {
+      Alert.alert("Erro", "Informe o devocional.");
       return false;
     }
-    if (publishAtInput.trim()) {
-      const parsed = parseDateTimeToTimestamp(publishAtInput);
-      if (!parsed) {
-        Alert.alert("Erro", "Data e hora de publicação automática inválidas (use dd/mm/aaaa hh:mm).");
-        return false;
-      }
+    if (publishAtInput.trim() && !parseDateTimeToTimestamp(publishAtInput)) {
+      Alert.alert("Erro", "Data e hora de publicação automática inválidas (dd/mm/aaaa hh:mm).");
+      return false;
     }
     return true;
   }
 
   async function handleSaveDraft() {
-    if (!firebaseUser) return;
-    if (!validateInputs()) return;
-    const isoDate = toISODate(dataDevocional);
-    if (!isoDate) return;
+    await handleSubmit(DevotionalStatus.RASCUNHO, "[NewDevotional] handleSaveDraft chamado");
+  }
 
-    try {
-      console.log("[DevotionalNew] handleSaveDraft chamado");
-      setIsSubmitting(true);
-      const available = await isDevotionalDateAvailable(isoDate);
-      if (!available) {
-        Alert.alert("Atenção", "Já existe um devocional para essa data.");
-        return;
-      }
-
-      const publishInfo = parseDateTimeToTimestamp(publishAtInput);
-
-      await createDevotionalDraft({
-        titulo: titulo.trim(),
-        referencia_biblica: referenciaBiblica.trim(),
-        devocional_texto: devocionalTexto.trim(),
-        data_devocional: isoDate,
-        publish_at: publishInfo?.timestamp ?? null,
-        data_publicacao_auto: publishInfo?.display ?? null,
-        criado_por_id: firebaseUser.uid,
-      });
-
-      Alert.alert("Sucesso", "Devocional salvo como rascunho.");
-      resetForm();
-      router.replace("/admin/devotionals" as any);
-    } catch (error) {
-      console.error("[Devocionais][Criar] Erro ao salvar rascunho:", error);
-      Alert.alert("Erro", (error as any)?.message || "Não foi possível salvar o devocional.");
-    } finally {
-      setIsSubmitting(false);
-    }
+  async function handleMakeAvailable() {
+    await handleSubmit(DevotionalStatus.DISPONIVEL, "[NewDevotional] handleMakeAvailable chamado");
   }
 
   async function handlePublishNow() {
+    await handleSubmit(DevotionalStatus.PUBLICADO, "[NewDevotional] handlePublishNow chamado", true);
+  }
+
+  async function handleSubmit(status: DevotionalStatus, logPrefix: string, publishNow = false) {
     if (!firebaseUser) return;
-    if (!validateInputs()) return;
+    if (!validate()) return;
     const isoDate = toISODate(dataDevocional);
     if (!isoDate) return;
 
     try {
-      console.log("[DevotionalNew] handlePublishNow chamado");
+      const publishInfo = parseDateTimeToTimestamp(publishAtInput);
+      console.log(logPrefix, {
+        isoDate,
+        publishAtInput,
+        publishAtDisplay: publishInfo?.display,
+        publishAtTimestamp: publishInfo?.timestamp?.toDate?.() ?? null,
+        status,
+        publishNow,
+      });
       setIsSubmitting(true);
+
       const available = await isDevotionalDateAvailable(isoDate);
+      console.log("[NewDevotional] data available?", available);
+      // Se já existir devocional na mesma data, apenas avisa mas deixa seguir (evita travar criação)
       if (!available) {
-        Alert.alert("Atenção", "Já existe um devocional para essa data.");
-        return;
+        console.warn("[NewDevotional] já existe devocional nessa data, prosseguindo mesmo assim.");
       }
 
-      await createDevotional({
+      const id = await createDevotional({
         titulo: titulo.trim(),
         referencia_biblica: referenciaBiblica.trim(),
-        devocional_texto: devocionalTexto.trim(),
+        conteudo_base: conteudoBase.trim(),
         data_devocional: isoDate,
-        publish_at: null,
-        data_publicacao_auto: null,
+        publish_at_text: publishAtInput.trim() || null,
+        publish_at: publishInfo?.timestamp ?? null,
+        data_publicacao_auto: publishInfo?.display ?? null,
         criado_por_id: firebaseUser.uid,
-        status: DevotionalStatus.PUBLICADO,
-        publishNow: true,
+        status: publishNow ? DevotionalStatus.PUBLICADO : status,
+        publishNow,
       });
 
-      Alert.alert("Sucesso", "Devocional publicado com sucesso.");
+      console.log(`${logPrefix} sucesso:`, id);
+      Alert.alert("Sucesso", status === DevotionalStatus.PUBLICADO ? "Devocional publicado." : "Devocional salvo.");
       resetForm();
-      router.replace("/admin/devotionals" as any);
+      router.replace("/(tabs)/devotionals" as any);
     } catch (error) {
-      console.error("[Devocionais][Criar] Erro ao publicar devocional:", error);
-      Alert.alert("Erro", (error as any)?.message || "Não foi possível publicar o devocional.");
+      console.error("[NewDevotional] Erro ao salvar devocional:", error);
+      const message = (error as any)?.message || "Não foi possível salvar o devocional.";
+      Alert.alert("Erro", message);
     } finally {
       setIsSubmitting(false);
     }
@@ -158,47 +136,30 @@ export default function NewDevotionalScreen() {
 
   return (
     <ScrollView
-      style={[
-        styles.container,
-        { backgroundColor: themeSettings?.cor_fundo || "#020617" },
-      ]}
+      style={[styles.container, { backgroundColor: themeSettings?.cor_fundo || "#020617" }]}
       contentContainerStyle={styles.content}
     >
-      <Card title="Criar devocional" subtitle="Preencha os campos básicos e escolha a ação.">
-        <AppInput
-          label="Título"
-          placeholder="Ex.: Devocional sobre fé"
-          value={titulo}
-          onChangeText={setTitulo}
-        />
-
+      <Card title="Criar devocional" subtitle="Preencha os campos e escolha a ação.">
+        <AppInput label="Título" placeholder="Ex.: Devocional sobre fé" value={titulo} onChangeText={setTitulo} />
         <AppInput
           label="Referência bíblica"
           placeholder="Ex.: João 3:16"
           value={referenciaBiblica}
           onChangeText={setReferenciaBiblica}
         />
-
         <AppInput
           label="Data do devocional"
           placeholder="dd/mm/aaaa"
           value={dataDevocional}
           onChangeText={(text) => setDataDevocional(maskDate(text))}
         />
-
         <AppInput
           label="Publicar automaticamente em (data e hora)"
           placeholder="dd/mm/aaaa hh:mm"
           value={publishAtInput}
           onChangeText={(text) => setPublishAtInput(maskDateTime(text))}
         />
-
-        <RichTextEditor
-          value={devocionalTexto}
-          onChange={setDevocionalTexto}
-          placeholder="Digite o devocional..."
-          minHeight={180}
-        />
+        <RichTextEditor value={conteudoBase} onChange={setConteudoBase} placeholder="Digite o devocional..." minHeight={180} />
 
         <View style={styles.actions}>
           <AppButton
@@ -208,7 +169,7 @@ export default function NewDevotionalScreen() {
             disabled={isSubmitting}
           />
           <AppButton
-            title={isSubmitting ? "Disponibilizando..." : "Disponibilizar"}
+            title={isSubmitting ? "Disponibilizando..." : "Disponibilizar para professores"}
             variant="secondary"
             onPress={handleMakeAvailable}
             disabled={isSubmitting}
@@ -229,7 +190,7 @@ export default function NewDevotionalScreen() {
     setReferenciaBiblica("");
     setDataDevocional("");
     setPublishAtInput("");
-    setDevocionalTexto("");
+    setConteudoBase("");
   }
 }
 
@@ -256,41 +217,3 @@ function toISODate(input: string): string | null {
   if (Number.isNaN(date.getTime())) return null;
   return `${year}-${`${month}`.padStart(2, "0")}-${`${day}`.padStart(2, "0")}`;
 }
-  async function handleMakeAvailable() {
-    if (!firebaseUser) return;
-    if (!validateInputs()) return;
-    const isoDate = toISODate(dataDevocional);
-    if (!isoDate) return;
-
-    try {
-      console.log("[DevotionalNew] handleMakeAvailable chamado");
-      setIsSubmitting(true);
-      const available = await isDevotionalDateAvailable(isoDate);
-      if (!available) {
-        Alert.alert("Atenção", "Já existe um devocional para essa data.");
-        return;
-      }
-
-      const publishInfo = parseDateTimeToTimestamp(publishAtInput);
-
-      await createDevotional({
-        titulo: titulo.trim(),
-        referencia_biblica: referenciaBiblica.trim(),
-        devocional_texto: devocionalTexto.trim(),
-        data_devocional: isoDate,
-        publish_at: publishInfo?.timestamp ?? null,
-        data_publicacao_auto: publishInfo?.display ?? null,
-        criado_por_id: firebaseUser.uid,
-        status: DevotionalStatus.DISPONIVEL,
-      });
-
-      Alert.alert("Sucesso", "Devocional disponibilizado.");
-      resetForm();
-      router.replace("/admin/devotionals" as any);
-    } catch (error) {
-      console.error("[Devocionais][Criar] Erro ao disponibilizar devocional:", error);
-      Alert.alert("Erro", (error as any)?.message || "Não foi possível disponibilizar o devocional.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }

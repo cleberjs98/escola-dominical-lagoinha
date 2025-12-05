@@ -12,6 +12,7 @@ export interface Devotional {
   titulo: string;
   referencia_biblica: string;
   devocional_texto: string;
+  conteudo_base?: string;
   data_devocional: string; // sempre "YYYY-MM-DD"
   status: DevotionalStatus;
   publish_at: Timestamp | null;
