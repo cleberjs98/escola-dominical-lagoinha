@@ -2,12 +2,17 @@ import { useState } from "react";
 import { Tabs, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useAuth } from "../../hooks/useAuth";
 
 /* Ajustes fase de testes - Home, notificacoes, gestao de papeis e permissoes */
 
 export default function TabsLayout() {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+  const { user } = useAuth();
+  const papel = user?.papel;
+  const canCreateAviso =
+    papel === "professor" || papel === "coordenador" || papel === "administrador";
 
   return (
     <>
@@ -63,12 +68,6 @@ export default function TabsLayout() {
 
         {/* Oculta rotas adicionais da tab bar (acesso via menu/desvios internos) */}
         <Tabs.Screen
-          name="news/index"
-          options={{
-            href: null,
-          }}
-        />
-        <Tabs.Screen
           name="manage/index"
           options={{
             href: null,
@@ -89,10 +88,11 @@ export default function TabsLayout() {
             <Text style={styles.drawerTitle}>Menu</Text>
             <MenuItem label="Perfil" onPress={() => handleNavigate("/(tabs)/profile")} />
             <MenuItem label="Notificacoes" onPress={() => handleNavigate("/notifications")} />
-            <MenuItem label="Noticias" onPress={() => handleNavigate("/(tabs)/news")} />
+            <MenuItem label="Avisos" onPress={() => handleNavigate("/avisos")} />
+            {canCreateAviso ? (
+              <MenuItem label="Criar aviso" onPress={() => handleNavigate("/avisos/new")} />
+            ) : null}
             <MenuItem label="Gerenciar" onPress={() => handleNavigate("/(tabs)/manage")} />
-            <MenuItem label="Minhas noticias" onPress={() => handleNavigate("/news/my-news")} />
-            <MenuItem label="Criar noticia" onPress={() => handleNavigate("/news/new")} />
             <MenuItem label="Aprovar usuarios" onPress={() => handleNavigate("/manager/pending-users")} />
             <MenuItem label="Aprovar reservas" onPress={() => handleNavigate("/manager/pending-reservations")} />
             <MenuItem label="Dashboard Admin" onPress={() => handleNavigate("/admin/dashboard")} />

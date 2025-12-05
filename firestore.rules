@@ -1,7 +1,6 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    /* Ajustes fase de testes — Home, notificações, gestão de papéis e permissões */
     function isSignedIn() {
       return request.auth != null;
     }
@@ -79,7 +78,6 @@ service cloud.firestore {
       allow get, list: if resource.data.status == 'publicada' || isApprovedUser() || isCoordinator() || isAdmin();
       allow create, update: if isCoordinator() || isAdmin();
       allow update: if isAssignedProfessor() && professorFieldsOnly();
-      // Admin ou coordenador podem excluir aulas
       allow delete: if isAdmin() || isCoordinator();
     }
 
@@ -104,17 +102,65 @@ service cloud.firestore {
       allow create, update, delete: if isCoordinator() || isAdmin();
     }
 
-    // Noticias
-    match /noticias/{id} {
-      function isAuthor() { return isSignedIn() && resource.data.autor_id == request.auth.uid; }
-      allow get, list: if (resource.data.status == 'publicada' && isApprovedUser()) || isCoordinator() || isAdmin() || isAuthor();
-      allow create: if (isProfessor() || isCoordinator() || isAdmin())
-        && request.resource.data.autor_id == request.auth.uid;
-      allow update: if
-        isAdmin() || isCoordinator() ||
-        (isProfessor() && isAuthor() && resource.data.status == 'rascunho'
-          && request.resource.data.diff(resource.data).changedKeys().hasOnly(['titulo','conteudo','rascunho_salvo_em','updated_at']));
-      allow delete: if isAdmin() || isCoordinator() || (isAuthor() && resource.data.status == 'rascunho');
+    // Avisos
+    match /avisos/{avisoId} {
+      function isAuthor() {
+        return isSignedIn() && resource.data.criado_por_id == request.auth.uid;
+      }
+
+      function canReadAviso() {
+        if (!(isSignedIn() && isApprovedUser())) return false;
+
+        let role = requestUserRole();
+        let destino = resource.data.destino;
+        let status = resource.data.status;
+
+        // Rascunho: somente autor + coord + admin
+        if (status == "rascunho") {
+          return isAuthor() || isCoordinator() || isAdmin();
+        }
+
+        // Publicado
+        if (status == "publicado") {
+          if (destino == "todos") {
+            return true;
+          }
+          if (destino == "alunos") {
+            return role == "aluno" || isCoordinator() || isAdmin();
+          }
+          if (destino == "professores") {
+            return role == "professor" || isCoordinator() || isAdmin();
+          }
+          if (destino == "coordenadores") {
+            return isCoordinator() || isAdmin();
+          }
+          if (destino == "admin") {
+            return isAdmin();
+          }
+        }
+
+        return false;
+      }
+
+      allow get, list: if canReadAviso();
+
+      allow create: if isSignedIn()
+        && (isProfessor() || isCoordinator() || isAdmin())
+        && request.resource.data.criado_por_id == request.auth.uid;
+
+      allow update: if isSignedIn()
+        && (
+          (isProfessor() && isAuthor()) ||
+          isCoordinator() ||
+          isAdmin()
+        );
+
+      allow delete: if isSignedIn()
+        && (
+          (isProfessor() && isAuthor()) ||
+          isCoordinator() ||
+          isAdmin()
+        );
     }
 
     // Materiais de apoio

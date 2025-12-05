@@ -4,7 +4,7 @@ import type { Timestamp } from "firebase/firestore";
 export enum MaterialReferenceType {
   AULA = "aula",
   DEVOCIONAL = "devocional",
-  NOTICIA = "noticia",
+  AVISO = "aviso",
 }
 
 export enum MaterialType {
@@ -20,7 +20,7 @@ export enum MaterialType {
 export interface SupportMaterial {
   id: string;
   tipo_referencia: MaterialReferenceType;
-  referencia_id: string; // id da aula/devocional/noticia
+  referencia_id: string; // id da aula/devocional/aviso
   tipo_material: MaterialType;
   nome: string;
   descricao?: string | null;

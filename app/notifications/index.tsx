@@ -112,8 +112,8 @@ export default function NotificationsScreen() {
       case "devocional":
         router.push(`/devotionals/${id}` as any);
         break;
-      case "noticia":
-        router.push(`/news/${id}` as any);
+      case "aviso":
+        router.push(`/avisos` as any);
         break;
       case "reserva":
         // TODO: rota de detalhes de reserva quando existir
@@ -156,7 +156,7 @@ export default function NotificationsScreen() {
       />
 
       <View style={styles.filters}>
-        {(["todas", "aula", "devocional", "noticia", "reserva"] as FilterKey[]).map(
+        {(["todas", "aula", "devocional", "aviso", "reserva"] as FilterKey[]).map(
           (f) => {
             const active = filter === f;
             return (
@@ -199,10 +199,7 @@ export default function NotificationsScreen() {
               <Text style={styles.cardMessage}>{item.mensagem}</Text>
               <View style={styles.cardFooter}>
                 <Text style={styles.cardDate}>{formatDate(item.created_at)}</Text>
-                <StatusBadge
-                  status={item.tipo_referencia || "notificação"}
-                  variant="news"
-                />
+                <StatusBadge status={item.tipo_referencia || "notificacao"} />
               </View>
             </Pressable>
           );

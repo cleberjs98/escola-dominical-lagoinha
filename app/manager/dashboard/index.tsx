@@ -18,7 +18,7 @@ export default function CoordinatorDashboardScreen() {
   const [pending, setPending] = useState({ pendingUsers: 0, pendingReservations: 0 });
   const [lessonsCount, setLessonsCount] = useState(0);
   const [devotionalCount, setDevotionalCount] = useState(0);
-  const [newsCount, setNewsCount] = useState(0);
+  const [announcementsCount, setAnnouncementsCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
   const isAllowed = useMemo(
@@ -48,7 +48,7 @@ export default function CoordinatorDashboardScreen() {
       setPending(pendingCounts);
       setLessonsCount(stats.totalLessons);
       setDevotionalCount(stats.totalDevotionals);
-      setNewsCount(stats.totalNews);
+      setAnnouncementsCount(stats.totalAvisos);
     } catch (err) {
       console.error("Erro ao carregar dados:", err);
     } finally {
@@ -99,7 +99,7 @@ export default function CoordinatorDashboardScreen() {
         <View style={styles.row}>
           <StatBadge label="Aulas" value={lessonsCount} color="#22c55e" />
           <StatBadge label="Devocionais" value={devotionalCount} color="#facc15" />
-          <StatBadge label="Notícias" value={newsCount} color="#a855f7" />
+          <StatBadge label="Avisos" value={announcementsCount} color="#a855f7" />
         </View>
         <View style={styles.row}>
           <Pressable
@@ -116,9 +116,9 @@ export default function CoordinatorDashboardScreen() {
           </Pressable>
           <Pressable
             style={[styles.button, styles.buttonPrimary]}
-            onPress={() => router.push("/news/my-news" as any)}
+            onPress={() => router.push("/avisos" as any)}
           >
-            <Text style={styles.buttonText}>Minhas notícias</Text>
+            <Text style={styles.buttonText}>Avisos</Text>
           </Pressable>
         </View>
       </View>

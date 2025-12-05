@@ -37,7 +37,7 @@ export interface LayoutSettings {
 
 export interface BackgroundSettings {
   id: string;
-  secao: string; // ex: home, lessons, devotionals, news, profile
+  secao: string; // ex: home, lessons, devotionals, avisos, profile
   url_imagem: string;
   opacidade: number; // 0..1
   posicao: string; // ex: center, cover, top, bottom

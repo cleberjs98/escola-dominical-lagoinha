@@ -4,7 +4,7 @@ import { useTheme } from "../../hooks/useTheme";
 
 type Props = {
   status: string;
-  variant?: "user" | "lesson" | "devotional" | "reservation" | "news";
+  variant?: "user" | "lesson" | "devotional" | "reservation" | "aviso";
 };
 
 export function StatusBadge({ status }: Props) {

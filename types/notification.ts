@@ -6,7 +6,7 @@ export enum NotificationType {
   NOVA_RESERVA = "nova_reserva",
   RESERVA_APROVADA = "reserva_aprovada",
   RESERVA_REJEITADA = "reserva_rejeitada",
-  NOVA_NOTICIA = "nova_noticia",
+  NOVO_AVISO = "novo_aviso",
   NOVA_AULA = "nova_aula",
   NOVO_DEVOCIONAL = "novo_devocional",
 }
@@ -14,7 +14,7 @@ export enum NotificationType {
 export enum NotificationReferenceType {
   AULA = "aula",
   DEVOCIONAL = "devocional",
-  NOTICIA = "noticia",
+  AVISO = "aviso",
   RESERVA = "reserva",
   OUTRO = "outro",
 }

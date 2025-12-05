@@ -17,7 +17,7 @@ export interface SystemStats {
   };
   totalLessons: number;
   totalDevotionals: number;
-  totalNews: number;
+  totalAvisos: number;
 }
 
 export interface PendingCounts {
@@ -41,14 +41,14 @@ export async function getSystemStats(): Promise<SystemStats> {
 
   const lessonsSnap = await getDocs(collection(firebaseDb, "aulas"));
   const devotionalsSnap = await getDocs(collection(firebaseDb, "devocionais"));
-  const newsSnap = await getDocs(collection(firebaseDb, "noticias"));
+  const avisosSnap = await getDocs(collection(firebaseDb, "avisos"));
 
   return {
     totalUsers: usersSnap.size,
     totalUsersByRole: { aluno, professor, coordenador, administrador },
     totalLessons: lessonsSnap.size,
     totalDevotionals: devotionalsSnap.size,
-    totalNews: newsSnap.size,
+    totalAvisos: avisosSnap.size,
   };
 }
 

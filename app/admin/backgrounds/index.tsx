@@ -25,7 +25,7 @@ const SECTIONS = [
   { key: "home", label: "Home" },
   { key: "lessons", label: "Aulas" },
   { key: "devotionals", label: "Devocionais" },
-  { key: "news", label: "Notícias" },
+  { key: "avisos", label: "Avisos" },
   { key: "profile", label: "Perfil" },
 ];
 

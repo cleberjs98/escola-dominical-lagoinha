@@ -163,7 +163,7 @@ export async function listCoordinatorsAndAdminsIds(): Promise<string[]> {
 }
 
 /**
- * Lista IDs de todos os usuarios aprovados (para broadcast de aulas/devocionais/noticias).
+ * Lista IDs de todos os usuarios aprovados (para broadcast de aulas/devocionais/avisos).
  * Observacao: apenas coord/admin devem usar para evitar leitura ampla por perfis restritos.
  */
 export async function listApprovedUsersIds(): Promise<string[]> {

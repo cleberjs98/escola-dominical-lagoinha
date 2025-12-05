@@ -13,7 +13,9 @@ import { useRouter } from "expo-router";
 import { useAuth } from "../../hooks/useAuth";
 import { getDevotionalOfTheDay, listAvailableAndPublishedForProfessor } from "../../lib/devotionals";
 import { listLessonsForProfessor, listNextPublishedLessons, listAvailableAndPublished } from "../../lib/lessons";
+import { listRecentAvisosForUser } from "../../lib/avisos";
 import type { Devotional } from "../../types/devotional";
+import type { Aviso } from "../../types/aviso";
 import type { Lesson } from "../../types/lesson";
 import { useUnreadNotificationsCount } from "../../hooks/useUnreadNotificationsCount";
 import { Card } from "../../components/ui/Card";
@@ -23,6 +25,7 @@ import { AulaCard } from "../../components/cards/AulaCard";
 import { DevocionalCard } from "../../components/cards/DevocionalCard";
 import { Header } from "../../components/ui/Header";
 import { useTheme } from "../../hooks/useTheme";
+import { RecentAnnouncements } from "../../components/home/RecentAnnouncements";
 
 /* Ajustes fase de testes - Home, notificacoes, gestao de papeis e permissoes */
 
@@ -39,6 +42,9 @@ export default function HomeScreen() {
 
   const [myLessons, setMyLessons] = useState<Lesson[]>([]);
   const [isLoadingMyLessons, setIsLoadingMyLessons] = useState(false);
+
+  const [recentAvisos, setRecentAvisos] = useState<Aviso[]>([]);
+  const [isLoadingAvisos, setIsLoadingAvisos] = useState(false);
 
   const userId = firebaseUser?.uid ?? null;
   const { unreadCount, reload: reloadUnread } = useUnreadNotificationsCount(userId);
@@ -128,9 +134,25 @@ export default function HomeScreen() {
       }
     }
 
+    async function loadAvisos() {
+      try {
+        setIsLoadingAvisos(true);
+        const targetUser = user
+          ? ({ ...user, id: user.id || firebaseUser.uid } as any)
+          : null;
+        const list = await listRecentAvisosForUser(targetUser);
+        setRecentAvisos(list);
+      } catch (error) {
+        console.error("Erro ao carregar avisos recentes:", error);
+      } finally {
+        setIsLoadingAvisos(false);
+      }
+    }
+
     loadDevotional();
     loadLessons();
     loadMyLessons();
+    loadAvisos();
   }, [firebaseUser, isApproved, papel, isCoordenador, isAdmin, isProfessor]);
 
   useEffect(() => {
@@ -159,7 +181,7 @@ export default function HomeScreen() {
   function bannerSubtitle() {
     if (isProfessor) return "Veja suas aulas reservadas e devocionais.";
     if (isCoordenador || isAdmin)
-      return "Gerencie usuarios, aulas, devocionais e noticias.";
+      return "Gerencie usuarios, aulas, devocionais e avisos.";
     return "Fique por dentro das aulas e devocionais.";
   }
 
@@ -197,6 +219,17 @@ export default function HomeScreen() {
           </Pressable>
         }
       />
+
+      {isLoadingAvisos ? (
+        <Card title="Avisos recentes" subtitle="Comunicados para voce.">
+          <ActivityIndicator color={themeSettings?.cor_info || "#facc15"} />
+        </Card>
+      ) : (
+        <RecentAnnouncements
+          avisos={recentAvisos}
+          onPressAll={() => router.push("/avisos" as any)}
+        />
+      )}
 
       <Card
         title="Devocional do Dia"

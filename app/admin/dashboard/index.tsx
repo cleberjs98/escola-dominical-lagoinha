@@ -75,7 +75,7 @@ export default function AdminDashboardScreen() {
             <StatTile label="Admins" value={stats.totalUsersByRole.administrador} />
             <StatTile label="Aulas" value={stats.totalLessons} />
             <StatTile label="Devocionais" value={stats.totalDevotionals} />
-            <StatTile label="Notícias" value={stats.totalNews} />
+            <StatTile label="Avisos" value={stats.totalAvisos} />
           </View>
         ) : (
           <EmptyState title="Sem dados disponíveis." />
@@ -122,10 +122,10 @@ export default function AdminDashboardScreen() {
             onPress={() => router.push("/admin/devotionals/new" as any)}
           />
           <AppButton
-            title="Gerenciar notícias"
+            title="Gerenciar avisos"
             variant="outline"
             fullWidth={false}
-            onPress={() => router.push("/news/my-news" as any)}
+            onPress={() => router.push("/avisos" as any)}
           />
         </View>
       </Card>
