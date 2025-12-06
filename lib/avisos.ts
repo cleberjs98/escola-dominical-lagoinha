@@ -84,6 +84,7 @@ export async function updateAviso(id: string, data: UpdateAvisoInput) {
 }
 
 export async function deleteAviso(id: string) {
+  console.log("[AvisosLib] deleteAviso", id);
   const ref = doc(firebaseDb, collectionName, id);
   await deleteDoc(ref);
 }

@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Text,
   View,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -71,24 +72,29 @@ export default function AvisosListScreen() {
   }
 
   async function handleDelete(id: string) {
+    const doDelete = async () => {
+      try {
+        console.log("[Avisos] deleting", id);
+        setActionId(id);
+        await deleteAviso(id);
+        await loadAvisos();
+      } catch (err) {
+        console.error("[Avisos] erro ao excluir aviso:", err);
+        Alert.alert("Erro", "Nao foi possivel excluir o aviso.");
+      } finally {
+        setActionId(null);
+      }
+    };
+
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      const ok = window.confirm("Deseja excluir este aviso?");
+      if (ok) void doDelete();
+      return;
+    }
+
     Alert.alert("Excluir aviso", "Deseja excluir este aviso?", [
       { text: "Cancelar", style: "cancel" },
-      {
-        text: "Excluir",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            setActionId(id);
-            await deleteAviso(id);
-            await loadAvisos();
-          } catch (err) {
-            console.error("[Avisos] erro ao excluir aviso:", err);
-            Alert.alert("Erro", "Nao foi possivel excluir o aviso.");
-          } finally {
-            setActionId(null);
-          }
-        },
-      },
+      { text: "Excluir", style: "destructive", onPress: () => void doDelete() },
     ]);
   }
 

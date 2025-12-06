@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View, Platform } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { useAuth } from "../../../hooks/useAuth";
@@ -113,24 +113,29 @@ export default function EditAvisoScreen() {
 
   async function handleDelete() {
     if (!aviso || !canEdit) return;
+    const doDelete = async () => {
+      try {
+        console.log("[Avisos] deleting from edit", aviso.id);
+        setIsSaving(true);
+        await deleteAviso(aviso.id);
+        router.replace("/avisos" as any);
+      } catch (err) {
+        console.error("[Avisos] erro ao excluir aviso:", err);
+        Alert.alert("Erro", "Nao foi possivel excluir o aviso.");
+      } finally {
+        setIsSaving(false);
+      }
+    };
+
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      const ok = window.confirm("Deseja excluir este aviso?");
+      if (ok) void doDelete();
+      return;
+    }
+
     Alert.alert("Excluir aviso", "Deseja excluir este aviso?", [
       { text: "Cancelar", style: "cancel" },
-      {
-        text: "Excluir",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            setIsSaving(true);
-            await deleteAviso(aviso.id);
-            router.replace("/avisos" as any);
-          } catch (err) {
-            console.error("[Avisos] erro ao excluir aviso:", err);
-            Alert.alert("Erro", "Nao foi possivel excluir o aviso.");
-          } finally {
-            setIsSaving(false);
-          }
-        },
-      },
+      { text: "Excluir", style: "destructive", onPress: () => void doDelete() },
     ]);
   }
 
