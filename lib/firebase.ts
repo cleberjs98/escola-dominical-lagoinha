@@ -36,6 +36,13 @@ if (!getApps().length) {
 
 const firebaseAuth: Auth = getAuth(app);
 
+// EXPOR AUTH PARA DEBUG APENAS NO NAVEGADOR
+// NÃO AFETA MOBILE, NÃO AFETA PRODUÇÃO
+if (typeof window !== "undefined") {
+  // @ts-ignore
+  window._auth = firebaseAuth;
+}
+
 // ---------------------------------------------------------------------------
 // Firestore - forçando long polling para evitar problemas de rede/WebSocket
 // ---------------------------------------------------------------------------

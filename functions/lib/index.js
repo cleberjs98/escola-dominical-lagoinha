@@ -33,8 +33,9 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.publishScheduledLessons = void 0;
+exports.publishScheduledLessons = exports.syncUserClaimsOnUserWrite = void 0;
 const admin = __importStar(require("firebase-admin"));
+const functions = __importStar(require("firebase-functions"));
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const firebase_functions_1 = require("firebase-functions");
 if (!admin.apps.length) {
@@ -43,6 +44,54 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 const lessonsCollection = "aulas";
 const devotionalsCollection = "devocionais";
+/**
+ * SYNC DE CLAIMS:
+ * Sempre que /users/{userId} for criado/atualizado/deletado,
+ * atualizamos as custom claims do usuário no Firebase Auth.
+ *
+ * Campos esperados no documento:
+ *  - papel: 'aluno' | 'professor' | 'coordenador' | 'administrador'
+ *  - status: 'aprovado' | 'pendente' | ...
+ */
+exports.syncUserClaimsOnUserWrite = functions.firestore
+    .document("users/{userId}")
+    .onWrite(async (change, context) => {
+    const uid = context.params.userId;
+    const afterData = change.after.exists
+        ? change.after.data()
+        : undefined;
+    // Doc deletado ou sem dados -> limpa claims
+    if (!afterData) {
+        await admin.auth().setCustomUserClaims(uid, {});
+        firebase_functions_1.logger.info("[Claims] Usuário removido ou sem dados, limpando claims", { uid });
+        return;
+    }
+    const papel = afterData.papel;
+    const status = afterData.status;
+    // Sem papel/status -> limpa claims também
+    if (!papel || !status) {
+        await admin.auth().setCustomUserClaims(uid, {});
+        firebase_functions_1.logger.warn("[Claims] Documento de usuário sem papel/status, claims limpas", {
+            uid,
+            papel,
+            status,
+        });
+        return;
+    }
+    // Grava claims no Auth
+    await admin.auth().setCustomUserClaims(uid, {
+        role: papel,
+        status,
+    });
+    firebase_functions_1.logger.info("[Claims] Claims atualizadas a partir de /users", {
+        uid,
+        role: papel,
+        status,
+    });
+});
+/**
+ * Publicação automática de aulas/devocionais agendados
+ */
 exports.publishScheduledLessons = (0, scheduler_1.onSchedule)("every 1 minutes", async () => {
     const now = admin.firestore.Timestamp.now();
     const [lessonsProcessed, devotionalsProcessed] = await Promise.all([
@@ -98,7 +147,10 @@ async function processLessons(now) {
 async function processDevotionals(now) {
     const devotionalsRef = db.collection(devotionalsCollection);
     // Consulta apenas por publish_at para evitar índice composto; filtramos status em memória
-    const snapshot = await devotionalsRef.where("publish_at", "<=", now).orderBy("publish_at", "asc").get();
+    const snapshot = await devotionalsRef
+        .where("publish_at", "<=", now)
+        .orderBy("publish_at", "asc")
+        .get();
     firebase_functions_1.logger.info("[Functions] Publicando devocionais agendados", { encontrados: snapshot.size });
     let processed = 0;
     const updates = [];

@@ -1,36 +1,65 @@
 rules_version = '2';
+
 service firebase.storage {
   match /b/{bucket}/o {
 
+    // ========= HELPERS BÁSICOS (USANDO CLAIMS) =========
     function isSignedIn() {
       return request.auth != null;
     }
 
-    function userDoc() {
-      return get(/databases/(default)/documents/users/$(request.auth.uid));
+    function userRole() {
+      return isSignedIn() ? request.auth.token.role : null;
     }
 
-    function requestUserRole() {
-      return isSignedIn() ? userDoc().data.papel : null;
-    }
-
-    function requestUserStatus() {
-      return isSignedIn() ? userDoc().data.status : null;
+    function userStatus() {
+      return isSignedIn() ? request.auth.token.status : null;
     }
 
     function isApprovedUser() {
-      return isSignedIn() && requestUserStatus() == 'aprovado';
+      return isSignedIn() && userStatus() == 'aprovado';
     }
 
-    function isAdmin()       { return requestUserRole() == 'administrador'; }
-    function isCoordinator() { return requestUserRole() == 'coordenador'; }
-    function isProfessor()   { return requestUserRole() == 'professor'; }
+    function isAdmin()       { return userRole() == 'administrador'; }
+    function isCoordinator() { return userRole() == 'coordenador'; }
+    function isProfessor()   { return userRole() == 'professor'; }
 
-    match /{allPaths=**} {
+    function isProfessorOrAbove() {
+      return isApprovedUser() && (isProfessor() || isCoordinator() || isAdmin());
+    }
+
+    function isCoordinatorOrAdmin() {
+      return isApprovedUser() && (isCoordinator() || isAdmin());
+    }
+
+    // ===================== AVATARES =====================
+    // avatars/{userId}/{fileName}
+    match /avatars/{userId}/{fileName} {
       allow read: if isApprovedUser();
-      // Permite upload/alteração para qualquer usuário autenticado e aprovado.
-      // (Se quiser restringir por papel, reative a checagem de professor/coordenador/admin.)
-      allow write: if isApprovedUser();
+      allow write: if isApprovedUser() && request.auth.uid == userId;
+    }
+
+    // ================== MATERIAIS DE AULA ==================
+    // materiais/aula/{lessonId}/{fileName}
+    match /materiais/aula/{lessonId}/{fileName} {
+      // leitura para qualquer usuário aprovado (aluno, professor, coord, admin)
+      allow read: if isApprovedUser();
+
+      // escrita apenas para professor/coordenador/admin aprovados
+      allow write: if isProfessorOrAbove();
+    }
+
+    // ================== MATERIAIS GERAIS (opcional) ==================
+    // materiais/geral/{fileName}
+    match /materiais/geral/{fileName} {
+      allow read: if isApprovedUser();
+      allow write: if isProfessorOrAbove();
+    }
+
+    // ======================== FALLBACK ========================
+    match /{path=**} {
+      allow read: if isApprovedUser();
+      allow write: if isCoordinatorOrAdmin();
     }
   }
 }
