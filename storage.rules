@@ -1,0 +1,34 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return get(/databases/(default)/documents/users/$(request.auth.uid));
+    }
+
+    function requestUserRole() {
+      return isSignedIn() ? userDoc().data.papel : null;
+    }
+
+    function requestUserStatus() {
+      return isSignedIn() ? userDoc().data.status : null;
+    }
+
+    function isApprovedUser() {
+      return isSignedIn() && requestUserStatus() == 'aprovado';
+    }
+
+    function isAdmin()       { return requestUserRole() == 'administrador'; }
+    function isCoordinator() { return requestUserRole() == 'coordenador'; }
+    function isProfessor()   { return requestUserRole() == 'professor'; }
+
+    match /{allPaths=**} {
+      allow read: if isApprovedUser();
+      allow write: if isApprovedUser() && (isProfessor() || isCoordinator() || isAdmin());
+    }
+  }
+}
