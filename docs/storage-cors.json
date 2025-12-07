@@ -1,0 +1,15 @@
+[
+  {
+    "origin": [
+      "http://localhost:8081",
+      "http://localhost:19006",
+      "http://localhost:19000",
+      "https://app-ebd.web.app",
+      "https://app-ebd.firebaseapp.com",
+      "https://SEU-DOMINIO-VERCEL.vercel.app"
+    ],
+    "method": ["GET", "HEAD", "PUT", "POST", "DELETE"],
+    "responseHeader": ["Content-Type", "x-goog-meta-*", "Authorization"],
+    "maxAgeSeconds": 3600
+  }
+]

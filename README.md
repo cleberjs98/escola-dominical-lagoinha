@@ -52,3 +52,22 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+
+## Configuração de CORS do Firebase Storage
+
+Uploads web dependem de o bucket do Storage aceitar requisições do origin usado pelo Expo/host. Use o JSON de exemplo em `docs/storage-cors.json` (substitua `https://SEU-DOMINIO-VERCEL.vercel.app` pelo domínio real da Vercel, se houver).
+
+Passo a passo com Google Cloud SDK:
+
+1. Descubra o nome do bucket no console do Firebase > Storage (ex.: `app-ebd-XXXXX.appspot.com`).
+2. Aplique o CORS:
+   ```bash
+   gcloud init                     # se ainda não tiver configurado
+   gsutil ls                       # opcional, ver buckets
+   gsutil cors set docs/storage-cors.json gs://NOME-DO-BUCKET
+   ```
+3. Opcional: conferir o que ficou configurado:
+   ```bash
+   gsutil cors get gs://NOME-DO-BUCKET
+   ```
+4. Reinicie o Expo Web e teste o upload. Se usar outro host/porta, inclua-o em `docs/storage-cors.json` e repita o comando do passo 2.
