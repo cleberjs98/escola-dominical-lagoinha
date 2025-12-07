@@ -1,0 +1,17 @@
+[
+  {
+    "origin": [
+      "http://localhost:8081",
+      "http://127.0.0.1:8081",
+      "http://localhost:19006",
+      "http://127.0.0.1:19006",
+      "http://localhost:3000",
+      "http://127.0.0.1:3000",
+      "https://app-ebd-25695.firebaseapp.com",
+      "https://app-ebd-25695.web.app"
+    ],
+    "method": ["GET", "PUT", "POST", "HEAD", "DELETE", "OPTIONS"],
+    "responseHeader": ["Content-Type", "Authorization"],
+    "maxAgeSeconds": 3600
+  }
+]
