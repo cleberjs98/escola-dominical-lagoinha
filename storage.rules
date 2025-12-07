@@ -28,7 +28,9 @@ service firebase.storage {
 
     match /{allPaths=**} {
       allow read: if isApprovedUser();
-      allow write: if isApprovedUser() && (isProfessor() || isCoordinator() || isAdmin());
+      // Permite upload/alteração para qualquer usuário autenticado e aprovado.
+      // (Se quiser restringir por papel, reative a checagem de professor/coordenador/admin.)
+      allow write: if isApprovedUser();
     }
   }
 }
