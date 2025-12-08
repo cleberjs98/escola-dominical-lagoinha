@@ -61,7 +61,25 @@ service cloud.firestore {
           (request.auth.uid == userId && request.resource.data.papel == 'administrador') ||
           request.auth.uid != userId
         ));
-      allow delete: if isAdmin() && request.auth.uid != userId;
+      function canDeleteUser() {
+        if (!isSignedIn()) return false;
+
+        // Admin: pode deletar qualquer um, exceto a si mesmo e outros admins
+        if (isAdmin()) {
+          return request.auth.uid != userId && resource.data.papel != 'administrador';
+        }
+
+        // Coordenador: pode deletar apenas não-admins e não-coordenadores, nunca a si mesmo
+        if (isCoordinator()) {
+          return request.auth.uid != userId &&
+            resource.data.papel != 'administrador' &&
+            resource.data.papel != 'coordenador';
+        }
+
+        return false;
+      }
+
+      allow delete: if canDeleteUser();
     }
 
     // Aulas
