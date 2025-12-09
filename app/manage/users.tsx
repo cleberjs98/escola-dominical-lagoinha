@@ -1,4 +1,3 @@
-// app/admin/users.tsx
 import { useEffect, useMemo, useState } from "react";
 import {
   View,
@@ -24,21 +23,12 @@ import { firebaseDb } from "../../lib/firebase";
 import { updateUserRole } from "../../lib/users";
 import type { User, UserRole, UserStatus } from "../../types/user";
 
-type ManagedUser = Pick<
-  User,
-  "id" | "nome" | "email" | "telefone" | "papel" | "status"
->;
+type ManagedUser = Pick<User, "id" | "nome" | "email" | "telefone" | "papel" | "status">;
 
-const ROLE_OPTIONS: UserRole[] = [
-  "aluno",
-  "professor",
-  "coordenador",
-  "administrador",
-];
-
+const ROLE_OPTIONS: UserRole[] = ["aluno", "professor", "coordenador", "administrador"];
 const STATUS_OPTIONS: UserStatus[] = ["vazio", "pendente", "aprovado", "rejeitado"];
 
-export default function AdminUsersScreen() {
+export default function ManageUsersScreen() {
   const router = useRouter();
   const { user: currentUser, role, isAuthenticated, isInitializing } = useAuth();
 
@@ -47,7 +37,6 @@ export default function AdminUsersScreen() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<UserStatus | "todos">("todos");
   const [roleFilter, setRoleFilter] = useState<UserRole | "todos">("todos");
-
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedRole, setSelectedRole] = useState<UserRole>("aluno");
   const [roleModalVisible, setRoleModalVisible] = useState(false);
@@ -59,7 +48,6 @@ export default function AdminUsersScreen() {
     [role, isAdmin]
   );
 
-  // Guard de acesso
   useEffect(() => {
     if (isInitializing) return;
     if (!isAuthenticated || !isCoordinatorOrAdmin) {
@@ -67,7 +55,6 @@ export default function AdminUsersScreen() {
     }
   }, [isAuthenticated, isCoordinatorOrAdmin, isInitializing, router]);
 
-  // Snapshot de usuarios
   useEffect(() => {
     if (!isCoordinatorOrAdmin) return;
 
@@ -142,9 +129,9 @@ export default function AdminUsersScreen() {
 
   const canDeleteUser = (target: ManagedUser) => {
     if (!currentUser || !isCoordinatorOrAdmin) return false;
-    if (target.id === currentUser.id) return false; // nao pode se deletar
-    if (target.papel === "administrador") return false; // ninguem deleta admin
-    if (!isAdmin && target.papel === "coordenador") return false; // coord nao deleta coord
+    if (target.id === currentUser.id) return false;
+    if (target.papel === "administrador" || target.papel === "admin") return false;
+    if (!isAdmin && target.papel === "coordenador") return false;
     return true;
   };
 
@@ -155,80 +142,35 @@ export default function AdminUsersScreen() {
       return;
     }
 
-    Alert.alert(
-      "Confirmar exclusao",
-      `Deseja realmente excluir ${target.nome}?`,
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Excluir",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              setActionLoadingId(target.id);
-              await deleteDoc(doc(firebaseDb, "users", target.id));
-              Alert.alert("Sucesso", "Usuario removido.");
-            } catch (error: any) {
-              console.error("Erro ao remover usuario:", error);
-              Alert.alert("Erro", error?.message || "Falha ao remover usuario.");
-            } finally {
-              setActionLoadingId(null);
-            }
-          },
+    Alert.alert("Confirmar exclusao", `Deseja realmente excluir ${target.nome}?`, [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Excluir",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            setActionLoadingId(target.id);
+            await deleteDoc(doc(firebaseDb, "users", target.id));
+            Alert.alert("Sucesso", "Usuario removido.");
+          } catch (error: any) {
+            console.error("Erro ao remover usuario:", error);
+            Alert.alert("Erro", error?.message || "Falha ao remover usuario.");
+          } finally {
+            setActionLoadingId(null);
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
-  const renderRoleChips = () => {
-    return (
-      <View style={styles.chipsRow}>
-        <Pressable
-          style={[styles.chip, roleFilter === "todos" && styles.chipSelected]}
-          onPress={() => setRoleFilter("todos")}
-        >
-          <Text
-            style={[
-              styles.chipText,
-              roleFilter === "todos" && styles.chipTextSelected,
-            ]}
-          >
-            Papel: todos
-          </Text>
-        </Pressable>
-        {ROLE_OPTIONS.map((r) => (
-          <Pressable
-            key={r}
-            style={[styles.chip, roleFilter === r && styles.chipSelected]}
-            onPress={() => setRoleFilter(r)}
-          >
-            <Text
-              style={[
-                styles.chipText,
-                roleFilter === r && styles.chipTextSelected,
-              ]}
-            >
-              {r}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-    );
-  };
-
-  const renderStatusChips = () => {
-    return (
+  const renderFilters = () => (
+    <>
       <View style={styles.chipsRow}>
         <Pressable
           style={[styles.chip, statusFilter === "todos" && styles.chipSelected]}
           onPress={() => setStatusFilter("todos")}
         >
-          <Text
-            style={[
-              styles.chipText,
-              statusFilter === "todos" && styles.chipTextSelected,
-            ]}
-          >
+          <Text style={[styles.chipText, statusFilter === "todos" && styles.chipTextSelected]}>
             Status: todos
           </Text>
         </Pressable>
@@ -238,19 +180,34 @@ export default function AdminUsersScreen() {
             style={[styles.chip, statusFilter === s && styles.chipSelected]}
             onPress={() => setStatusFilter(s)}
           >
-            <Text
-              style={[
-                styles.chipText,
-                statusFilter === s && styles.chipTextSelected,
-              ]}
-            >
+            <Text style={[styles.chipText, statusFilter === s && styles.chipTextSelected]}>
               {s}
             </Text>
           </Pressable>
         ))}
       </View>
-    );
-  };
+
+      <View style={styles.chipsRow}>
+        <Pressable
+          style={[styles.chip, roleFilter === "todos" && styles.chipSelected]}
+          onPress={() => setRoleFilter("todos")}
+        >
+          <Text style={[styles.chipText, roleFilter === "todos" && styles.chipTextSelected]}>
+            Papel: todos
+          </Text>
+        </Pressable>
+        {ROLE_OPTIONS.map((r) => (
+          <Pressable
+            key={r}
+            style={[styles.chip, roleFilter === r && styles.chipSelected]}
+            onPress={() => setRoleFilter(r)}
+          >
+            <Text style={[styles.chipText, roleFilter === r && styles.chipTextSelected]}>{r}</Text>
+          </Pressable>
+        ))}
+      </View>
+    </>
+  );
 
   const renderItem = ({ item }: { item: ManagedUser }) => {
     const isActing = actionLoadingId === item.id;
@@ -290,7 +247,7 @@ export default function AdminUsersScreen() {
             onPress={() => handleDeleteUser(item)}
             disabled={!deletable || isActing}
           >
-            <Text style={styles.buttonText}>Deletar</Text>
+            <Text style={styles.buttonText}>Excluir</Text>
           </Pressable>
         </View>
       </View>
@@ -308,9 +265,9 @@ export default function AdminUsersScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Gerenciar usuarios</Text>
+      <Text style={styles.title}>Gestao de usuarios</Text>
       <Text style={styles.subtitle}>
-        Coordenadores e administradores podem alterar papel e remover usuarios (com restricoes).
+        Coordenadores e administradores podem alterar papel e excluir usuarios (quando permitido).
       </Text>
 
       <TextInput
@@ -321,8 +278,7 @@ export default function AdminUsersScreen() {
         onChangeText={setSearch}
       />
 
-      {renderStatusChips()}
-      {renderRoleChips()}
+      {renderFilters()}
 
       {filteredUsers.length === 0 ? (
         <View style={styles.emptyContainer}>
@@ -347,18 +303,10 @@ export default function AdminUsersScreen() {
                 return (
                   <Pressable
                     key={option}
-                    style={[
-                      styles.roleChip,
-                      selected && styles.roleChipSelected,
-                    ]}
+                    style={[styles.roleChip, selected && styles.roleChipSelected]}
                     onPress={() => setSelectedRole(option)}
                   >
-                    <Text
-                      style={[
-                        styles.roleChipText,
-                        selected && styles.roleChipTextSelected,
-                      ]}
-                    >
+                    <Text style={[styles.roleChipText, selected && styles.roleChipTextSelected]}>
                       {option}
                     </Text>
                   </Pressable>
@@ -372,10 +320,7 @@ export default function AdminUsersScreen() {
               >
                 <Text style={styles.buttonText}>Cancelar</Text>
               </Pressable>
-              <Pressable
-                style={[styles.button, styles.confirmButton]}
-                onPress={handleUpdateRole}
-              >
+              <Pressable style={[styles.button, styles.confirmButton]} onPress={handleUpdateRole}>
                 <Text style={styles.buttonText}>Confirmar</Text>
               </Pressable>
             </View>

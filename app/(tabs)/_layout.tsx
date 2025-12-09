@@ -13,6 +13,8 @@ export default function TabsLayout() {
   const papel = user?.papel;
   const canCreateAviso =
     papel === "professor" || papel === "coordenador" || papel === "administrador";
+  const isCoordinatorOrAdmin =
+    papel === "coordenador" || papel === "administrador" || papel === "admin";
 
   return (
     <>
@@ -93,6 +95,9 @@ export default function TabsLayout() {
               <MenuItem label="Criar aviso" onPress={() => handleNavigate("/avisos/new")} />
             ) : null}
             <MenuItem label="Gerenciar" onPress={() => handleNavigate("/(tabs)/manage")} />
+            {isCoordinatorOrAdmin ? (
+              <MenuItem label="Gestao de usuarios" onPress={() => handleNavigate("/manage/users")} />
+            ) : null}
             <MenuItem label="Aprovar usuarios" onPress={() => handleNavigate("/manager/pending-users")} />
             <MenuItem label="Aprovar reservas" onPress={() => handleNavigate("/manager/pending-reservations")} />
             <MenuItem label="Dashboard Admin" onPress={() => handleNavigate("/admin/dashboard")} />
