@@ -9,6 +9,12 @@ export enum NotificationType {
   NOVO_AVISO = "novo_aviso",
   NOVA_AULA = "nova_aula",
   NOVO_DEVOCIONAL = "novo_devocional",
+  NOVO_USUARIO_PENDENTE = "novo_usuario_pendente",
+  USUARIO_APROVADO = "usuario_aprovado",
+  USUARIO_REJEITADO = "usuario_rejeitado",
+  AULA_DISPONIVEL = "aula_disponivel",
+  AULA_PUBLICADA = "aula_publicada",
+  AULA_RESERVADA = "aula_reservada",
 }
 
 export enum NotificationReferenceType {

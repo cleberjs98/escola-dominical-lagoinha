@@ -11,6 +11,7 @@ import { AppInput } from "../../components/ui/AppInput";
 import { AppButton } from "../../components/ui/AppButton";
 import { useTheme } from "../../hooks/useTheme";
 import { isNonEmpty, isValidEmail } from "../../utils/validation";
+import { mapAuthErrorToMessage } from "../../lib/auth/errorMessages";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -19,16 +20,18 @@ export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   function validate() {
     if (!isValidEmail(email)) {
-      Alert.alert("Erro", "Informe um email valido.");
+      setErrorMessage("Informe um email valido.");
       return false;
     }
     if (!isNonEmpty(password)) {
-      Alert.alert("Erro", "Informe sua senha.");
+      setErrorMessage("Informe sua senha.");
       return false;
     }
+    setErrorMessage(null);
     return true;
   }
 
@@ -37,6 +40,7 @@ export default function LoginScreen() {
 
     try {
       setIsSubmitting(true);
+      setErrorMessage(null);
       const trimmedEmail = email.trim();
 
       const cred = await signInWithEmailAndPassword(
@@ -84,8 +88,9 @@ export default function LoginScreen() {
         router.replace("/" as any);
       }
     } catch (error: any) {
-      console.error("Erro no login:", error);
-      Alert.alert("Erro ao entrar", error?.message || "Tente novamente.");
+      console.error("[Auth] Erro ao fazer login", error);
+      const message = mapAuthErrorToMessage(error?.code ?? "auth/unknown", "login");
+      setErrorMessage(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -118,6 +123,7 @@ export default function LoginScreen() {
           onPress={handleLogin}
           loading={isSubmitting}
         />
+        {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
         <View style={styles.linksRow}>
           <Link href="/auth/forgot-password" style={styles.linkText}>
             Esqueci minha senha
@@ -152,5 +158,9 @@ const styles = StyleSheet.create({
   smallText: {
     color: "#9ca3af",
     fontSize: 13,
+  },
+  errorText: {
+    color: "#f97316",
+    marginTop: 8,
   },
 });

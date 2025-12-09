@@ -42,6 +42,15 @@ export default function ManageHubScreen() {
     }
   }, [firebaseUser, isInitializing, router]);
 
+  useEffect(() => {
+    if (isInitializing) return;
+    if (!firebaseUser) return;
+    if (!allowed) {
+      Alert.alert("Sem permissao", "Voce nao tem acesso a area de gestao.");
+      router.replace("/(tabs)" as any);
+    }
+  }, [allowed, firebaseUser, isInitializing, router]);
+
   if (isInitializing) {
     return (
       <View style={styles.center}>
@@ -57,12 +66,6 @@ export default function ManageHubScreen() {
         <Text style={styles.loadingText}>Redirecionando...</Text>
       </View>
     );
-  }
-
-  if (!allowed) {
-    Alert.alert("Sem permissao", "Voce nao tem acesso a area de gestao.");
-    router.replace("/(tabs)");
-    return null;
   }
 
   return (

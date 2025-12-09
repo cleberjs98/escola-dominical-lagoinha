@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -20,7 +20,7 @@ import {
 
 import { useAuth } from "../../hooks/useAuth";
 import { firebaseDb } from "../../lib/firebase";
-import { updateUserRole } from "../../lib/users";
+import { updateUserRole, approveUser } from "../../lib/users";
 import type { User, UserRole, UserStatus } from "../../types/user";
 
 type ManagedUser = Pick<User, "id" | "nome" | "email" | "telefone" | "papel" | "status">;
@@ -30,7 +30,7 @@ const STATUS_OPTIONS: UserStatus[] = ["vazio", "pendente", "aprovado", "rejeitad
 
 export default function ManageUsersScreen() {
   const router = useRouter();
-  const { user: currentUser, role, isAuthenticated, isInitializing } = useAuth();
+  const { user: currentUser, firebaseUser, role, isAuthenticated, isInitializing } = useAuth();
 
   const [isLoading, setIsLoading] = useState(true);
   const [users, setUsers] = useState<ManagedUser[]>([]);
@@ -41,6 +41,11 @@ export default function ManageUsersScreen() {
   const [selectedRole, setSelectedRole] = useState<UserRole>("aluno");
   const [roleModalVisible, setRoleModalVisible] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+
+  const currentUid = useMemo(
+    () => currentUser?.id || firebaseUser?.uid || "",
+    [currentUser?.id, firebaseUser?.uid]
+  );
 
   const isAdmin = role === "administrador" || role === "admin";
   const isCoordinatorOrAdmin = useMemo(
@@ -66,19 +71,20 @@ export default function ManageUsersScreen() {
         snapshot.forEach((docSnap) => {
           const data = docSnap.data() as User;
           list.push({
-            id: data.id,
+            id: docSnap.id,
             nome: data.nome,
-            email: data.email,
+            email: (data as any).email,
             telefone: data.telefone,
             papel: data.papel,
             status: data.status,
           });
         });
+        console.log("[AdminUsers] Usuarios carregados", list.length);
         setUsers(list);
         setIsLoading(false);
       },
       (error: FirestoreError) => {
-        console.error("Erro ao carregar usuarios:", error);
+        console.error("[AdminUsers] Erro ao carregar usuarios:", error);
         Alert.alert("Erro", "Nao foi possivel carregar usuarios.");
         setIsLoading(false);
       }
@@ -94,8 +100,8 @@ export default function ManageUsersScreen() {
       const matchRole = roleFilter === "todos" || user.papel === roleFilter;
       const matchSearch =
         term.length === 0 ||
-        user.nome.toLowerCase().includes(term) ||
-        user.email.toLowerCase().includes(term) ||
+        (user.nome || "").toLowerCase().includes(term) ||
+        (user.email || "").toLowerCase().includes(term) ||
         (user.telefone ?? "").toLowerCase().includes(term);
       return matchStatus && matchRole && matchSearch;
     });
@@ -113,15 +119,29 @@ export default function ManageUsersScreen() {
       setActionLoadingId(selectedUserId);
       await updateUserRole({
         targetUserId: selectedUserId,
-        approverId: currentUser.id,
+        approverId: currentUid,
         newRole: selectedRole,
       });
       Alert.alert("Sucesso", "Papel atualizado.");
       setRoleModalVisible(false);
       setSelectedUserId(null);
     } catch (error: any) {
-      console.error("Erro ao atualizar papel:", error);
+      console.error("[AdminUsers] Erro ao atualizar papel:", error);
       Alert.alert("Erro", error?.message || "Falha ao atualizar papel.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleApproveUser = async (targetUserId: string) => {
+    if (!currentUser) return;
+    try {
+      setActionLoadingId(targetUserId);
+      await approveUser({ targetUserId, approverId: currentUid });
+      Alert.alert("Sucesso", "Usuario aprovado.");
+    } catch (error: any) {
+      console.error("[AdminUsers] Erro ao aprovar usuario:", error);
+      Alert.alert("Erro", error?.message || "Falha ao aprovar usuario.");
     } finally {
       setActionLoadingId(null);
     }
@@ -129,38 +149,63 @@ export default function ManageUsersScreen() {
 
   const canDeleteUser = (target: ManagedUser) => {
     if (!currentUser || !isCoordinatorOrAdmin) return false;
-    if (target.id === currentUser.id) return false;
+    if (currentUid && target.id === currentUid) return false;
     if (target.papel === "administrador" || target.papel === "admin") return false;
     if (!isAdmin && target.papel === "coordenador") return false;
     return true;
   };
 
-  const handleDeleteUser = (target: ManagedUser) => {
+  const handleDeleteUser = useCallback(
+    async (userId: string) => {
+      console.log("[AdminUsers] handleDeleteUser chamado", userId);
+      try {
+        await deleteDoc(doc(firebaseDb, "users", userId));
+        console.log("[AdminUsers] Usuario deletado com sucesso", userId);
+        setUsers((prev) => prev.filter((u) => u.id !== userId));
+      } catch (error: any) {
+        console.error("[AdminUsers] Erro ao remover usuario:", error);
+        const message =
+          error?.code === "permission-denied"
+            ? "Voce nao tem permissao para excluir este usuario."
+            : error?.message || "Falha ao remover usuario.";
+        Alert.alert("Erro", message);
+      } finally {
+        setActionLoadingId(null);
+      }
+    },
+    []
+  );
+
+  const handleDeleteUserConfirm = (target: ManagedUser) => {
     if (!currentUser) return;
+    console.log("[AdminUsers] Clique excluir", target.id);
     if (!canDeleteUser(target)) {
       Alert.alert("Operacao nao permitida", "Voce nao pode remover este usuario.");
       return;
     }
 
-    Alert.alert("Confirmar exclusao", `Deseja realmente excluir ${target.nome}?`, [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Excluir",
-        style: "destructive",
-        onPress: async () => {
-          try {
+    const proceed = Platform.OS === "web"
+      ? window.confirm(`Deseja realmente excluir ${target.nome || "o usuario"}?`)
+      : true;
+
+    if (Platform.OS !== "web") {
+      Alert.alert("Confirmar exclusao", `Deseja realmente excluir ${target.nome || "o usuario"}?`, [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Excluir",
+          style: "destructive",
+          onPress: () => {
+            console.log("[AdminUsers] Confirm delete pressed", target.id);
             setActionLoadingId(target.id);
-            await deleteDoc(doc(firebaseDb, "users", target.id));
-            Alert.alert("Sucesso", "Usuario removido.");
-          } catch (error: any) {
-            console.error("Erro ao remover usuario:", error);
-            Alert.alert("Erro", error?.message || "Falha ao remover usuario.");
-          } finally {
-            setActionLoadingId(null);
-          }
+            void handleDeleteUser(target.id);
+          },
         },
-      },
-    ]);
+      ]);
+    } else if (proceed) {
+      console.log("[AdminUsers] Confirm delete pressed", target.id);
+      setActionLoadingId(target.id);
+      void handleDeleteUser(target.id);
+    }
   };
 
   const renderFilters = () => (
@@ -212,6 +257,7 @@ export default function ManageUsersScreen() {
   const renderItem = ({ item }: { item: ManagedUser }) => {
     const isActing = actionLoadingId === item.id;
     const deletable = canDeleteUser(item);
+    const showApprove = item.status === "pendente";
 
     return (
       <View style={styles.card}>
@@ -222,7 +268,7 @@ export default function ManageUsersScreen() {
           </View>
         </View>
 
-        <Text style={styles.email}>{item.email}</Text>
+        <Text style={styles.email}>{item.email || "Email nao informado"}</Text>
         {item.telefone ? (
           <Text style={styles.phone}>Tel: {item.telefone}</Text>
         ) : (
@@ -238,13 +284,22 @@ export default function ManageUsersScreen() {
           >
             <Text style={styles.buttonText}>Alterar papel</Text>
           </Pressable>
+          {showApprove ? (
+            <Pressable
+              style={[styles.button, styles.approveButton, isActing && styles.disabled]}
+              onPress={() => handleApproveUser(item.id)}
+              disabled={isActing}
+            >
+              <Text style={styles.buttonText}>Aprovar</Text>
+            </Pressable>
+          ) : null}
           <Pressable
             style={[
               styles.button,
               deletable ? styles.deleteButton : styles.disabledButton,
               (!deletable || isActing) && styles.disabled,
             ]}
-            onPress={() => handleDeleteUser(item)}
+            onPress={() => handleDeleteUserConfirm(item)}
             disabled={!deletable || isActing}
           >
             <Text style={styles.buttonText}>Excluir</Text>
@@ -420,10 +475,10 @@ const styles = StyleSheet.create({
   },
   email: {
     color: "#cbd5e1",
-    fontSize: 14,
+    fontSize: 13,
   },
   phone: {
-    color: "#cbd5e1",
+    color: "#94a3b8",
     fontSize: 13,
   },
   status: {
@@ -432,76 +487,76 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: "row",
-    gap: 8,
-    marginTop: 6,
+    justifyContent: "space-between",
+    marginTop: 8,
+    gap: 6,
   },
   button: {
-    flex: 1,
     borderRadius: 10,
-    paddingVertical: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     alignItems: "center",
+    justifyContent: "center",
   },
   roleButton: {
-    backgroundColor: "#0ea5e9",
+    backgroundColor: "#38bdf8",
+  },
+  approveButton: {
+    backgroundColor: "#22c55e",
   },
   deleteButton: {
     backgroundColor: "#ef4444",
   },
   disabledButton: {
-    backgroundColor: "#475569",
+    backgroundColor: "#4b5563",
   },
   disabled: {
-    opacity: 0.7,
+    opacity: 0.6,
   },
   buttonText: {
-    color: "#0f172a",
+    color: "#f8fafc",
     fontWeight: "700",
   },
   center: {
-    flex: 1,
-    backgroundColor: "#020617",
     alignItems: "center",
     justifyContent: "center",
+    padding: 16,
   },
   loadingText: {
     color: "#e5e7eb",
-    marginTop: 12,
+    marginTop: 8,
   },
   emptyContainer: {
-    borderWidth: 1,
-    borderColor: "#1f2937",
-    borderRadius: 12,
-    padding: 16,
+    padding: 24,
     alignItems: "center",
-    marginTop: 12,
   },
   emptyText: {
-    color: "#9ca3af",
+    color: "#94a3b8",
   },
   modalOverlay: {
     position: "absolute",
+    top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: "#00000088",
+    alignItems: "center",
+    justifyContent: "center",
     padding: 16,
   },
   modalCard: {
-    borderRadius: 12,
     backgroundColor: "#0b1224",
+    borderRadius: 12,
     padding: 16,
+    width: "100%",
     borderWidth: 1,
     borderColor: "#1f2937",
-    gap: 12,
   },
   modalTitle: {
     color: "#e5e7eb",
     fontSize: 16,
     fontWeight: "700",
-  },
-  modalActions: {
-    flexDirection: "row",
-    gap: 8,
+    marginBottom: 12,
   },
   rolesRow: {
     flexDirection: "row",
@@ -509,11 +564,11 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   roleChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
     borderWidth: 1,
     borderColor: "#334155",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
   roleChipSelected: {
     backgroundColor: "#facc15",
@@ -525,11 +580,19 @@ const styles = StyleSheet.create({
   },
   roleChipTextSelected: {
     color: "#0f172a",
+    fontWeight: "700",
+  },
+  modalActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 8,
+    marginTop: 16,
   },
   cancelButton: {
-    backgroundColor: "#475569",
+    backgroundColor: "#4b5563",
   },
   confirmButton: {
     backgroundColor: "#22c55e",
   },
 });
+import { Platform } from "react-native";

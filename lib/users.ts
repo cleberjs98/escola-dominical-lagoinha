@@ -153,13 +153,18 @@ export async function updateUserRole(params: UpdateUserRoleParams) {
  */
 export async function listCoordinatorsAndAdminsIds(): Promise<string[]> {
   const colRef = collection(firebaseDb, "users");
-  const q = query(
-    colRef,
-    where("papel", "in", ["coordenador", "administrador"]),
-    where("status", "==", "aprovado")
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map((docSnap) => docSnap.id);
+  // Evita dependência de índice composto e inclui papel "admin" (alias).
+  const snap = await getDocs(colRef);
+  const allowed = new Set<UserRole>(["coordenador", "administrador", "admin"]);
+  const ids: string[] = [];
+  snap.forEach((docSnap) => {
+    const data = docSnap.data() as User;
+    if (!allowed.has(data.papel)) return;
+    const isApproved = data.status === "aprovado" || data.papel === "administrador" || data.papel === "admin";
+    if (!isApproved) return;
+    ids.push(data.id || docSnap.id);
+  });
+  return ids;
 }
 
 /**

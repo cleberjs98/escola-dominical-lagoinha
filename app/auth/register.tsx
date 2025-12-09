@@ -26,6 +26,11 @@ import {
   validateStrongPassword,
 } from "../../utils/validation";
 import { sanitizeText } from "../../utils/sanitize";
+import {
+  PasswordRequirements,
+  getPasswordValidation,
+} from "../../components/PasswordRequirements";
+import { mapAuthErrorToMessage } from "../../lib/auth/errorMessages";
 
 type FormErrors = Partial<{
   firstName: string;
@@ -151,6 +156,22 @@ export default function RegisterScreen() {
     const { ok, normalizedDate } = validate();
     if (!ok || !normalizedDate) return;
 
+    const pwdValidation = getPasswordValidation(password.trim());
+    if (!pwdValidation.lengthOk || !pwdValidation.hasUppercase || !pwdValidation.numberAndSpecialOk) {
+      setErrors((prev) => ({
+        ...prev,
+        password: "Sua senha não atende aos requisitos mínimos.",
+      }));
+      return;
+    }
+    if (password.trim() !== confirmPassword.trim()) {
+      setErrors((prev) => ({
+        ...prev,
+        confirmPassword: "As senhas nao conferem.",
+      }));
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       const trimmedEmail = email.trim().toLowerCase();
@@ -192,19 +213,10 @@ export default function RegisterScreen() {
 
       router.replace("/auth/pending");
     } catch (error: any) {
-      console.error("Erro ao criar conta:", error);
-      if (error?.code === "auth/email-already-in-use") {
-        const msg =
-          "Este e-mail ja esta em uso. Tente outro e-mail ou faca login.";
-        setErrors((prev) => ({ ...prev, email: msg }));
-        Alert.alert("E-mail ja cadastrado", msg);
-        return;
-      }
-
-      Alert.alert(
-        "Erro ao criar conta",
-        "Erro ao criar conta, tente novamente mais tarde."
-      );
+      console.error("[Auth] Erro ao criar conta", error);
+      const msg = mapAuthErrorToMessage(error?.code ?? "auth/unknown", "signup");
+      Alert.alert("Erro ao criar conta", msg);
+      setErrors((prev) => ({ ...prev, email: msg }));
     } finally {
       setIsSubmitting(false);
     }
@@ -261,6 +273,7 @@ export default function RegisterScreen() {
                 onChangeText={setPassword}
                 error={errors.password}
               />
+              <PasswordRequirements password={password} />
 
               <AppInput
                 label="Confirmar senha"

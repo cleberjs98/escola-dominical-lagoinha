@@ -6,33 +6,46 @@ import {
   TextInput,
   StyleSheet,
   Pressable,
-  Alert,
+  ActivityIndicator,
 } from "react-native";
-import { Link } from "expo-router";
+import { Link, useRouter } from "expo-router";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { firebaseAuth } from "../../lib/firebase";
+import { mapAuthErrorToMessage } from "../../lib/auth/errorMessages";
 
 export default function ForgotPasswordScreen() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   async function handleResetPassword() {
-    if (!email.trim() || !email.includes("@")) {
-      Alert.alert("Erro", "Informe um email válido.");
+    console.log("[ForgotPassword] Clique no botão Enviar email");
+    const trimmedEmail = email.trim();
+
+    if (!trimmedEmail) {
+      setErrorMessage("Informe seu e-mail.");
+      setSuccessMessage(null);
       return;
     }
 
+    setSubmitting(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
     try {
-      await sendPasswordResetEmail(firebaseAuth, email.trim());
-      Alert.alert(
-        "Email enviado",
-        "Se existir uma conta com esse email, você receberá instruções para redefinir a senha."
+      await sendPasswordResetEmail(firebaseAuth, trimmedEmail);
+      console.log("[ForgotPassword] E-mail de reset enviado com sucesso");
+      setSuccessMessage(
+        "Enviamos um e-mail com instruções para redefinir sua senha. Verifique sua caixa de entrada (e também o spam)."
       );
-    } catch (error: any) {
-      console.error("Erro ao enviar email de reset:", error);
-      Alert.alert(
-        "Erro",
-        error?.message || "Não foi possível enviar o email. Tente novamente."
-      );
+    } catch (err: any) {
+      console.error("[ForgotPassword] Erro ao enviar e-mail de reset", err);
+      const msg = mapAuthErrorToMessage(err?.code ?? "auth/unknown", "reset");
+      setErrorMessage(msg);
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -55,13 +68,29 @@ export default function ForgotPasswordScreen() {
           onChangeText={setEmail}
         />
 
-        <Pressable style={styles.button} onPress={handleResetPassword}>
-          <Text style={styles.buttonText}>Enviar email</Text>
+        {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+        {successMessage ? <Text style={styles.successText}>{successMessage}</Text> : null}
+
+        <Pressable
+          style={[styles.button, submitting && styles.buttonDisabled]}
+          onPress={handleResetPassword}
+          disabled={submitting}
+        >
+          {submitting ? (
+            <ActivityIndicator color="#0f172a" />
+          ) : (
+            <Text style={styles.buttonText}>Enviar email</Text>
+          )}
+        </Pressable>
+
+        <Pressable style={styles.backButton} onPress={() => router.back()}>
+          <Text style={styles.backText}>Voltar para login</Text>
         </Pressable>
 
         <View style={styles.linksRow}>
+          <Text style={styles.smallText}>Lembrou a senha? </Text>
           <Link href="/auth/login" style={styles.linkText}>
-            Voltar para login
+            Fazer login
           </Link>
         </View>
       </View>
@@ -104,7 +133,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     color: "#e5e7eb",
-    marginBottom: 12,
+    marginBottom: 4,
   },
   button: {
     backgroundColor: "#facc15",
@@ -112,12 +141,26 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 8,
+    marginTop: 12,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   buttonText: {
     color: "#111827",
     fontWeight: "600",
     fontSize: 16,
+  },
+  errorText: { color: "#f97316", marginBottom: 4 },
+  successText: { color: "#22c55e", marginBottom: 4 },
+  backButton: {
+    marginTop: 16,
+    alignItems: "center",
+  },
+  backText: {
+    color: "#38bdf8",
+    fontWeight: "500",
+    fontSize: 14,
   },
   linksRow: {
     flexDirection: "row",
@@ -127,5 +170,9 @@ const styles = StyleSheet.create({
   linkText: {
     color: "#38bdf8",
     fontWeight: "500",
+  },
+  smallText: {
+    color: "#9ca3af",
+    fontSize: 13,
   },
 });

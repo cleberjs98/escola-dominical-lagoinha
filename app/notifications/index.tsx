@@ -19,12 +19,14 @@ import {
 import type {
   Notification,
   NotificationReferenceType,
+  NotificationType,
 } from "../../types/notification";
 import { Card } from "../../components/ui/Card";
 import { AppButton } from "../../components/ui/AppButton";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { StatusBadge } from "../../components/ui/StatusBadge";
 import { useTheme } from "../../hooks/useTheme";
+import { useUnreadNotificationsCount } from "../../hooks/useUnreadNotificationsCount";
 
 type FilterKey = "todas" | NotificationReferenceType;
 
@@ -32,6 +34,7 @@ export default function NotificationsScreen() {
   const router = useRouter();
   const { firebaseUser, isInitializing } = useAuth();
   const { themeSettings } = useTheme();
+  const { reload: reloadUnread } = useUnreadNotificationsCount(firebaseUser?.uid);
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -62,7 +65,8 @@ export default function NotificationsScreen() {
     try {
       setIsLoading(true);
       const list = await listUserNotifications(userId, 50);
-      setNotifications(list);
+      // Exibir apenas não lidas, conforme solicitado
+      setNotifications(list.filter((n) => !n.lida));
     } catch (err) {
       console.error("Erro ao carregar notificações:", err);
       Alert.alert("Erro", "Não foi possível carregar as notificações.");
@@ -75,12 +79,12 @@ export default function NotificationsScreen() {
     if (!userId) return;
     try {
       if (!item.lida) {
-        setNotifications((prev) =>
-          prev.map((n) =>
-            n.id === item.id ? { ...n, lida: true, lida_em: null } : n
-          )
-        );
+        setNotifications((prev) => prev.filter((n) => n.id !== item.id));
         await markNotificationAsRead(item.id);
+        // Atualiza badge (contador global) depois de marcar lida
+        if (reloadUnread) {
+          await reloadUnread();
+        }
       }
       if (item.tipo_referencia && item.referencia_id) {
         navigateToReference(item.tipo_referencia, item.referencia_id);
@@ -95,7 +99,10 @@ export default function NotificationsScreen() {
     try {
       setIsMarkingAll(true);
       await markAllNotificationsAsRead(userId);
-      setNotifications((prev) => prev.map((n) => ({ ...n, lida: true })));
+      setNotifications([]);
+      if (reloadUnread) {
+        await reloadUnread();
+      }
     } catch (err) {
       console.error("Erro ao marcar todas como lidas:", err);
       Alert.alert("Erro", "Não foi possível marcar todas como lidas.");
@@ -133,6 +140,37 @@ export default function NotificationsScreen() {
     }
   }
 
+  function getIconByType(tipo: NotificationType) {
+    switch (tipo) {
+      case "novo_usuario_pendente":
+        return "👤";
+      case "usuario_aprovado":
+        return "✅";
+      case "usuario_rejeitado":
+        return "⚠️";
+      case "aula_disponivel":
+        return "📘";
+      case "aula_publicada":
+        return "🚀";
+      case "aula_reservada":
+        return "📝";
+      case "nova_reserva":
+        return "📅";
+      case "reserva_aprovada":
+        return "👍";
+      case "reserva_rejeitada":
+        return "✖️";
+      case "novo_aviso":
+        return "📢";
+      case "nova_aula":
+        return "📘";
+      case "novo_devocional":
+        return "🙏";
+      default:
+        return "🔔";
+    }
+  }
+
   return (
     <ScrollView
       style={[
@@ -156,7 +194,7 @@ export default function NotificationsScreen() {
       />
 
       <View style={styles.filters}>
-        {(["todas", "aula", "devocional", "aviso", "reserva"] as FilterKey[]).map(
+        {(["todas", "aula", "devocional", "aviso", "reserva", "outro"] as FilterKey[]).map(
           (f) => {
             const active = filter === f;
             return (
@@ -186,6 +224,7 @@ export default function NotificationsScreen() {
       ) : (
         filteredNotifications.map((item) => {
           const isUnread = !item.lida;
+          const icon = getIconByType(item.tipo);
           return (
             <Pressable
               key={item.id}
@@ -193,7 +232,9 @@ export default function NotificationsScreen() {
               onPress={() => handlePressNotification(item)}
             >
               <View style={styles.cardHeader}>
-                <Text style={styles.cardTitle}>{item.titulo}</Text>
+                <Text style={styles.cardTitle}>
+                  {icon} {item.titulo}
+                </Text>
                 {isUnread && <Text style={styles.unreadDot}>•</Text>}
               </View>
               <Text style={styles.cardMessage}>{item.mensagem}</Text>
