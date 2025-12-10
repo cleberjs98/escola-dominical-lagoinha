@@ -9,12 +9,13 @@ import { useAuth } from "../../hooks/useAuth";
 export default function TabsLayout() {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const papel = user?.papel;
   const canCreateAviso =
     papel === "professor" || papel === "coordenador" || papel === "administrador";
   const isCoordinatorOrAdmin =
     papel === "coordenador" || papel === "administrador" || papel === "admin";
+  const isStudent = papel === "aluno";
 
   return (
     <>
@@ -89,18 +90,25 @@ export default function TabsLayout() {
           <View style={styles.drawer}>
             <Text style={styles.drawerTitle}>Menu</Text>
             <MenuItem label="Perfil" onPress={() => handleNavigate("/(tabs)/profile")} />
-            <MenuItem label="Notificacoes" onPress={() => handleNavigate("/notifications")} />
             <MenuItem label="Avisos" onPress={() => handleNavigate("/avisos")} />
-            {canCreateAviso ? (
-              <MenuItem label="Criar aviso" onPress={() => handleNavigate("/avisos/new")} />
-            ) : null}
-            <MenuItem label="Gerenciar" onPress={() => handleNavigate("/(tabs)/manage")} />
-            {isCoordinatorOrAdmin ? (
-              <MenuItem label="Gestao de usuarios" onPress={() => handleNavigate("/manage/users")} />
-            ) : null}
-            <MenuItem label="Aprovar usuarios" onPress={() => handleNavigate("/manager/pending-users")} />
-            <MenuItem label="Aprovar reservas" onPress={() => handleNavigate("/manager/pending-reservations")} />
-            <MenuItem label="Dashboard Admin" onPress={() => handleNavigate("/admin/dashboard")} />
+            {isStudent ? (
+              <MenuItem label="Sair" onPress={handleLogout} />
+            ) : (
+              <>
+                <MenuItem label="Notificacoes" onPress={() => handleNavigate("/notifications")} />
+                {canCreateAviso ? (
+                  <MenuItem label="Criar aviso" onPress={() => handleNavigate("/avisos/new")} />
+                ) : null}
+                <MenuItem label="Gerenciar" onPress={() => handleNavigate("/(tabs)/manage")} />
+                {isCoordinatorOrAdmin ? (
+                  <MenuItem label="Gestao de usuarios" onPress={() => handleNavigate("/manage/users")} />
+                ) : null}
+                <MenuItem label="Aprovar usuarios" onPress={() => handleNavigate("/manager/pending-users")} />
+                <MenuItem label="Aprovar reservas" onPress={() => handleNavigate("/manager/pending-reservations")} />
+                <MenuItem label="Dashboard Admin" onPress={() => handleNavigate("/admin/dashboard")} />
+                <MenuItem label="Sair" onPress={handleLogout} />
+              </>
+            )}
           </View>
         </View>
       ) : null}
@@ -110,6 +118,16 @@ export default function TabsLayout() {
   function handleNavigate(path: string) {
     setMenuOpen(false);
     router.push(path as any);
+  }
+
+  async function handleLogout() {
+    try {
+      setMenuOpen(false);
+      await signOut?.();
+      router.replace("/auth/login" as any);
+    } catch (err) {
+      console.error("Erro ao sair:", err);
+    }
   }
 }
 

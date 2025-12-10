@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, Platform } from "react-native";
+﻿import React, { useEffect, useState } from "react";
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, Platform, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { Timestamp } from "firebase/firestore";
 
@@ -37,6 +37,7 @@ export default function LessonsTabScreen() {
   const [profSections, setProfSections] = useState<ProfessorSections | null>(null);
   const [publishedForStudent, setPublishedForStudent] = useState<Lesson[]>([]);
   const [loading, setLoading] = useState(true);
+  const [order, setOrder] = useState<"desc" | "asc">("desc");
 
   useEffect(() => {
     if (!firebaseUser || isInitializing) return;
@@ -58,7 +59,7 @@ export default function LessonsTabScreen() {
       }
     } catch (err) {
       console.error("[Lessons] Erro ao carregar aulas:", err);
-      Alert.alert("Erro", "Não foi possível carregar as aulas.");
+      Alert.alert("Erro", "NÃ£o foi possÃ­vel carregar as aulas.");
     } finally {
       setLoading(false);
     }
@@ -100,16 +101,16 @@ export default function LessonsTabScreen() {
       const proceed = window.confirm(`Deseja excluir "${lesson.titulo}"?`);
       if (!proceed) return;
       try {
-        console.log("[Lessons] confirma��o web aceita, excluindo", lesson.id);
+        console.log("[Lessons] confirmação web aceita, excluindo", lesson.id);
         await deleteLesson(lesson.id);
-        console.log("[Lessons] Aula exclu�da com sucesso:", lesson.id);
+        console.log("[Lessons] Aula excluída com sucesso:", lesson.id);
         removeLessonFromState(lesson.id);
-        Alert.alert("Sucesso", "Aula exclu�da com sucesso.");
+        Alert.alert("Sucesso", "Aula excluída com sucesso.");
       } catch (err) {
         console.error("[Lessons] Erro ao excluir aula:", err);
         Alert.alert(
           "Erro",
-          (err as any)?.message || "N�o foi poss�vel excluir a aula. Verifique permiss�es ou conex�o."
+          (err as any)?.message || "Não foi possível excluir a aula. Verifique permissões ou conexão."
         );
       }
       return;
@@ -122,16 +123,16 @@ export default function LessonsTabScreen() {
         style: "destructive",
         onPress: async () => {
           try {
-            console.log("[Lessons] confirma��o mobile aceita, excluindo", lesson.id);
+            console.log("[Lessons] confirmação mobile aceita, excluindo", lesson.id);
             await deleteLesson(lesson.id);
-            console.log("[Lessons] Aula exclu�da com sucesso:", lesson.id);
+            console.log("[Lessons] Aula excluída com sucesso:", lesson.id);
             removeLessonFromState(lesson.id);
-            Alert.alert("Sucesso", "Aula exclu�da com sucesso.");
+            Alert.alert("Sucesso", "Aula excluída com sucesso.");
           } catch (err) {
             console.error("[Lessons] Erro ao excluir aula:", err);
             Alert.alert(
               "Erro",
-              (err as any)?.message || "N�o foi poss�vel excluir a aula. Verifique permiss�es ou conex�o."
+              (err as any)?.message || "Não foi possível excluir a aula. Verifique permissões ou conexão."
             );
           }
         },
@@ -145,7 +146,7 @@ export default function LessonsTabScreen() {
       await loadData();
     } catch (err) {
       console.error("Erro ao mudar status:", err);
-      Alert.alert("Erro", "Não foi possível atualizar a aula.");
+      Alert.alert("Erro", "NÃ£o foi possÃ­vel atualizar a aula.");
     }
   }
 
@@ -155,7 +156,7 @@ export default function LessonsTabScreen() {
       await loadData();
     } catch (err) {
       console.error("Erro ao publicar:", err);
-      Alert.alert("Erro", "Não foi possível publicar a aula.");
+      Alert.alert("Erro", "NÃ£o foi possÃ­vel publicar a aula.");
     }
   }
 
@@ -165,7 +166,7 @@ export default function LessonsTabScreen() {
       await loadData();
     } catch (err) {
       console.error("Erro ao reservar:", err);
-      Alert.alert("Erro", (err as Error)?.message || "Não foi possível reservar a aula.");
+      Alert.alert("Erro", (err as Error)?.message || "NÃ£o foi possÃ­vel reservar a aula.");
     }
   }
 
@@ -175,7 +176,7 @@ export default function LessonsTabScreen() {
       await loadData();
     } catch (err) {
       console.error("Erro ao aprovar reserva:", err);
-      Alert.alert("Erro", "Não foi possível aprovar a reserva.");
+      Alert.alert("Erro", "NÃ£o foi possÃ­vel aprovar a reserva.");
     }
   }
 
@@ -185,7 +186,7 @@ export default function LessonsTabScreen() {
       await loadData();
     } catch (err) {
       console.error("Erro ao rejeitar reserva:", err);
-      Alert.alert("Erro", "Não foi possível rejeitar a reserva.");
+      Alert.alert("Erro", "NÃ£o foi possÃ­vel rejeitar a reserva.");
     }
   }
 
@@ -216,7 +217,7 @@ export default function LessonsTabScreen() {
             )}
           </Section>
 
-          <Section title="Aulas disponíveis" empty="Nenhuma aula disponível" data={adminSections.available}>
+          <Section title="Aulas disponÃ­veis" empty="Nenhuma aula disponÃ­vel" data={adminSections.available}>
             {(lesson) => (
               <AdminAvailableCard
                 lesson={lesson}
@@ -265,8 +266,8 @@ export default function LessonsTabScreen() {
       {role === "professor" && profSections ? (
         <>
           <Section
-            title="Aulas disponíveis para reserva"
-            empty="Nenhuma aula disponível"
+            title="Aulas disponÃ­veis para reserva"
+            empty="Nenhuma aula disponÃ­vel"
             data={profSections.available}
           >
             {(lesson) => (
@@ -320,7 +321,7 @@ export default function LessonsTabScreen() {
                         onPress={() => handlePublishNow(lesson.id)}
                       />
                     ) : (
-                      <Text style={styles.helper}>Aguardando aprovação</Text>
+                      <Text style={styles.helper}>Aguardando aprovaÃ§Ã£o</Text>
                     )}
                   </View>
                 }
@@ -339,11 +340,41 @@ export default function LessonsTabScreen() {
       ) : null}
 
       {(role === "aluno" || !role) && (
-        <Section title="Aulas publicadas" empty="Nenhuma publicada" data={publishedForStudent}>
-          {(lesson) => (
-            <SimpleLessonCard lesson={lesson} onDetails={() => goTo("/lessons/[lessonId]", { lessonId: lesson.id })} />
-          )}
-        </Section>
+        <View style={{ gap: 8 }}>
+          <View style={styles.orderRow}>
+            <Text style={styles.sectionTitle}>Aulas publicadas</Text>
+            <View style={styles.orderButtons}>
+              <Text
+                style={[styles.orderChip, order === "desc" && styles.orderChipActive]}
+                onPress={() => setOrder("desc")}
+              >
+                Mais recentes
+              </Text>
+              <Text
+                style={[styles.orderChip, order === "asc" && styles.orderChipActive]}
+                onPress={() => setOrder("asc")}
+              >
+                Mais antigas
+              </Text>
+            </View>
+          </View>
+          <Section
+            title=""
+            empty="Nenhuma publicada"
+            data={[...publishedForStudent].sort((a, b) => {
+              const aDate = (a.data_aula as any)?.toDate?.() ?? new Date(a.data_aula as any);
+              const bDate = (b.data_aula as any)?.toDate?.() ?? new Date(b.data_aula as any);
+              return order === "desc" ? bDate.getTime() - aDate.getTime() : aDate.getTime() - bDate.getTime();
+            })}
+          >
+            {(lesson) => (
+              <StudentLessonCard
+                lesson={lesson}
+                onPress={() => goTo("/lessons/[lessonId]", { lessonId: lesson.id })}
+              />
+            )}
+          </Section>
+        </View>
       )}
     </ScrollView>
   );
@@ -378,6 +409,19 @@ function SimpleLessonCard({ lesson, onDetails }: { lesson: Lesson; onDetails: ()
     >
       <Text style={styles.desc}>{lesson.descricao_base}</Text>
     </Card>
+  );
+}
+
+function StudentLessonCard({ lesson, onPress }: { lesson: Lesson; onPress: () => void }) {
+  return (
+    <View style={styles.studentCard}>
+      <Pressable onPress={onPress} style={styles.studentPressable}>
+        <Text style={styles.sectionTitle}>{lesson.titulo}</Text>
+        <Text style={styles.desc}>
+          Data: {formatTimestampToDateInput(lesson.data_aula as Timestamp)}
+        </Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -460,7 +504,7 @@ function AdminReservedCard({
   return (
     <Card
       title={lesson.titulo}
-      subtitle={`${reservedBy} • Status: ${lesson.status}`}
+      subtitle={`${reservedBy} â€¢ Status: ${lesson.status}`}
       footer={
         <View style={styles.cardActions}>
           <AppButton title="Ver detalhes" variant="outline" fullWidth={false} onPress={onDetails} />
@@ -558,6 +602,41 @@ const styles = StyleSheet.create({
   actionsRow: {
     marginTop: 12,
   },
+  orderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 8,
+  },
+  orderButtons: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  orderChip: {
+    color: "#cbd5e1",
+    borderWidth: 1,
+    borderColor: "#1f2937",
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  orderChipActive: {
+    backgroundColor: "#22c55e22",
+    borderColor: "#22c55e",
+    color: "#e5e7eb",
+  },
+  studentCard: {
+    borderWidth: 1,
+    borderColor: "#1f2937",
+    borderRadius: 12,
+    padding: 12,
+    backgroundColor: "#0b1224",
+    marginTop: 8,
+  },
+  studentPressable: {
+    gap: 4,
+  },
 });
+
 
 

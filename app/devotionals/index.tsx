@@ -189,7 +189,13 @@ function StudentList({ devotionals, onOpen, emptyMessage = "Nenhum devocional pu
   return (
     <>
       {devotionals.map((devo) => (
-        <DevocionalCard key={devo.id} devotional={devo} onPress={() => onOpen(devo.id)} showStatus style={styles.card} />
+        <DevocionalCard
+          key={devo.id}
+          devotional={devo}
+          onPress={() => onOpen(devo.id)}
+          showStatus={false}
+          style={styles.card}
+        />
       ))}
     </>
   );

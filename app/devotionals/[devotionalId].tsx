@@ -1,4 +1,4 @@
-// app/devotionals/[devotionalId].tsx - detalhe de devocional com UI compartilhada
+// app/devotionals/[devotionalId].tsx - detalhe de devocional com ajustes para aluno
 import { useEffect, useState } from "react";
 import {
   View,
@@ -29,6 +29,7 @@ export default function DevotionalDetailsScreen() {
   const { devotionalId } = useLocalSearchParams<{ devotionalId: string }>();
   const { firebaseUser, user, isInitializing } = useAuth();
   const { themeSettings } = useTheme();
+  const isStudent = user?.papel === "aluno";
 
   const [devotional, setDevotional] = useState<Devotional | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -51,7 +52,7 @@ export default function DevotionalDetailsScreen() {
         setIsLoading(true);
         const data = await getDevotionalById(devotionalId);
         if (!data) {
-          Alert.alert("Erro", "Devocional nÇœo encontrado.");
+          Alert.alert("Erro", "Devocional não encontrado.");
           router.replace("/devotionals" as any);
           return;
         }
@@ -68,7 +69,7 @@ export default function DevotionalDetailsScreen() {
         }
       } catch (error) {
         console.error("Erro ao carregar devocional:", error);
-        Alert.alert("Erro", "NÇœo foi possÇðvel carregar o devocional.");
+        Alert.alert("Erro", "Não foi possível carregar o devocional.");
       } finally {
         setIsLoading(false);
       }
@@ -89,7 +90,7 @@ export default function DevotionalDetailsScreen() {
   if (!devotional) {
     return (
       <View style={styles.center}>
-        <Text style={styles.loadingText}>Devocional nÇœo encontrado.</Text>
+        <Text style={styles.loadingText}>Devocional não encontrado.</Text>
         <AppButton
           title="Voltar"
           variant="outline"
@@ -104,11 +105,11 @@ export default function DevotionalDetailsScreen() {
     if (url) {
       Linking.openURL(url).catch((err) => {
         console.error("Erro ao abrir link:", err);
-        Alert.alert("Erro", "NÇœo foi possÇðvel abrir o material.");
+        Alert.alert("Erro", "Não foi possível abrir o material.");
       });
       return;
     }
-    Alert.alert("Material sem link", "Este material nÇœo possui URL acessÇðvel.");
+    Alert.alert("Material sem link", "Este material não possui URL acessível.");
   }
 
   return (
@@ -120,31 +121,43 @@ export default function DevotionalDetailsScreen() {
       contentContainerStyle={styles.content}
     >
       <Card
-        title={devotional.titulo}
-        subtitle={`Data: ${formatDateString(devotional.data_devocional)} • ${devotional.referencia_biblica}`}
-        footer={<StatusBadge status={devotional.status} variant="devotional" />}
+        title={
+          isStudent
+            ? `${devotional.titulo} - ${formatDateString(devotional.data_devocional)}`
+            : devotional.titulo
+        }
+        subtitle={
+          isStudent
+            ? devotional.referencia_biblica
+            : `Data: ${formatDateString(devotional.data_devocional)} • ${devotional.referencia_biblica}`
+        }
+        footer={
+          isStudent ? null : <StatusBadge status={devotional.status} variant="devotional" />
+        }
       />
 
       <Card title="Devocional">
         <Text style={styles.cardText}>{devotional.devocional_texto}</Text>
       </Card>
 
-      <Card title="Materiais de apoio">
-        {isLoadingMaterials ? (
-          <ActivityIndicator size="small" color="#facc15" />
-        ) : materials.length === 0 ? (
-          <EmptyState title="Nenhum material de apoio disponÇðvel para este devocional." />
-        ) : (
-          materials.map((mat) => (
-            <SupportMaterialItem
-              key={mat.id}
-              material={mat}
-              onPress={() => openMaterial(mat)}
-              previewImage
-            />
-          ))
-        )}
-      </Card>
+      {!isStudent && (
+        <Card title="Materiais de apoio">
+          {isLoadingMaterials ? (
+            <ActivityIndicator size="small" color="#facc15" />
+          ) : materials.length === 0 ? (
+            <EmptyState title="Nenhum material de apoio disponível para este devocional." />
+          ) : (
+            materials.map((mat) => (
+              <SupportMaterialItem
+                key={mat.id}
+                material={mat}
+                onPress={() => openMaterial(mat)}
+                previewImage
+              />
+            ))
+          )}
+        </Card>
+      )}
 
       <AppButton
         title="Voltar"

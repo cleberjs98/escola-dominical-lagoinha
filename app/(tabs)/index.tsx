@@ -61,6 +61,7 @@ export default function HomeScreen() {
   const isProfessor = papel === "professor";
   const isCoordenador = papel === "coordenador";
   const isAdmin = papel === "administrador";
+  const isStudent = papel === "aluno";
   const primeiroNome = nome.split(" ")[0] || nome;
 
   useEffect(() => {
@@ -259,8 +260,8 @@ export default function HomeScreen() {
       </Card>
 
       <Card
-        title="Proximas aulas"
-        subtitle="Confira o que vem pela frente."
+        title={isStudent ? "Minhas aulas" : "Proximas aulas"}
+        subtitle={isStudent ? "Revise suas aulas." : "Confira o que vem pela frente."}
         footer={
           <AppButton
             title="Ver todas"
@@ -315,9 +316,11 @@ export default function HomeScreen() {
       ) : null}
 
       <View style={styles.footer}>
-        <Pressable style={styles.logoutButton} onPress={handleSignOut}>
-          <Text style={styles.logoutText}>Sair</Text>
-        </Pressable>
+        {!isStudent ? (
+          <Pressable style={styles.logoutButton} onPress={handleSignOut}>
+            <Text style={styles.logoutText}>Sair</Text>
+          </Pressable>
+        ) : null}
       </View>
     </ScrollView>
   );

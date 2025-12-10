@@ -161,20 +161,27 @@ export default function LessonDetailsScreen() {
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: bg }]} contentContainerStyle={styles.content}>
-      <Card title={lesson.titulo} subtitle={`Status: ${lesson.status}`}>
+      <Card
+        title={lesson.titulo}
+        subtitle={isStudent ? undefined : `Status: ${lesson.status}`}
+      >
         <Text style={styles.label}>Referência bíblica</Text>
         <Text style={styles.value}>{lesson.referencia_biblica}</Text>
 
         <Text style={styles.label}>Data da aula</Text>
         <Text style={styles.value}>{dataAulaStr}</Text>
 
-        <Text style={styles.label}>Publicação automática</Text>
-        <Text style={styles.value}>{publishAtStr}</Text>
+        {!isStudent ? (
+          <>
+            <Text style={styles.label}>Publicação automática</Text>
+            <Text style={styles.value}>{publishAtStr}</Text>
+          </>
+        ) : null}
 
-        <Text style={styles.label}>Descrição base</Text>
+        <Text style={styles.label}>{isStudent ? "Resumo" : "Descrição base"}</Text>
         <Text style={styles.value}>{lesson.descricao_base}</Text>
 
-        {lesson.complemento_professor ? (
+        {lesson.complemento_professor && !isStudent ? (
           <>
             <Text style={styles.label}>Complemento do professor</Text>
             <Text style={styles.value}>{lesson.complemento_professor}</Text>
@@ -182,7 +189,8 @@ export default function LessonDetailsScreen() {
         ) : null}
 
         {(lesson.status === "pendente_reserva" || lesson.status === "reservada") &&
-        lesson.professor_reservado_id ? (
+          lesson.professor_reservado_id &&
+          !isStudent ? (
           <>
             <Text style={styles.label}>Professor reservado</Text>
             <Text style={styles.value}>
@@ -201,70 +209,72 @@ export default function LessonDetailsScreen() {
           currentUserId={uid}
         />
 
-        <View style={styles.actions}>
-          {isAdmin ? (
-          <>
-            <AppButton
-              title="Editar"
-              variant="secondary"
-              onPress={() => router.push({ pathname: "/admin/lessons/[lessonId]", params: { lessonId } } as any)}
-            />
-              {lesson.status !== "publicada" ? (
+        {!isStudent && (
+          <View style={styles.actions}>
+            {isAdmin ? (
+              <>
                 <AppButton
-                  title={publishing ? "Publicando..." : "Publicar agora"}
-                  variant="primary"
-                  onPress={handlePublishNow}
-                  disabled={publishing}
+                  title="Editar"
+                  variant="secondary"
+                  onPress={() =>
+                    router.push({ pathname: "/admin/lessons/[lessonId]", params: { lessonId } } as any)
+                  }
                 />
-              ) : null}
-              {lesson.status === "pendente_reserva" ? (
-                <View style={styles.actionsRow}>
-                  <AppButton title="Aprovar reserva" variant="primary" onPress={handleApprove} />
-                  <AppButton title="Rejeitar reserva" variant="secondary" onPress={handleReject} />
-                </View>
-              ) : null}
-            </>
-          ) : null}
-
-          {isProfessor ? (
-            <>
-              {lesson.status === "disponivel" ? (
-                <AppButton title="Reservar aula" variant="primary" onPress={handleReserve} />
-              ) : null}
-
-              {lesson.status === "pendente_reserva" && isOwnerProfessor ? (
-                <Text style={styles.helper}>Aguardando aprovação da coordenação.</Text>
-              ) : null}
-
-              {lesson.status === "reservada" && isOwnerProfessor ? (
-                <>
-                  <RichTextEditor
-                    value={complement}
-                    onChange={setComplement}
-                    placeholder="Escreva seu complemento para a aula..."
-                    minHeight={140}
+                {lesson.status !== "publicada" ? (
+                  <AppButton
+                    title={publishing ? "Publicando..." : "Publicar agora"}
+                    variant="primary"
+                    onPress={handlePublishNow}
+                    disabled={publishing}
                   />
+                ) : null}
+                {lesson.status === "pendente_reserva" ? (
                   <View style={styles.actionsRow}>
-                    <AppButton
-                      title={savingComplement ? "Salvando..." : "Salvar complemento"}
-                      variant="secondary"
-                      onPress={handleSaveComplement}
-                      disabled={savingComplement}
-                    />
-                    <AppButton
-                      title={publishing ? "Publicando..." : "Publicar agora"}
-                      variant="primary"
-                      onPress={handlePublishNow}
-                      disabled={publishing}
-                    />
+                    <AppButton title="Aprovar reserva" variant="primary" onPress={handleApprove} />
+                    <AppButton title="Rejeitar reserva" variant="secondary" onPress={handleReject} />
                   </View>
-                </>
-              ) : null}
-            </>
-          ) : null}
+                ) : null}
+              </>
+            ) : null}
 
-          {isStudent ? <Text style={styles.helper}>Conteúdo disponível para alunos.</Text> : null}
-        </View>
+            {isProfessor ? (
+              <>
+                {lesson.status === "disponivel" ? (
+                  <AppButton title="Reservar aula" variant="primary" onPress={handleReserve} />
+                ) : null}
+
+                {lesson.status === "pendente_reserva" && isOwnerProfessor ? (
+                  <Text style={styles.helper}>Aguardando aprovação da coordenação.</Text>
+                ) : null}
+
+                {lesson.status === "reservada" && isOwnerProfessor ? (
+                  <>
+                    <RichTextEditor
+                      value={complement}
+                      onChange={setComplement}
+                      placeholder="Escreva seu complemento para a aula..."
+                      minHeight={140}
+                    />
+                    <View style={styles.actionsRow}>
+                      <AppButton
+                        title={savingComplement ? "Salvando..." : "Salvar complemento"}
+                        variant="secondary"
+                        onPress={handleSaveComplement}
+                        disabled={savingComplement}
+                      />
+                      <AppButton
+                        title={publishing ? "Publicando..." : "Publicar agora"}
+                        variant="primary"
+                        onPress={handlePublishNow}
+                        disabled={publishing}
+                      />
+                    </View>
+                  </>
+                ) : null}
+              </>
+            ) : null}
+          </View>
+        )}
       </Card>
     </ScrollView>
   );
