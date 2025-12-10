@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -11,14 +11,18 @@ import {
   Platform,
   Pressable,
   Image,
+  Modal,
+  TouchableWithoutFeedback,
 } from "react-native";
 import { useRouter } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
+import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { doc, updateDoc } from "firebase/firestore";
+
 import { useAuth } from "../../hooks/useAuth";
 import { useTheme } from "../../hooks/useTheme";
 import { updateUserProfile } from "../../lib/users";
-import { firebaseAuth, firebaseStorage } from "../../lib/firebase";
-import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { sendPasswordResetEmail } from "firebase/auth";
+import { firebaseAuth, firebaseDb, firebaseStorage } from "../../lib/firebase";
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -32,7 +36,9 @@ export default function ProfileScreen() {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [resettingPassword, setResettingPassword] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [photoModalVisible, setPhotoModalVisible] = useState(false);
+  const [photoActionLoading, setPhotoActionLoading] = useState(false);
 
   useEffect(() => {
     if (!isInitializing && !firebaseUser) {
@@ -40,21 +46,23 @@ export default function ProfileScreen() {
     }
   }, [firebaseUser, isInitializing, router]);
 
-  // Carrega dados iniciais uma vez
   useEffect(() => {
     if (user) {
       setNome(user.nome || "");
       setTelefone(user.telefone || "");
-      // data_nascimento no tipo é string YYYY-MM-DD; exibir como está
-      // Se houver formatação específica, adaptar aqui
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const birth = (user as any).data_nascimento || "";
       setDataNascimento(birth);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const foto = (user as any).foto_url || null;
+      const foto = (user as any).photoURL || (user as any).foto_url || null;
       setPhotoUrl(foto);
     }
   }, [user]);
+
+  const avatarLetter = useMemo(
+    () => (nome?.[0]?.toUpperCase?.() || firebaseUser?.email?.[0]?.toUpperCase?.() || "U"),
+    [nome, firebaseUser?.email]
+  );
 
   if (isInitializing) {
     return (
@@ -81,7 +89,7 @@ export default function ProfileScreen() {
       setMessage(null);
       await updateUserProfile({
         userId: firebaseUser.uid,
-        nome: nome.trim(), // mantido, mas campo fica apenas leitura
+        nome: nome.trim(), // leitura apenas, mantido
         telefone: telefone.trim(),
       });
       setMessage("Dados atualizados com sucesso.");
@@ -93,53 +101,106 @@ export default function ProfileScreen() {
     }
   }
 
-  async function handlePasswordReset() {
-    if (!firebaseUser.email) {
-      Alert.alert("Erro", "E-mail não encontrado na conta.");
-      return;
-    }
+  function openPhotoModal() {
+    setPhotoError(null);
+    setPhotoModalVisible(true);
+  }
+
+  function closePhotoModal() {
+    if (photoActionLoading) return;
+    setPhotoModalVisible(false);
+  }
+
+  async function pickAndUploadPhoto() {
     try {
-      setMessage(null);
-      setResettingPassword(true);
-      await sendPasswordResetEmail(firebaseAuth, firebaseUser.email);
-      Alert.alert(
-        "Alterar senha",
-        "Enviamos um e-mail com instruções para alterar sua senha."
-      );
+      setPhotoError(null);
+      setPhotoActionLoading(true);
+      const userAuth = firebaseAuth.currentUser;
+      if (!userAuth) {
+        setPhotoError("Não foi possível identificar o usuário logado.");
+        setPhotoActionLoading(false);
+        return;
+      }
+
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (permission.status !== "granted") {
+        setPhotoError("Permissão para acessar a galeria negada.");
+        setPhotoActionLoading(false);
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (result.canceled) {
+        setPhotoActionLoading(false);
+        return;
+      }
+
+      const asset = result.assets[0];
+      const uri = asset.uri;
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      const extension =
+        (asset.fileName?.split(".").pop() ||
+          asset.uri.split(".").pop() ||
+          "jpg").toLowerCase();
+
+      const fileRef = ref(firebaseStorage, `avatars/${userAuth.uid}/profile.${extension}`);
+      await uploadBytes(fileRef, blob);
+      const url = await getDownloadURL(fileRef);
+
+      const userDocRef = doc(firebaseDb, "users", userAuth.uid);
+      await updateDoc(userDocRef, {
+        photoURL: url,
+        updated_at: new Date(),
+      });
+
+      setPhotoUrl(url);
+      setMessage("Foto atualizada com sucesso.");
+      setPhotoModalVisible(false);
     } catch (err) {
-      console.error("Erro ao enviar e-mail de senha:", err);
-      Alert.alert("Erro", "Não foi possível enviar o e-mail de alteração de senha.");
+      console.error("[Profile] Erro ao enviar/trocar foto", err);
+      setPhotoError("Não foi possível enviar a foto. Tente novamente.");
     } finally {
-      setResettingPassword(false);
+      setPhotoActionLoading(false);
     }
   }
 
-  function openFilePicker() {
-    if (Platform.OS === "web") {
-      const input = document.createElement("input");
-      input.type = "file";
-      input.accept = "image/*";
-      input.onchange = async () => {
-        const file = input.files?.[0];
-        if (!file || !firebaseUser) return;
-        try {
-          setUploadingPhoto(true);
-          const storageRef = ref(firebaseStorage, `profile_photos/${firebaseUser.uid}`);
-          await uploadBytesResumable(storageRef, file);
-          const url = await getDownloadURL(storageRef);
-          setPhotoUrl(url);
-          await updateUserProfile({ userId: firebaseUser.uid, nome: nome.trim(), telefone: telefone.trim() });
-          // atualiza doc do user com foto_url se quiser; reusa updateUserProfile? não inclui campo
-        } catch (err) {
-          console.error("Erro ao enviar foto:", err);
-          Alert.alert("Erro", "Não foi possível enviar a foto.");
-        } finally {
-          setUploadingPhoto(false);
-        }
-      };
-      input.click();
-    } else {
-      Alert.alert("Envio de foto", "Envio de foto suportado apenas no ambiente web nesta versão.");
+  async function handleRemovePhoto() {
+    try {
+      setPhotoError(null);
+      setPhotoActionLoading(true);
+      const userAuth = firebaseAuth.currentUser;
+      if (!userAuth) {
+        setPhotoError("Não foi possível identificar o usuário logado.");
+        setPhotoActionLoading(false);
+        return;
+      }
+      const ext = photoUrl?.split(".").pop()?.split("?")[0] || "jpg";
+      const fileRef = ref(firebaseStorage, `avatars/${userAuth.uid}/profile.${ext}`);
+      try {
+        await deleteObject(fileRef);
+      } catch (e) {
+        console.warn("[Profile] Não foi possível remover arquivo de avatar:", (e as any)?.code);
+      }
+      const userDocRef = doc(firebaseDb, "users", userAuth.uid);
+      await updateDoc(userDocRef, {
+        photoURL: null,
+        updated_at: new Date(),
+      });
+      setPhotoUrl(null);
+      setMessage("Foto removida com sucesso.");
+      setPhotoModalVisible(false);
+    } catch (err) {
+      console.error("[Profile] Erro ao remover foto", err);
+      setPhotoError("Não foi possível remover a foto. Tente novamente.");
+    } finally {
+      setPhotoActionLoading(false);
     }
   }
 
@@ -157,21 +218,14 @@ export default function ProfileScreen() {
         </Text>
 
         <View style={styles.photoRow}>
-          {photoUrl ? (
-            <Image source={{ uri: photoUrl }} style={styles.avatar} />
-          ) : (
-            <View style={[styles.avatar, styles.avatarPlaceholder]}>
-              <Text style={styles.avatarText}>{nome?.[0]?.toUpperCase?.() || "?"}</Text>
-            </View>
-          )}
-          <Pressable
-            style={[styles.saveButton, uploadingPhoto && styles.saveButtonDisabled]}
-            onPress={openFilePicker}
-            disabled={uploadingPhoto}
-          >
-            <Text style={styles.saveButtonText}>
-              {uploadingPhoto ? "Enviando..." : "Enviar foto"}
-            </Text>
+          <Pressable onPress={openPhotoModal}>
+            {photoUrl ? (
+              <Image source={{ uri: photoUrl }} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                <Text style={styles.avatarText}>{avatarLetter}</Text>
+              </View>
+            )}
           </Pressable>
         </View>
 
@@ -198,7 +252,7 @@ export default function ProfileScreen() {
           placeholderTextColor="#6b7280"
           value={dataNascimento}
           onChangeText={setDataNascimento}
-          editable={false} // manter somente leitura para evitar inconsistência
+          editable={false}
         />
 
         <Text style={styles.label}>Papel</Text>
@@ -214,13 +268,87 @@ export default function ProfileScreen() {
         <View style={styles.actions}>
           <PressableButton
             title="Alterar senha"
-            disabled={uploadingPhoto || resettingPassword}
+            disabled={uploadingPhoto}
             onPress={() => router.push("/auth/change-password" as any)}
           />
         </View>
 
         {message ? <Text style={styles.successText}>{message}</Text> : null}
+        {photoError ? <Text style={styles.photoError}>{photoError}</Text> : null}
       </ScrollView>
+
+      <Modal
+        visible={photoModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closePhotoModal}
+      >
+        <TouchableWithoutFeedback onPress={closePhotoModal}>
+          <View style={styles.modalBackdrop}>
+            <TouchableWithoutFeedback>
+              <View style={styles.modalContent}>
+                {photoUrl ? (
+                  <>
+                    <Image source={{ uri: photoUrl }} style={styles.modalImage} />
+                    <Pressable
+                      style={[
+                        styles.modalButton,
+                        styles.modalButtonPrimary,
+                        photoActionLoading && styles.saveButtonDisabled,
+                      ]}
+                      onPress={pickAndUploadPhoto}
+                      disabled={photoActionLoading}
+                    >
+                      {photoActionLoading ? (
+                        <ActivityIndicator color="#0f172a" />
+                      ) : (
+                        <Text style={styles.modalButtonTextDark}>Trocar foto</Text>
+                      )}
+                    </Pressable>
+                    <Pressable
+                      style={[
+                        styles.modalButton,
+                        styles.modalButtonDanger,
+                        photoActionLoading && styles.saveButtonDisabled,
+                      ]}
+                      onPress={handleRemovePhoto}
+                      disabled={photoActionLoading}
+                    >
+                      {photoActionLoading ? (
+                        <ActivityIndicator color="#f9fafb" />
+                      ) : (
+                        <Text style={styles.modalButtonTextLight}>Remover foto</Text>
+                      )}
+                    </Pressable>
+                  </>
+                ) : (
+                  <>
+                    <View style={styles.modalPlaceholderCircle}>
+                      <Text style={styles.modalPlaceholderInitial}>{avatarLetter}</Text>
+                    </View>
+                    <Pressable
+                      style={[
+                        styles.modalButton,
+                        styles.modalButtonPrimary,
+                        photoActionLoading && styles.saveButtonDisabled,
+                      ]}
+                      onPress={pickAndUploadPhoto}
+                      disabled={photoActionLoading}
+                    >
+                      {photoActionLoading ? (
+                        <ActivityIndicator color="#0f172a" />
+                      ) : (
+                        <Text style={styles.modalButtonTextDark}>Enviar foto</Text>
+                      )}
+                    </Pressable>
+                  </>
+                )}
+                {photoError ? <Text style={styles.photoErrorText}>{photoError}</Text> : null}
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -312,5 +440,69 @@ const styles = StyleSheet.create({
   successText: {
     color: "#22c55e",
     marginTop: 8,
+  },
+  photoError: {
+    color: "#f97316",
+    marginTop: 4,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
+  modalContent: {
+    width: "100%",
+    maxWidth: 400,
+    alignItems: "center",
+  },
+  modalImage: {
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    marginBottom: 24,
+  },
+  modalPlaceholderCircle: {
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#e5e7eb",
+    marginBottom: 24,
+  },
+  modalPlaceholderInitial: {
+    fontSize: 64,
+    color: "#e5e7eb",
+    fontWeight: "700",
+  },
+  modalButton: {
+    width: "100%",
+    borderRadius: 999,
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 8,
+  },
+  modalButtonPrimary: {
+    backgroundColor: "#facc15",
+  },
+  modalButtonDanger: {
+    backgroundColor: "#ef4444",
+  },
+  modalButtonTextDark: {
+    color: "#0f172a",
+    fontWeight: "600",
+  },
+  modalButtonTextLight: {
+    color: "#f9fafb",
+    fontWeight: "600",
+  },
+  photoErrorText: {
+    color: "#f97316",
+    marginTop: 8,
+    textAlign: "center",
   },
 });

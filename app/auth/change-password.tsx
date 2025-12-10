@@ -15,6 +15,7 @@ import {
   reauthenticateWithCredential,
   updatePassword,
 } from "firebase/auth";
+
 import { firebaseAuth } from "../../lib/firebase";
 import {
   PasswordRequirements,
@@ -43,20 +44,20 @@ export default function ChangePasswordScreen() {
       !validation.hasUppercase ||
       !validation.numberAndSpecialOk
     ) {
-      setErrorMessage("Sua nova senha não atende aos requisitos mínimos.");
+      setErrorMessage("Sua nova senha nao atende aos requisitos minimos.");
       setSubmitting(false);
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setErrorMessage("A confirmação da nova senha não confere.");
+      setErrorMessage("A confirmacao da nova senha nao confere.");
       setSubmitting(false);
       return;
     }
 
     const user = firebaseAuth.currentUser;
     if (!user || !user.email) {
-      setErrorMessage("Não foi possível identificar o usuário logado.");
+      setErrorMessage("Nao foi possivel identificar o usuario logado.");
       setSubmitting(false);
       return;
     }
@@ -65,7 +66,7 @@ export default function ChangePasswordScreen() {
       const credential = EmailAuthProvider.credential(user.email, currentPassword);
       await reauthenticateWithCredential(user, credential);
     } catch (err: any) {
-      console.error("[ChangePassword] Erro na reautenticação", err);
+      console.error("[ChangePassword] Erro na reautenticacao", err);
       const code = err?.code ?? "auth/unknown";
       if (code === "auth/wrong-password") {
         setErrorMessage("Senha atual incorreta.");
@@ -82,6 +83,10 @@ export default function ChangePasswordScreen() {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
+
+      setTimeout(() => {
+        router.replace("/" as any);
+      }, 800);
     } catch (err: any) {
       console.error("[ChangePassword] Erro ao atualizar senha", err);
       const msg = mapAuthErrorToMessage(err?.code ?? "auth/unknown", "reset");
@@ -99,7 +104,7 @@ export default function ChangePasswordScreen() {
       <View style={styles.container}>
         <Text style={styles.title}>Alterar senha</Text>
         <Text style={styles.subtitle}>
-          Para sua segurança, informe sua senha atual e escolha uma nova senha forte.
+          Para sua seguranca, informe sua senha atual e escolha uma nova senha forte.
         </Text>
 
         <Text style={styles.label}>Senha atual</Text>

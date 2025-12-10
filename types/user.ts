@@ -18,6 +18,7 @@ export interface User {
   email: string;
   telefone: string | null;
   data_nascimento: string | null; // formato YYYY-MM-DD
+  photoURL?: string | null;
 
   papel: UserRole;
   status: UserStatus;
