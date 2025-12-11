@@ -1,86 +1,34 @@
-﻿// app/devotionals/index.tsx - lista real de devocionais (usada pela tab)
-import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, Platform } from "react-native";
+// app/devotionals/index.tsx - lista principal de devocionais (tab "Devocional")
+import React, { useEffect, useMemo, useState } from "react";
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, TouchableOpacity, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 
 import { AppButton } from "../../components/ui/AppButton";
-import { Card } from "../../components/ui/Card";
+import { DevotionalListItem } from "../../components/devotionals/DevotionalListItem";
 import { EmptyState } from "../../components/ui/EmptyState";
-import { DevocionalCard } from "../../components/cards/DevocionalCard";
 import { useAuth } from "../../hooks/useAuth";
 import { useTheme } from "../../hooks/useTheme";
 import type { Devotional } from "../../types/devotional";
+import { DevotionalStatus } from "../../types/devotional";
 import {
-  listPublishedDevotionals,
   listDevotionalsForAdmin,
   listAvailableAndPublishedForProfessor,
-  publishDevotionalNow,
-  setDevotionalStatus,
-  deleteDevotional,
+  listPublishedDevotionals,
 } from "../../lib/devotionals";
+import { formatDate } from "../../utils/publishAt";
+import { AppCardStatusVariant } from "../../components/common/AppCard";
 
-type Role = "aluno" | "professor" | "coordenador" | "administrador" | undefined;
+type Role = "aluno" | "professor" | "coordenador" | "administrador" | "admin" | undefined;
+type DateOrder = "asc" | "desc";
+type DevotionalFilter = "all" | "available" | "published" | "pending";
+type NormalizedDevotionalStatus = "disponivel" | "publicado" | "pendente";
 
 export default function DevotionalsScreen() {
-  const router = useRouter();
   const { firebaseUser, user, isInitializing } = useAuth();
-  const { themeSettings } = useTheme();
   const role = (user?.papel as Role) || "aluno";
+  const isAdminOrCoordinator = role === "coordenador" || role === "administrador" || role === "admin";
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [publishedForStudent, setPublishedForStudent] = useState<Devotional[]>([]);
-  const [professorList, setProfessorList] = useState<Devotional[]>([]);
-  const [adminSections, setAdminSections] = useState<{
-    drafts: Devotional[];
-    available: Devotional[];
-    published: Devotional[];
-  } | null>(null);
-
-  useEffect(() => {
-    console.log("[DevotionalsTab] tela carregada");
-  }, []);
-
-  useEffect(() => {
-    if (!firebaseUser || isInitializing) return;
-    void loadData();
-  }, [firebaseUser, isInitializing, role]);
-
-  async function loadData() {
-    try {
-      console.log("[DevotionalsTab] carregando devocionais...");
-      setLoading(true);
-      setError(null);
-      if (role === "coordenador" || role === "administrador") {
-        const sections = await listDevotionalsForAdmin();
-        const total = sections.drafts.length + sections.available.length + sections.published.length;
-        console.log("[DevotionalsTab] devocionais carregados:", total);
-        setAdminSections(sections);
-        setPublishedForStudent([]);
-        setProfessorList([]);
-      } else if (role === "professor") {
-        const list = await listAvailableAndPublishedForProfessor();
-        console.log("[DevotionalsTab] devocionais carregados:", list.length);
-        setProfessorList(list);
-        setPublishedForStudent([]);
-        setAdminSections(null);
-      } else {
-        const published = await listPublishedDevotionals();
-        console.log("[DevotionalsTab] devocionais carregados:", published.length);
-        setPublishedForStudent(published);
-        setAdminSections(null);
-        setProfessorList([]);
-      }
-    } catch (err) {
-      console.error("[DevotionalsTab] erro ao carregar devocionais:", err);
-      setError("Erro ao carregar devocionais.");
-      Alert.alert("Erro", "NÃ£o foi possÃ­vel carregar os devocionais.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  if (isInitializing || loading) {
+  if (isInitializing || !firebaseUser || !user) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#facc15" />
@@ -89,10 +37,87 @@ export default function DevotionalsScreen() {
     );
   }
 
-  if (!firebaseUser) {
+  if (isAdminOrCoordinator) {
+    return <AdminDevotionalsTab uid={firebaseUser.uid} />;
+  }
+
+  if (role === "professor") {
+    return <ProfessorDevotionalsTab />;
+  }
+
+  return <StudentDevotionalsTab />;
+}
+
+// =========================
+// Admin / Coordenador
+// =========================
+function AdminDevotionalsTab({ uid }: { uid: string }) {
+  const router = useRouter();
+  const { themeSettings } = useTheme();
+  const [sections, setSections] = useState<Awaited<ReturnType<typeof listDevotionalsForAdmin>> | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<DevotionalFilter>("all");
+  const [dateOrder, setDateOrder] = useState<DateOrder>("desc");
+
+  useEffect(() => {
+    void loadData();
+  }, []);
+
+  async function loadData() {
+    try {
+      setLoading(true);
+      const data = await listDevotionalsForAdmin();
+      setSections(data);
+    } catch (error) {
+      console.error("[Devotionals][Admin] Erro ao carregar:", error);
+      Alert.alert("Erro", "Nao foi possivel carregar os devocionais.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const allDevotionals = useMemo(() => {
+    if (!sections) return [];
+    const scheduled = sections.scheduledDrafts ?? [];
+    const drafts = sections.drafts ?? [];
+    const published = sections.published ?? [];
+    const combined = [...scheduled, ...drafts, ...published];
+    const map = new Map<string, Devotional>();
+    combined.forEach((devo) => {
+      if (!map.has(devo.id)) {
+        map.set(devo.id, devo);
+      }
+    });
+    return Array.from(map.values());
+  }, [sections]);
+
+  const filteredDevotionals = useMemo(() => {
+    return allDevotionals
+      .filter((devo) => {
+        const normalized = normalizeStatusForFilter(devo.status);
+        if (filter === "all") return true;
+        if (filter === "available") return normalized === "disponivel";
+        if (filter === "published") return normalized === "publicado";
+        if (filter === "pending") return normalized === "rascunho";
+        return true;
+      })
+      .sort((a, b) => {
+        const da = devotionalDateValue(a.data_devocional);
+        const db = devotionalDateValue(b.data_devocional);
+        if (dateOrder === "asc") return da - db;
+        return db - da;
+      });
+  }, [allDevotionals, dateOrder, filter, uid]);
+
+  function toggleDateOrder() {
+    setDateOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+  }
+
+  if (loading) {
     return (
       <View style={styles.center}>
-        <Text style={styles.loadingText}>Redirecionando para login...</Text>
+        <ActivityIndicator size="large" color="#facc15" />
+        <Text style={styles.loadingText}>Carregando devocionais...</Text>
       </View>
     );
   }
@@ -101,224 +126,269 @@ export default function DevotionalsScreen() {
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: bg }]} contentContainerStyle={styles.content}>
-      {error ? (
-        <EmptyState title={error} />
-      ) : adminSections ? (
-        <AdminSectionsView
-          sections={adminSections}
-          onEdit={(id) => router.push(`/admin/devotionals/${id}` as any)}
-          onPublishNow={handlePublishNow}
-          onDelete={handleDelete}
-          onMakeAvailable={(id) => handleStatus(id, "disponivel")}
-          onMakeDraft={(id) => handleStatus(id, "rascunho")}
-        />
-      ) : role === "professor" ? (
-        <StudentList
-          devotionals={professorList}
-          onOpen={(id) => router.push(`/devotionals/${id}` as any)}
-          emptyMessage="Nenhum devocional disponível/publicado no momento."
-        />
-      ) : (
-        <StudentList
-          devotionals={publishedForStudent}
-          onOpen={(id) => router.push(`/devotionals/${id}` as any)}
-          emptyMessage="Nenhum devocional publicado no momento."
-        />
-      )}
+      <View style={styles.header}>
+        <Text style={styles.sectionTitle}>Devocionais - Gestao</Text>
+        <AppButton title="Criar devocional" variant="primary" fullWidth={false} onPress={() => router.push("/admin/devotionals/new" as any)} />
+      </View>
 
-      <View style={styles.actions}>
-        {adminSections ? (
-          <AppButton title="Criar devocional" variant="primary" fullWidth={false} onPress={() => router.push("/admin/devotionals/new" as any)} />
+      <View style={{ gap: 12 }}>
+        <View style={styles.filtersRow}>
+          {renderFilterChip("Todos", "all", filter, setFilter)}
+          {renderFilterChip("Disponiveis", "available", filter, setFilter)}
+          {renderFilterChip("Publicados", "published", filter, setFilter)}
+          {renderFilterChip("Pendentes", "pending", filter, setFilter)}
+        </View>
+
+        <View style={styles.orderToggleRow}>
+          <Text style={styles.sectionTitle}>Devocionais</Text>
+          <TouchableOpacity onPress={toggleDateOrder} style={styles.orderToggleButton}>
+            <Text style={styles.orderToggleText}>Ordenar por data: {dateOrder === "desc" ? "↓" : "↑"}</Text>
+          </TouchableOpacity>
+        </View>
+
+        {filteredDevotionals.length === 0 ? (
+          <Text style={styles.empty}>Nenhum devocional encontrado.</Text>
         ) : (
-          <AppButton title="Atualizar" variant="outline" fullWidth={false} onPress={loadData} />
+          filteredDevotionals.map((devo) => {
+            const status = normalizeStatusForFilter(devo.status);
+            const subtitle = `${formatDevotionalDate(devo.data_devocional)} • ${devotionalStatusLabel(status)}`;
+            return (
+              <DevotionalListItem
+                key={devo.id}
+                title={devo.titulo}
+                subtitle={subtitle}
+                statusLabel={devotionalStatusLabel(status)}
+                statusVariant={devotionalStatusVariant(status)}
+                onPress={() => router.push(`/devotionals/${devo.id}` as any)}
+              />
+            );
+          })
         )}
       </View>
     </ScrollView>
   );
+}
 
-  async function handlePublishNow(id: string) {
+// =========================
+// Professor
+// =========================
+function ProfessorDevotionalsTab() {
+  const router = useRouter();
+  const { themeSettings } = useTheme();
+  const [list, setList] = useState<Devotional[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [order, setOrder] = useState<DateOrder>("desc");
+
+  useEffect(() => {
+    void loadData();
+  }, []);
+
+  async function loadData() {
     try {
-      await publishDevotionalNow(id, firebaseUser?.uid || "system");
-      await loadData();
-    } catch (err) {
-      console.error("[DevotionalsTab] erro ao publicar agora:", err);
-      Alert.alert("Erro", "Não foi possível publicar o devocional.");
+      setLoading(true);
+      const devos = await listAvailableAndPublishedForProfessor();
+      setList(devos);
+    } catch (error) {
+      console.error("[Devotionals][Professor] Erro ao carregar:", error);
+      Alert.alert("Erro", "Nao foi possivel carregar os devocionais.");
+    } finally {
+      setLoading(false);
     }
   }
 
-  async function handleStatus(id: string, status: DevotionalStatus) {
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#facc15" />
+        <Text style={styles.loadingText}>Carregando devocionais...</Text>
+      </View>
+    );
+  }
+
+  const bg = themeSettings?.cor_fundo || "#020617";
+  const sorted = [...list].sort((a, b) => {
+    const da = devotionalDateValue(a.data_devocional);
+    const db = devotionalDateValue(b.data_devocional);
+    return order === "asc" ? da - db : db - da;
+  });
+
+  return (
+    <ScrollView style={[styles.container, { backgroundColor: bg }]} contentContainerStyle={styles.content}>
+      <View style={styles.orderToggleRow}>
+        <Text style={styles.sectionTitle}>Devocionais</Text>
+        <TouchableOpacity onPress={() => setOrder((prev) => (prev === "asc" ? "desc" : "asc"))} style={styles.orderToggleButton}>
+          <Text style={styles.orderToggleText}>Ordenar por data: {order === "desc" ? "↓" : "↑"}</Text>
+        </TouchableOpacity>
+      </View>
+
+      {sorted.length === 0 ? (
+        <EmptyState title="Nenhum devocional disponivel no momento." />
+      ) : (
+        sorted.map((devo) => {
+          const status = normalizeStatusForFilter(devo.status);
+          const subtitle = `${formatDevotionalDate(devo.data_devocional)} • ${devotionalStatusLabel(status)}`;
+          return (
+            <DevotionalListItem
+              key={devo.id}
+              title={devo.titulo}
+              subtitle={subtitle}
+              statusLabel={devotionalStatusLabel(status)}
+              statusVariant={devotionalStatusVariant(status)}
+              onPress={() => router.push(`/devotionals/${devo.id}` as any)}
+            />
+          );
+        })
+      )}
+    </ScrollView>
+  );
+}
+
+// =========================
+// Aluno / publico
+// =========================
+function StudentDevotionalsTab() {
+  const router = useRouter();
+  const { themeSettings } = useTheme();
+  const [list, setList] = useState<Devotional[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [order, setOrder] = useState<DateOrder>("desc");
+
+  useEffect(() => {
+    void loadData();
+  }, []);
+
+  async function loadData() {
     try {
-      await setDevotionalStatus(id, status);
-      await loadData();
-    } catch (err) {
-      console.error("[DevotionalsTab] erro ao atualizar status:", err);
-      Alert.alert("Erro", "Não foi possível atualizar o status.");
+      setLoading(true);
+      const published = await listPublishedDevotionals();
+      setList(published);
+    } catch (error) {
+      console.error("[Devotionals][Aluno] Erro ao carregar:", error);
+      Alert.alert("Erro", "Nao foi possivel carregar os devocionais.");
+    } finally {
+      setLoading(false);
     }
   }
 
-  async function handleDelete(id: string) {
-    const doDelete = async () => {
-      try {
-        await deleteDevotional(id);
-        await loadData();
-      } catch (err) {
-        console.error("[DevotionalsTab] erro ao excluir devocional:", err);
-        Alert.alert("Erro", "Não foi possível excluir o devocional.");
-      }
-    };
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#facc15" />
+        <Text style={styles.loadingText}>Carregando devocionais...</Text>
+      </View>
+    );
+  }
 
-    if (Platform.OS === "web" && typeof window !== "undefined" && typeof window.confirm === "function") {
-      const ok = window.confirm("Tem certeza que deseja excluir este devocional?");
-      if (ok) {
-        await doDelete();
-      }
-      return;
-    }
+  const bg = themeSettings?.cor_fundo || "#020617";
+  const sorted = [...list].sort((a, b) => {
+    const da = devotionalDateValue(a.data_devocional);
+    const db = devotionalDateValue(b.data_devocional);
+    return order === "asc" ? da - db : db - da;
+  });
 
-    Alert.alert("Excluir devocional", "Deseja excluir este devocional?", [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Excluir", style: "destructive", onPress: () => void doDelete() },
-    ]);
+  return (
+    <ScrollView style={[styles.container, { backgroundColor: bg }]} contentContainerStyle={styles.content}>
+      <View style={styles.orderToggleRow}>
+        <Text style={styles.sectionTitle}>Devocionais</Text>
+        <TouchableOpacity onPress={() => setOrder((prev) => (prev === "asc" ? "desc" : "asc"))} style={styles.orderToggleButton}>
+          <Text style={styles.orderToggleText}>Ordenar por data: {order === "desc" ? "↓" : "↑"}</Text>
+        </TouchableOpacity>
+      </View>
+
+      {sorted.length === 0 ? (
+        <EmptyState title="Nenhum devocional publicado no momento." />
+      ) : (
+        sorted.map((devo) => {
+          const status = normalizeStatusForFilter(devo.status);
+          const subtitle = `${formatDevotionalDate(devo.data_devocional)} • ${devotionalStatusLabel(status)}`;
+          return (
+            <DevotionalListItem
+              key={devo.id}
+              title={devo.titulo}
+              subtitle={subtitle}
+              statusLabel={devotionalStatusLabel(status)}
+              statusVariant={devotionalStatusVariant(status)}
+              onPress={() => router.push(`/devotionals/${devo.id}` as any)}
+            />
+          );
+        })
+      )}
+    </ScrollView>
+  );
+}
+
+// =========================
+// Helpers
+// =========================
+function renderFilterChip(label: string, value: DevotionalFilter, current: DevotionalFilter, onChange: (v: DevotionalFilter) => void) {
+  const active = current === value;
+  return (
+    <Pressable
+      key={value}
+      style={[styles.filterChip, active && styles.filterChipActive]}
+      onPress={() => onChange(value)}
+    >
+      <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function normalizeStatusForFilter(status: DevotionalStatus | string): NormalizedDevotionalStatus {
+  const s = `${status ?? ""}`
+    .toLowerCase()
+    .trim()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/s$/, ""); // remove plural simples
+
+  if (s === "disponivel" || s === "disponive" || s === "disponivel" || s === "disponivel") return "disponivel";
+  if (s === "publicado" || s === "publicad" || s === "publico" || s === "publicado") return "publicado";
+  // trata rascunho/pendente/agendado como pendente
+  return "pendente";
+}
+
+function devotionalStatusLabel(status: NormalizedDevotionalStatus) {
+  if (status === "disponivel") return "Disponivel";
+  if (status === "publicado") return "Publicado";
+  if (status === "pendente") return "Pendente";
+  return status;
+}
+
+function devotionalStatusVariant(status: NormalizedDevotionalStatus): AppCardStatusVariant {
+  switch (status) {
+    case "publicado":
+      return "success";
+    case "disponivel":
+      return "info";
+    case "pendente":
+    default:
+      return "warning";
   }
 }
 
-function StudentList({ devotionals, onOpen, emptyMessage = "Nenhum devocional publicado no momento." }: { devotionals: Devotional[]; onOpen: (id: string) => void; emptyMessage?: string }) {
-  if (devotionals.length === 0) {
-    return <EmptyState title={emptyMessage} />;
-  }
-  return (
-    <>
-      {devotionals.map((devo) => (
-        <DevocionalCard
-          key={devo.id}
-          devotional={devo}
-          onPress={() => onOpen(devo.id)}
-          showStatus={false}
-          style={styles.card}
-        />
-      ))}
-    </>
-  );
+function formatDevotionalDate(value: string): string {
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(value)) return value;
+  const [year, month, day] = value.split("-");
+  if (!year || !month || !day) return value;
+  return formatDate(new Date(Number(year), Number(month) - 1, Number(day)));
 }
 
-function AdminSectionsView({
-  sections,
-  onEdit,
-  onPublishNow,
-  onDelete,
-  onMakeAvailable,
-  onMakeDraft,
-}: {
-  sections: { drafts: Devotional[]; available: Devotional[]; published: Devotional[] };
-  onEdit: (id: string) => void;
-  onPublishNow: (id: string) => void;
-  onDelete: (id: string) => void;
-  onMakeAvailable: (id: string) => void;
-  onMakeDraft: (id: string) => void;
-}) {
-  return (
-    <View style={{ gap: 12 }}>
-      <Section title="Rascunhos" empty="Nenhum rascunho" data={sections.drafts}>
-        {(devo) => (
-          <AdminCard
-            devotional={devo}
-            onEdit={() => onEdit(devo.id)}
-            onPublishNow={() => onPublishNow(devo.id)}
-            onDelete={() => onDelete(devo.id)}
-            onMakeAvailable={() => onMakeAvailable(devo.id)}
-            onMakeDraft={() => onMakeDraft(devo.id)}
-          />
-        )}
-      </Section>
-
-      <Section title="Disponíveis" empty="Nenhum disponível" data={sections.available}>
-        {(devo) => (
-          <AdminCard
-            devotional={devo}
-            onEdit={() => onEdit(devo.id)}
-            onPublishNow={() => onPublishNow(devo.id)}
-            onDelete={() => onDelete(devo.id)}
-            onMakeDraft={() => onMakeDraft(devo.id)}
-          />
-        )}
-      </Section>
-
-      <Section title="Publicados" empty="Nenhum devocional publicado" data={sections.published}>
-        {(devo) => (
-          <AdminCard devotional={devo} onEdit={() => onEdit(devo.id)} onDelete={() => onDelete(devo.id)} />
-        )}
-      </Section>
-    </View>
-  );
+function devotionalDateValue(value: string): number {
+  const [year, month, day] = value.split("-");
+  const date = new Date(Number(year), Number(month) - 1, Number(day));
+  return date.getTime();
 }
 
-function Section<T>({
-  title,
-  empty,
-  data,
-  children,
-}: {
-  title: string;
-  empty: string;
-  data: T[];
-  children: (item: T) => React.ReactNode;
-}) {
-  return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {data.length === 0 ? <Text style={styles.empty}>{empty}</Text> : data.map((item, idx) => <View key={idx}>{children(item)}</View>)}
-    </View>
-  );
-}
-
-function AdminCard({
-  devotional,
-  onEdit,
-  onPublishNow,
-  onDelete,
-  onMakeAvailable,
-  onMakeDraft,
-}: {
-  devotional: Devotional;
-  onEdit: () => void;
-  onPublishNow?: () => void;
-  onDelete: () => void;
-  onMakeAvailable?: () => void;
-  onMakeDraft?: () => void;
-}) {
-  return (
-    <View style={styles.adminCard}>
-      <Card
-        title={devotional.titulo}
-        subtitle={`${devotional.referencia_biblica} - ${devotional.data_devocional}`}
-        footer={
-          <View style={styles.cardActions}>
-            <AppButton title="Editar" variant="outline" fullWidth={false} onPress={onEdit} />
-            {onMakeAvailable ? (
-              <AppButton title="Disponibilizar" variant="secondary" fullWidth={false} onPress={onMakeAvailable} />
-            ) : null}
-            {onMakeDraft ? (
-              <AppButton title="Rascunho" variant="secondary" fullWidth={false} onPress={onMakeDraft} />
-            ) : null}
-            {onPublishNow ? (
-              <AppButton title="Publicar agora" variant="primary" fullWidth={false} onPress={onPublishNow} />
-            ) : null}
-            <AppButton title="Excluir" variant="secondary" fullWidth={false} onPress={onDelete} />
-          </View>
-        }
-      >
-        <Text style={styles.desc}>{devotional.conteudo_base || devotional.devocional_texto}</Text>
-      </Card>
-    </View>
-  );
-}
-
+// =========================
+// Styles
+// =========================
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
   content: {
-    padding: 12,
+    paddingHorizontal: 16,
+    paddingTop: 56,
     paddingBottom: 32,
     gap: 12,
   },
@@ -328,12 +398,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  loadingText: {
-    color: "#e5e7eb",
-    marginTop: 12,
-  },
-  section: {
-    gap: 8,
+  loadingText: { color: "#e5e7eb", marginTop: 12 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
   },
   sectionTitle: {
     color: "#e5e7eb",
@@ -343,36 +413,48 @@ const styles = StyleSheet.create({
   empty: {
     color: "#cbd5e1",
   },
-  desc: {
-    color: "#cbd5e1",
-    marginTop: 6,
-  },
-  cardActions: {
+  filtersRow: {
     flexDirection: "row",
-    gap: 8,
     flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 4,
   },
-  actions: {
-    marginTop: 12,
-  },
-  adminCard: {
+  filterChip: {
+    borderRadius: 999,
     borderWidth: 1,
     borderColor: "#1f2937",
-    borderRadius: 12,
-    padding: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     backgroundColor: "#0b1224",
   },
-  card: {
-    marginBottom: 8,
+  filterChipActive: {
+    backgroundColor: "#facc15",
+    borderColor: "#facc15",
+  },
+  filterChipText: {
+    color: "#e5e7eb",
+    fontWeight: "600",
+  },
+  filterChipTextActive: {
+    color: "#0f172a",
+  },
+  orderToggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 4,
+  },
+  orderToggleButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#1f2937",
+    backgroundColor: "#0b1224",
+  },
+  orderToggleText: {
+    color: "#e5e7eb",
+    fontWeight: "600",
   },
 });
-
-
-
-
-
-
-
-
-
 

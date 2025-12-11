@@ -259,6 +259,7 @@ export default function EditDevotionalScreen() {
       style={[styles.container, { backgroundColor: themeSettings?.cor_fundo || "#020617" }]}
       contentContainerStyle={styles.content}
     >
+
       <Card
         title="Editar devocional"
         subtitle={devotional ? `Status atual: ${devotional.status}` : undefined}
@@ -318,7 +319,6 @@ export default function EditDevotionalScreen() {
             onPress={handlePublishNow}
             disabled={submitting}
           />
-          <AppButton title="Excluir devocional" variant="outline" onPress={handleDelete} disabled={submitting} />
         </View>
       </Card>
     </ScrollView>

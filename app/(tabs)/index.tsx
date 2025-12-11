@@ -26,12 +26,14 @@ import { DevocionalCard } from "../../components/cards/DevocionalCard";
 import { Header } from "../../components/ui/Header";
 import { useTheme } from "../../hooks/useTheme";
 import { RecentAnnouncements } from "../../components/home/RecentAnnouncements";
+import { AppCard, AppCardStatusVariant } from "../../components/common/AppCard";
+import CoordinatorDashboardScreen from "../(coordenador)";
 
 /* Ajustes fase de testes - Home, notificacoes, gestao de papeis e permissoes */
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { firebaseUser, user, isInitializing, signOut } = useAuth();
+  const { firebaseUser, user, isInitializing } = useAuth();
   const { themeSettings } = useTheme();
 
   const [devotionalOfDay, setDevotionalOfDay] = useState<Devotional | null>(null);
@@ -39,9 +41,6 @@ export default function HomeScreen() {
 
   const [nextLessons, setNextLessons] = useState<Lesson[]>([]);
   const [isLoadingLessons, setIsLoadingLessons] = useState(false);
-
-  const [myLessons, setMyLessons] = useState<Lesson[]>([]);
-  const [isLoadingMyLessons, setIsLoadingMyLessons] = useState(false);
 
   const [recentAvisos, setRecentAvisos] = useState<Aviso[]>([]);
   const [isLoadingAvisos, setIsLoadingAvisos] = useState(false);
@@ -103,14 +102,20 @@ export default function HomeScreen() {
           lessons = await listAvailableAndPublished(3);
         } else if (isProfessor) {
           const sections = await listLessonsForProfessor(firebaseUser.uid);
-          const merged = [...sections.published, ...sections.available]
+          const own = [...sections.mine, ...sections.published]
+            .filter((lesson) => {
+              const isMine =
+                lesson.professor_reservado_id === firebaseUser.uid ||
+                (lesson as any).publicado_por_id === firebaseUser.uid;
+              return isMine;
+            })
             .sort((a, b) => {
               const aDate = (a.data_aula as any)?.toDate?.() ?? new Date(a.data_aula as any);
               const bDate = (b.data_aula as any)?.toDate?.() ?? new Date(b.data_aula as any);
               return aDate.getTime() - bDate.getTime();
             })
             .slice(0, 3);
-          lessons = merged;
+          lessons = own;
         } else {
           lessons = await listNextPublishedLessons(3);
         }
@@ -119,19 +124,6 @@ export default function HomeScreen() {
         console.error("Erro ao carregar aulas:", error);
       } finally {
         setIsLoadingLessons(false);
-      }
-    }
-
-    async function loadMyLessons() {
-      if (papel !== "professor") return;
-      try {
-        setIsLoadingMyLessons(true);
-        const sections = await listLessonsForProfessor(firebaseUser.uid);
-        setMyLessons(sections.mine);
-      } catch (error) {
-        console.error("Erro ao carregar aulas do professor:", error);
-      } finally {
-        setIsLoadingMyLessons(false);
       }
     }
 
@@ -152,7 +144,6 @@ export default function HomeScreen() {
 
     loadDevotional();
     loadLessons();
-    loadMyLessons();
     loadAvisos();
   }, [firebaseUser, isApproved, papel, isCoordenador, isAdmin, isProfessor]);
 
@@ -179,6 +170,10 @@ export default function HomeScreen() {
     );
   }
 
+  if (isCoordenador || isAdmin) {
+    return <CoordinatorDashboardScreen />;
+  }
+
   function bannerSubtitle() {
     if (isProfessor) return "Veja suas aulas reservadas e devocionais.";
     if (isCoordenador || isAdmin)
@@ -186,13 +181,38 @@ export default function HomeScreen() {
     return "Fique por dentro das aulas e devocionais.";
   }
 
-  async function handleSignOut() {
-    try {
-      await signOut();
-      router.replace("/auth/login" as any);
-    } catch (error) {
-      console.error("Erro ao sair:", error);
+  function normalizeStatus(status: string): "disponivel" | "reservada" | "publicada" | "pendente" {
+    if (status === "pendente_reserva") return "pendente";
+    return status as any;
+  }
+
+  function mapStatusLabelHome(status: string) {
+    const normalized = normalizeStatus(status);
+    if (normalized === "disponivel") return "Disponivel";
+    if (normalized === "reservada") return "Reservada";
+    if (normalized === "publicada") return "Publicada";
+    if (normalized === "pendente") return "Pendente";
+    return normalized;
+  }
+
+  function mapStatusVariantHome(status: string): AppCardStatusVariant {
+    const normalized = normalizeStatus(status);
+    switch (normalized) {
+      case "publicada":
+        return "success";
+      case "reservada":
+        return "info";
+      case "pendente":
+        return "warning";
+      case "disponivel":
+      default:
+        return "muted";
     }
+  }
+
+  function formatLessonDateHome(lesson: Lesson) {
+    const date = (lesson.data_aula as any)?.toDate?.() ?? new Date(lesson.data_aula as any);
+    return new Date(date).toLocaleDateString("pt-BR");
   }
 
   return (
@@ -260,8 +280,10 @@ export default function HomeScreen() {
       </Card>
 
       <Card
-        title={isStudent ? "Minhas aulas" : "Proximas aulas"}
-        subtitle={isStudent ? "Revise suas aulas." : "Confira o que vem pela frente."}
+        title={isProfessor ? "Minhas aulas" : isStudent ? "Minhas aulas" : "Proximas aulas"}
+        subtitle={
+          isProfessor ? "Acompanhe suas aulas reservadas ou publicadas." : isStudent ? "Revise suas aulas." : "Confira o que vem pela frente."
+        }
         footer={
           <AppButton
             title="Ver todas"
@@ -274,7 +296,18 @@ export default function HomeScreen() {
         {isLoadingLessons ? (
           <ActivityIndicator color={themeSettings?.cor_info || "#facc15"} />
         ) : nextLessons.length === 0 ? (
-          <EmptyState title="Nenhuma aula publicada no momento." />
+          <EmptyState title={isProfessor ? "Voce ainda nao tem aulas reservadas ou publicadas." : "Nenhuma aula publicada no momento."} />
+        ) : isProfessor ? (
+          nextLessons.map((lesson) => (
+            <AppCard
+              key={lesson.id}
+              title={lesson.titulo}
+              subtitle={formatLessonDateHome(lesson)}
+              statusLabel={mapStatusLabelHome(lesson.status)}
+              statusVariant={mapStatusVariantHome(lesson.status)}
+              onPress={() => router.push(`/lessons/${lesson.id}` as any)}
+            />
+          ))
         ) : (
           nextLessons.map((lesson) => (
             <AulaCard
@@ -286,42 +319,6 @@ export default function HomeScreen() {
         )}
       </Card>
 
-      {isProfessor ? (
-        <Card
-          title="Minhas aulas reservadas"
-          subtitle="Acompanhe as aulas que voce ministrara."
-          footer={
-            <AppButton
-              title="Ver todas"
-              variant="outline"
-              fullWidth={false}
-              onPress={() => router.push("/(tabs)/lessons" as any)}
-            />
-          }
-        >
-          {isLoadingMyLessons ? (
-            <ActivityIndicator color={themeSettings?.cor_info || "#facc15"} />
-          ) : myLessons.length === 0 ? (
-            <EmptyState title="Voce ainda nao tem aulas reservadas." />
-          ) : (
-            myLessons.map((lesson) => (
-              <AulaCard
-                key={lesson.id}
-                lesson={lesson}
-                onPress={() => router.push(`/lessons/${lesson.id}` as any)}
-              />
-            ))
-          )}
-        </Card>
-      ) : null}
-
-      <View style={styles.footer}>
-        {!isStudent ? (
-          <Pressable style={styles.logoutButton} onPress={handleSignOut}>
-            <Text style={styles.logoutText}>Sair</Text>
-          </Pressable>
-        ) : null}
-      </View>
     </ScrollView>
   );
 }

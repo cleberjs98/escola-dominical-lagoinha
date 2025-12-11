@@ -25,6 +25,8 @@ import { useAuth } from "../../hooks/useAuth";
 import { firebaseDb } from "../../lib/firebase";
 import { approveUser, rejectUser } from "../../lib/users";
 import type { User } from "../../types/user";
+import { AppCard } from "../../components/common/AppCard";
+import { AppButton } from "../../components/ui/AppButton";
 
 type PendingUser = User;
 
@@ -136,37 +138,34 @@ export default function PendingUsersScreen() {
 
   const renderItem = ({ item }: { item: PendingUser }) => {
     const isActing = actionLoadingId === item.id;
+    const createdAt = formatDate(item.created_at);
 
     return (
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.name}>{item.nome || "Sem nome"}</Text>
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{item.papel}</Text>
-          </View>
-        </View>
-
+      <AppCard
+        title={item.nome || "Sem nome"}
+        subtitle={`${(item.papel || "").toUpperCase()} • Criado em ${createdAt}`}
+        statusLabel={item.status}
+        statusVariant={item.status === "pendente" ? "warning" : "muted"}
+        style={styles.card}
+      >
         <Text style={styles.email}>{item.email}</Text>
-        <Text style={styles.status}>Status: {item.status}</Text>
-
         <View style={styles.actions}>
-          <Pressable
-            style={[styles.button, styles.approveButton, isActing && styles.disabled]}
+          <AppButton
+            title={isActing ? "Aguarde..." : "Aprovar"}
+            variant="primary"
+            fullWidth={false}
             onPress={() => handleApprove(item.id)}
             disabled={isActing}
-          >
-            <Text style={styles.buttonText}>Aprovar</Text>
-          </Pressable>
-
-          <Pressable
-            style={[styles.button, styles.rejectButton, isActing && styles.disabled]}
+          />
+          <AppButton
+            title="Rejeitar"
+            variant="secondary"
+            fullWidth={false}
             onPress={() => openRejectModal(item.id)}
             disabled={isActing}
-          >
-            <Text style={styles.buttonText}>Rejeitar</Text>
-          </Pressable>
+          />
         </View>
-      </View>
+      </AppCard>
     );
   };
 
@@ -264,29 +263,6 @@ const styles = StyleSheet.create({
     padding: 12,
     backgroundColor: "#0b1224",
   },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 6,
-  },
-  name: {
-    color: "#e5e7eb",
-    fontSize: 16,
-    fontWeight: "600",
-    flexShrink: 1,
-  },
-  badge: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    backgroundColor: "#334155",
-  },
-  badgeText: {
-    color: "#e5e7eb",
-    fontSize: 12,
-    fontWeight: "600",
-  },
   email: {
     color: "#cbd5e1",
     fontSize: 14,
@@ -307,17 +283,11 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     alignItems: "center",
   },
-  approveButton: {
-    backgroundColor: "#22c55e",
-  },
-  rejectButton: {
-    backgroundColor: "#ef4444",
-  },
   cancelButton: {
     backgroundColor: "#475569",
   },
-  disabled: {
-    opacity: 0.7,
+  rejectButton: {
+    backgroundColor: "#ef4444",
   },
   buttonText: {
     color: "#0f172a",
@@ -380,3 +350,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
 });
+
+function formatDate(ts: any) {
+  try {
+    const date = ts?.toDate ? ts.toDate() : ts?.seconds ? new Date(ts.seconds * 1000) : null;
+    if (!date) return "--/--";
+    return date.toLocaleDateString("pt-BR");
+  } catch {
+    return "--/--";
+  }
+}

@@ -1,65 +1,117 @@
-﻿import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, Platform, Pressable } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, Pressable, TouchableOpacity } from "react-native";
 import { useRouter } from "expo-router";
 import { Timestamp } from "firebase/firestore";
 
 import { AppButton } from "../../../components/ui/AppButton";
-import { Card } from "../../../components/ui/Card";
 import { useAuth } from "../../../hooks/useAuth";
 import { useTheme } from "../../../hooks/useTheme";
-import type { Lesson, LessonStatus } from "../../../types/lesson";
-import {
-  approveReservation,
-  deleteLesson,
-  listLessonsForAdminCoordinator,
-  listLessonsForProfessor,
-  listPublishedLessons,
-  publishLessonNow,
-  rejectReservation,
-  reserveLesson,
-  setLessonStatus,
-} from "../../../lib/lessons";
-import { formatTimestampToDateInput, formatDateTime } from "../../../utils/publishAt";
+import type { Lesson } from "../../../types/lesson";
+import { listLessonsForAdminCoordinator, listLessonsForProfessor, listPublishedLessons } from "../../../lib/lessons";
+import { formatTimestampToDateInput } from "../../../utils/publishAt";
+import { AppCard, AppCardStatusVariant } from "../../../components/common/AppCard";
+import { LessonListItem } from "../../../components/lessons/LessonListItem";
 
-type Role = "aluno" | "professor" | "coordenador" | "administrador" | undefined;
+type Role = "aluno" | "professor" | "coordenador" | "administrador" | "admin" | undefined;
 
 type AdminSections = Awaited<ReturnType<typeof listLessonsForAdminCoordinator>>;
 type ProfessorSections = Awaited<ReturnType<typeof listLessonsForProfessor>>;
+type LessonStatusFilter = "all" | "available" | "reserved" | "published" | "pending" | "mine";
+type MyLessonsSubFilter = "all" | "pending" | "reserved" | "published";
+type DateOrder = "asc" | "desc";
+type AdminLessonFilter = "all" | "available" | "published" | "reservedPending" | "mine";
 
+type NormalizedLessonStatus = "disponivel" | "reservada" | "publicada" | "pendente";
+
+function normalizeLessonStatus(status: Lesson["status"]): NormalizedLessonStatus {
+  if (status === "pendente_reserva") return "pendente";
+  return status as NormalizedLessonStatus;
+}
+
+function getLessonDateValue(lesson: Lesson): number {
+  // @ts-expect-error compat timestamp/string
+  const val = lesson.data_aula?.toDate ? lesson.data_aula.toDate() : new Date(lesson.data_aula as any);
+  return val?.getTime?.() ?? 0;
+}
+
+function formatLessonDate(lesson: Lesson) {
+  return formatTimestampToDateInput(lesson.data_aula as Timestamp);
+}
+
+function lessonStatusLabel(status: NormalizedLessonStatus) {
+  if (status === "disponivel") return "Disponível";
+  if (status === "reservada") return "Reservada";
+  if (status === "publicada") return "Publicada";
+  if (status === "pendente") return "Pendente";
+  return status;
+}
+
+function lessonStatusVariant(status: NormalizedLessonStatus): AppCardStatusVariant {
+  switch (status) {
+    case "publicada":
+      return "success";
+    case "reservada":
+      return "info";
+    case "pendente":
+      return "warning";
+    case "disponivel":
+    default:
+      return "muted";
+  }
+}
+
+// =========================
+// Componente principal
+// =========================
 export default function LessonsTabScreen() {
-  const router = useRouter();
-  const { themeSettings } = useTheme();
   const { firebaseUser, user, isInitializing } = useAuth();
   const role = user?.papel as Role;
-  const uid = firebaseUser?.uid || "";
+  const isProfessor = role === "professor";
+  const isAdminOrCoordinator = role === "administrador" || role === "admin" || role === "coordenador";
 
+  if (isInitializing || !firebaseUser || !user) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#facc15" />
+        <Text style={styles.loadingText}>Carregando aulas...</Text>
+      </View>
+    );
+  }
+
+  if (isProfessor) {
+    return <ProfessorLessonsTabScreen uid={firebaseUser.uid} />;
+  }
+
+  if (isAdminOrCoordinator) {
+    return <AdminLessonsScreen uid={firebaseUser.uid} />;
+  }
+
+  return <StudentLessonsScreen uid={firebaseUser.uid} />;
+}
+
+// =========================
+// Tela admin / coordenador
+// =========================
+function AdminLessonsScreen({ uid }: { uid: string }) {
+  const router = useRouter();
+  const { themeSettings } = useTheme();
   const [adminSections, setAdminSections] = useState<AdminSections | null>(null);
-  const [profSections, setProfSections] = useState<ProfessorSections | null>(null);
-  const [publishedForStudent, setPublishedForStudent] = useState<Lesson[]>([]);
   const [loading, setLoading] = useState(true);
-  const [order, setOrder] = useState<"desc" | "asc">("desc");
+  const [adminStatusFilter, setAdminStatusFilter] = useState<AdminLessonFilter>("available");
+  const [adminDateOrder, setAdminDateOrder] = useState<DateOrder>("desc");
 
   useEffect(() => {
-    if (!firebaseUser || isInitializing) return;
     void loadData();
-  }, [firebaseUser, isInitializing, role]);
+  }, []);
 
   async function loadData() {
     try {
       setLoading(true);
-      if (role === "administrador" || role === "coordenador") {
-        const sections = await listLessonsForAdminCoordinator();
-        setAdminSections(sections);
-      } else if (role === "professor") {
-        const sections = await listLessonsForProfessor(uid);
-        setProfSections(sections);
-      } else {
-        const published = await listPublishedLessons();
-        setPublishedForStudent(published);
-      }
+      const sections = await listLessonsForAdminCoordinator();
+      setAdminSections(sections);
     } catch (err) {
       console.error("[Lessons] Erro ao carregar aulas:", err);
-      Alert.alert("Erro", "NÃ£o foi possÃ­vel carregar as aulas.");
+      Alert.alert("Erro", "Nao foi possivel carregar as aulas.");
     } finally {
       setLoading(false);
     }
@@ -69,128 +121,56 @@ export default function LessonsTabScreen() {
     router.push({ pathname, params } as any);
   }
 
-  // Remove a aula de todos os estados locais (sem recarregar)
-  function removeLessonFromState(id: string) {
-    setAdminSections((prev) =>
-      prev
-        ? {
-            drafts: prev.drafts.filter((l) => l.id !== id),
-            available: prev.available.filter((l) => l.id !== id),
-            pendingOrReserved: prev.pendingOrReserved.filter((l) => l.id !== id),
-            published: prev.published.filter((l) => l.id !== id),
-          }
-        : prev
-    );
-    setProfSections((prev) =>
-      prev
-        ? {
-            available: prev.available.filter((l) => l.id !== id),
-            mine: prev.mine.filter((l) => l.id !== id),
-            published: prev.published.filter((l) => l.id !== id),
-          }
-        : prev
-    );
-    setPublishedForStudent((prev) => prev.filter((l) => l.id !== id));
-  }
-
-    async function handleDelete(lesson: Lesson) {
-    console.log("[Lessons] handleDelete (lista) chamado para", lesson.id);
-
-    if (Platform.OS === "web") {
-      // eslint-disable-next-line no-alert
-      const proceed = window.confirm(`Deseja excluir "${lesson.titulo}"?`);
-      if (!proceed) return;
-      try {
-        console.log("[Lessons] confirmação web aceita, excluindo", lesson.id);
-        await deleteLesson(lesson.id);
-        console.log("[Lessons] Aula excluída com sucesso:", lesson.id);
-        removeLessonFromState(lesson.id);
-        Alert.alert("Sucesso", "Aula excluída com sucesso.");
-      } catch (err) {
-        console.error("[Lessons] Erro ao excluir aula:", err);
-        Alert.alert(
-          "Erro",
-          (err as any)?.message || "Não foi possível excluir a aula. Verifique permissões ou conexão."
-        );
+  const adminLessons = useMemo(() => {
+    if (!adminSections) return [];
+    const combined = [
+      ...adminSections.drafts,
+      ...adminSections.available,
+      ...adminSections.pendingOrReserved,
+      ...adminSections.published,
+    ];
+    const map = new Map<string, Lesson>();
+    combined.forEach((lesson) => {
+      if (!map.has(lesson.id)) {
+        map.set(lesson.id, lesson);
       }
-      return;
-    }
+    });
+    return Array.from(map.values());
+  }, [adminSections]);
 
-    Alert.alert("Excluir aula", `Deseja excluir "${lesson.titulo}"?`, [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Excluir",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            console.log("[Lessons] confirmação mobile aceita, excluindo", lesson.id);
-            await deleteLesson(lesson.id);
-            console.log("[Lessons] Aula excluída com sucesso:", lesson.id);
-            removeLessonFromState(lesson.id);
-            Alert.alert("Sucesso", "Aula excluída com sucesso.");
-          } catch (err) {
-            console.error("[Lessons] Erro ao excluir aula:", err);
-            Alert.alert(
-              "Erro",
-              (err as any)?.message || "Não foi possível excluir a aula. Verifique permissões ou conexão."
-            );
-          }
-        },
-      },
-    ]);
-  }
+  const filteredAdminLessons = useMemo(() => {
+    return adminLessons
+      .filter((lesson) => {
+        const status = normalizeLessonStatus(lesson.status);
+        const isMine =
+          lesson.criado_por_id === uid ||
+          lesson.professor_reservado_id === uid ||
+          (lesson as any).publicado_por_id === uid;
 
-  async function handleStatusChange(id: string, status: LessonStatus) {
-    try {
-      await setLessonStatus(id, status);
-      await loadData();
-    } catch (err) {
-      console.error("Erro ao mudar status:", err);
-      Alert.alert("Erro", "NÃ£o foi possÃ­vel atualizar a aula.");
-    }
-  }
+        switch (adminStatusFilter) {
+          case "all":
+            return true;
+          case "available":
+            return status === "disponivel";
+          case "published":
+            return status === "publicada";
+          case "reservedPending":
+            return status === "reservada" || status === "pendente";
+          case "mine":
+            return isMine;
+          default:
+            return true;
+        }
+      })
+      .sort((a, b) => {
+        const da = getLessonDateValue(a);
+        const db = getLessonDateValue(b);
+        if (adminDateOrder === "asc") return da - db;
+        return db - da;
+      });
+  }, [adminLessons, adminStatusFilter, adminDateOrder, uid]);
 
-  async function handlePublishNow(id: string) {
-    try {
-      await publishLessonNow(id, uid || "system");
-      await loadData();
-    } catch (err) {
-      console.error("Erro ao publicar:", err);
-      Alert.alert("Erro", "NÃ£o foi possÃ­vel publicar a aula.");
-    }
-  }
-
-  async function handleReserve(id: string) {
-    try {
-      await reserveLesson(id, uid);
-      await loadData();
-    } catch (err) {
-      console.error("Erro ao reservar:", err);
-      Alert.alert("Erro", (err as Error)?.message || "NÃ£o foi possÃ­vel reservar a aula.");
-    }
-  }
-
-  async function handleApprove(id: string) {
-    try {
-      await approveReservation(id, uid);
-      await loadData();
-    } catch (err) {
-      console.error("Erro ao aprovar reserva:", err);
-      Alert.alert("Erro", "NÃ£o foi possÃ­vel aprovar a reserva.");
-    }
-  }
-
-  async function handleReject(id: string) {
-    try {
-      await rejectReservation(id, uid);
-      await loadData();
-    } catch (err) {
-      console.error("Erro ao rejeitar reserva:", err);
-      Alert.alert("Erro", "NÃ£o foi possÃ­vel rejeitar a reserva.");
-    }
-  }
-
-  if (isInitializing || loading) {
+  if (loading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#facc15" />
@@ -200,186 +180,341 @@ export default function LessonsTabScreen() {
   }
 
   const bg = themeSettings?.cor_fundo || "#020617";
-  const canDelete = role === "administrador" || role === "coordenador";
+
+  function renderAdminFilterChip(label: string, value: AdminLessonFilter) {
+    const active = adminStatusFilter === value;
+    return (
+      <Pressable
+        key={value}
+        style={[styles.filterChip, active && styles.filterChipActive]}
+        onPress={() => setAdminStatusFilter(value)}
+      >
+        <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{label}</Text>
+      </Pressable>
+    );
+  }
+
+  function toggleAdminDateOrder() {
+    setAdminDateOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+  }
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: bg }]} contentContainerStyle={styles.content}>
-      {canDelete && adminSections ? (
-        <>
-          <Section title="Aulas em rascunho" empty="Nenhum rascunho" data={adminSections.drafts}>
-            {(lesson) => (
-              <AdminDraftCard
-                lesson={lesson}
-                onEdit={() => goTo("/admin/lessons/[lessonId]", { lessonId: lesson.id })}
-                onDelete={() => handleDelete(lesson)}
-                onMakeAvailable={() => handleStatusChange(lesson.id, "disponivel")}
-              />
-            )}
-          </Section>
+      <View style={{ gap: 12 }}>
+        <View style={styles.filtersRow}>
+          {renderAdminFilterChip("Todos", "all")}
+          {renderAdminFilterChip("Disponíveis", "available")}
+          {renderAdminFilterChip("Publicadas", "published")}
+          {renderAdminFilterChip("Reservadas / Pendentes", "reservedPending")}
+          {renderAdminFilterChip("Minhas aulas", "mine")}
+        </View>
 
-          <Section title="Aulas disponÃ­veis" empty="Nenhuma aula disponÃ­vel" data={adminSections.available}>
-            {(lesson) => (
-              <AdminAvailableCard
-                lesson={lesson}
-                onDetails={() => goTo("/lessons/[lessonId]", { lessonId: lesson.id })}
-                onEdit={() => goTo("/admin/lessons/[lessonId]", { lessonId: lesson.id })}
-                onPublish={() => handlePublishNow(lesson.id)}
-                onDelete={() => handleDelete(lesson)}
-              />
-            )}
-          </Section>
+        <View style={styles.orderToggleRow}>
+          <Text style={styles.sectionTitle}>Aulas</Text>
+          <TouchableOpacity onPress={toggleAdminDateOrder} style={styles.orderToggleButton}>
+            <Text style={styles.orderToggleText}>
+              Ordenar por data: {adminDateOrder === "desc" ? "↓" : "↑"}
+            </Text>
+          </TouchableOpacity>
+        </View>
 
-          <Section
-            title="Aulas reservadas / pendentes"
-            empty="Nenhuma reserva"
-            data={adminSections.pendingOrReserved}
-          >
-            {(lesson) => (
-              <AdminReservedCard
-                lesson={lesson}
-                onDetails={() => goTo("/lessons/[lessonId]", { lessonId: lesson.id })}
-                onApprove={() => handleApprove(lesson.id)}
-                onReject={() => handleReject(lesson.id)}
-                onPublish={() => handlePublishNow(lesson.id)}
-                onDelete={() => handleDelete(lesson)}
-              />
-            )}
-          </Section>
-
-          <Section title="Aulas publicadas" empty="Nenhuma publicada" data={adminSections.published}>
-            {(lesson) => (
-              <AdminPublishedCard
-                lesson={lesson}
-                onDetails={() => goTo("/lessons/[lessonId]", { lessonId: lesson.id })}
-                onEdit={() => goTo("/admin/lessons/[lessonId]", { lessonId: lesson.id })}
-                onDelete={() => handleDelete(lesson)}
-              />
-            )}
-          </Section>
-
-          <View style={styles.actionsRow}>
-            <AppButton title="Criar nova aula" variant="primary" onPress={() => goTo("/admin/lessons/new")} />
-          </View>
-        </>
-      ) : null}
-
-      {role === "professor" && profSections ? (
-        <>
-          <Section
-            title="Aulas disponÃ­veis para reserva"
-            empty="Nenhuma aula disponÃ­vel"
-            data={profSections.available}
-          >
-            {(lesson) => (
-              <Card
+        {filteredAdminLessons.length === 0 ? (
+          <Text style={styles.empty}>Nenhuma aula encontrada.</Text>
+        ) : (
+          filteredAdminLessons.map((lesson) => {
+            const status = normalizeLessonStatus(lesson.status);
+            const subtitle = `${formatLessonDate(lesson)} • ${lessonStatusLabel(status)}`;
+            return (
+              <LessonListItem
+                key={lesson.id}
                 title={lesson.titulo}
-                subtitle={`Data: ${formatTimestampToDateInput(lesson.data_aula as Timestamp)}`}
-                footer={
-                  <View style={styles.cardActions}>
-                    <AppButton
-                      title="Ver detalhes"
-                      variant="outline"
-                      fullWidth={false}
-                      onPress={() => goTo("/lessons/[lessonId]", { lessonId: lesson.id })}
-                    />
-                    <AppButton
-                      title="Reservar aula"
-                      variant="primary"
-                      fullWidth={false}
-                      onPress={() => handleReserve(lesson.id)}
-                    />
-                  </View>
-                }
-              >
-                <Text style={styles.desc}>{lesson.descricao_base}</Text>
-              </Card>
-            )}
-          </Section>
-
-          <Section
-            title="Minhas aulas (reservadas / pendentes)"
-            empty="Nenhuma aula reservada"
-            data={profSections.mine}
-          >
-            {(lesson) => (
-              <Card
-                title={lesson.titulo}
-                subtitle={`Status: ${lesson.status}`}
-                footer={
-                  <View style={styles.cardActions}>
-                    <AppButton
-                      title="Ver detalhes"
-                      variant="outline"
-                      fullWidth={false}
-                      onPress={() => goTo("/lessons/[lessonId]", { lessonId: lesson.id })}
-                    />
-                    {lesson.status === "reservada" ? (
-                      <AppButton
-                        title="Publicar agora"
-                        variant="primary"
-                        fullWidth={false}
-                        onPress={() => handlePublishNow(lesson.id)}
-                      />
-                    ) : (
-                      <Text style={styles.helper}>Aguardando aprovaÃ§Ã£o</Text>
-                    )}
-                  </View>
-                }
-              >
-                <Text style={styles.desc}>{lesson.descricao_base}</Text>
-              </Card>
-            )}
-          </Section>
-
-          <Section title="Aulas publicadas" empty="Nenhuma publicada" data={profSections.published}>
-            {(lesson) => (
-              <SimpleLessonCard lesson={lesson} onDetails={() => goTo("/lessons/[lessonId]", { lessonId: lesson.id })} />
-            )}
-          </Section>
-        </>
-      ) : null}
-
-      {(role === "aluno" || !role) && (
-        <View style={{ gap: 8 }}>
-          <View style={styles.orderRow}>
-            <Text style={styles.sectionTitle}>Aulas publicadas</Text>
-            <View style={styles.orderButtons}>
-              <Text
-                style={[styles.orderChip, order === "desc" && styles.orderChipActive]}
-                onPress={() => setOrder("desc")}
-              >
-                Mais recentes
-              </Text>
-              <Text
-                style={[styles.orderChip, order === "asc" && styles.orderChipActive]}
-                onPress={() => setOrder("asc")}
-              >
-                Mais antigas
-              </Text>
-            </View>
-          </View>
-          <Section
-            title=""
-            empty="Nenhuma publicada"
-            data={[...publishedForStudent].sort((a, b) => {
-              const aDate = (a.data_aula as any)?.toDate?.() ?? new Date(a.data_aula as any);
-              const bDate = (b.data_aula as any)?.toDate?.() ?? new Date(b.data_aula as any);
-              return order === "desc" ? bDate.getTime() - aDate.getTime() : aDate.getTime() - bDate.getTime();
-            })}
-          >
-            {(lesson) => (
-              <StudentLessonCard
-                lesson={lesson}
+                subtitle={subtitle}
+                statusLabel={lessonStatusLabel(status)}
+                statusVariant={lessonStatusVariant(status)}
                 onPress={() => goTo("/lessons/[lessonId]", { lessonId: lesson.id })}
               />
-            )}
-          </Section>
+            );
+          })
+        )}
+
+        <View style={styles.actionsRow}>
+          <AppButton title="Criar nova aula" variant="primary" fullWidth={false} onPress={() => goTo("/admin/lessons/new")} />
         </View>
-      )}
+      </View>
     </ScrollView>
   );
 }
 
+// =========================
+// Tela aluno / público
+// =========================
+function StudentLessonsScreen({ uid }: { uid: string }) {
+  const router = useRouter();
+  const { themeSettings } = useTheme();
+  const [publishedForStudent, setPublishedForStudent] = useState<Lesson[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [order, setOrder] = useState<DateOrder>("desc");
+
+  useEffect(() => {
+    void loadData();
+  }, []);
+
+  async function loadData() {
+    try {
+      setLoading(true);
+      const published = await listPublishedLessons();
+      setPublishedForStudent(published);
+    } catch (err) {
+      console.error("[Lessons] Erro ao carregar aulas:", err);
+      Alert.alert("Erro", "Nao foi possivel carregar as aulas.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function goTo(pathname: string, params?: Record<string, string>) {
+    router.push({ pathname, params } as any);
+  }
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#facc15" />
+        <Text style={styles.loadingText}>Carregando aulas...</Text>
+      </View>
+    );
+  }
+
+  const bg = themeSettings?.cor_fundo || "#020617";
+
+  return (
+    <ScrollView style={[styles.container, { backgroundColor: bg }]} contentContainerStyle={styles.content}>
+      <View style={{ gap: 8 }}>
+        <View style={styles.orderRow}>
+          <Text style={styles.sectionTitle}>Aulas publicadas</Text>
+          <View style={styles.orderButtons}>
+            <Text
+              style={[styles.orderChip, order === "desc" && styles.orderChipActive]}
+              onPress={() => setOrder("desc")}
+            >
+              Mais recentes
+            </Text>
+            <Text
+              style={[styles.orderChip, order === "asc" && styles.orderChipActive]}
+              onPress={() => setOrder("asc")}
+            >
+              Mais antigas
+            </Text>
+          </View>
+        </View>
+        <Section
+          title=""
+          empty="Nenhuma publicada"
+          data={[...publishedForStudent].sort((a, b) => {
+            const aDate = (a.data_aula as any)?.toDate?.() ?? new Date(a.data_aula as any);
+            const bDate = (b.data_aula as any)?.toDate?.() ?? new Date(b.data_aula as any);
+            return order === "desc" ? bDate.getTime() - aDate.getTime() : aDate.getTime() - bDate.getTime();
+          })}
+        >
+          {(lesson) => (
+            <StudentLessonCard
+              lesson={lesson}
+              onPress={() => goTo("/lessons/[lessonId]", { lessonId: lesson.id })}
+            />
+          )}
+        </Section>
+      </View>
+    </ScrollView>
+  );
+}
+
+// =========================
+// Tela do professor (nova UI)
+// =========================
+function ProfessorLessonsTabScreen({ uid }: { uid: string }) {
+  const router = useRouter();
+  const { themeSettings } = useTheme();
+  const [profSections, setProfSections] = useState<ProfessorSections | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<LessonStatusFilter>("all");
+  const [mySubFilter, setMySubFilter] = useState<MyLessonsSubFilter>("all");
+  const [dateOrder, setDateOrder] = useState<DateOrder>("desc");
+
+  useEffect(() => {
+    void loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uid]);
+
+  async function loadData() {
+    try {
+      setLoading(true);
+      const sections = await listLessonsForProfessor(uid);
+      setProfSections(sections);
+    } catch (err) {
+      console.error("[Lessons] Erro ao carregar aulas (professor):", err);
+      Alert.alert("Erro", "Nao foi possivel carregar as aulas.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const professorLessons = useMemo(() => {
+    if (!profSections) return [];
+    const combined = [...profSections.available, ...profSections.mine, ...profSections.published];
+    const map = new Map<string, Lesson>();
+    combined.forEach((lesson) => {
+      if (!map.has(lesson.id)) {
+        map.set(lesson.id, lesson);
+      }
+    });
+    return Array.from(map.values());
+  }, [profSections]);
+
+  const filteredLessons = useMemo(() => {
+    return professorLessons
+      .filter((lesson) => {
+        const status = normalizeLessonStatus(lesson.status);
+        switch (statusFilter) {
+          case "available":
+            return status === "disponivel";
+          case "reserved":
+            return status === "reservada";
+          case "published":
+            return status === "publicada";
+          case "pending":
+            return status === "pendente";
+          case "mine": {
+            const isMine = lesson.professor_reservado_id === uid || (lesson as any).publicado_por_id === uid;
+            if (!isMine) return false;
+            if (mySubFilter === "all") return true;
+            if (mySubFilter === "pending") return status === "pendente";
+            if (mySubFilter === "reserved") return status === "reservada";
+            if (mySubFilter === "published") return status === "publicada";
+            return true;
+          }
+          case "all":
+          default:
+            return true;
+        }
+      })
+      .sort((a, b) => {
+        const da = getLessonDateValue(a);
+        const db = getLessonDateValue(b);
+        if (dateOrder === "asc") return da - db;
+        return db - da;
+      });
+  }, [professorLessons, statusFilter, mySubFilter, dateOrder, uid]);
+
+  const counts = useMemo(() => {
+    const base = {
+      all: 0,
+      available: 0,
+      reserved: 0,
+      published: 0,
+      pending: 0,
+      mine: 0,
+    };
+    if (!professorLessons.length) return base;
+    professorLessons.forEach((lesson) => {
+      const status = normalizeLessonStatus(lesson.status);
+      const isMine = lesson.professor_reservado_id === uid || (lesson as any).publicado_por_id === uid;
+      base.all += 1;
+      if (status === "disponivel") base.available += 1;
+      if (status === "reservada") base.reserved += 1;
+      if (status === "publicada") base.published += 1;
+      if (status === "pendente") base.pending += 1;
+      if (isMine) base.mine += 1;
+    });
+    return base;
+  }, [professorLessons, uid]);
+
+  function renderFilterChip(label: string, value: LessonStatusFilter, count?: number) {
+    const active = statusFilter === value;
+    const displayLabel = typeof count === "number" ? `${label} (${count})` : label;
+    return (
+      <Pressable key={value} style={[styles.filterChip, active && styles.filterChipActive]} onPress={() => setStatusFilter(value)}>
+        <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{displayLabel}</Text>
+      </Pressable>
+    );
+  }
+
+  function renderMyFilterChip(label: string, value: MyLessonsSubFilter) {
+    const active = mySubFilter === value;
+    return (
+      <Pressable key={value} style={[styles.filterChip, active && styles.filterChipActive]} onPress={() => setMySubFilter(value)}>
+        <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{label}</Text>
+      </Pressable>
+    );
+  }
+
+  function toggleDateOrder() {
+    setDateOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+  }
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#facc15" />
+        <Text style={styles.loadingText}>Carregando aulas...</Text>
+      </View>
+    );
+  }
+
+  const bg = themeSettings?.cor_fundo || "#020617";
+
+  return (
+    <ScrollView style={[styles.container, { backgroundColor: bg }]} contentContainerStyle={styles.content}>
+        <View style={{ gap: 12 }}>
+          <View style={styles.filtersRow}>
+          {renderFilterChip("Todas", "all", counts.all)}
+          {renderFilterChip("Disponiveis", "available", counts.available)}
+          {renderFilterChip("Reservadas", "reserved", counts.reserved)}
+          {renderFilterChip("Publicadas", "published", counts.published)}
+          {renderFilterChip("Pendentes", "pending", counts.pending)}
+          {renderFilterChip("Minhas aulas", "mine", counts.mine)}
+        </View>
+
+        {statusFilter === "mine" ? (
+          <View style={styles.filtersRow}>
+            {renderMyFilterChip("Todas minhas", "all")}
+            {renderMyFilterChip("Pendentes", "pending")}
+            {renderMyFilterChip("Reservadas", "reserved")}
+            {renderMyFilterChip("Publicadas", "published")}
+          </View>
+        ) : null}
+
+        <View style={styles.orderToggleRow}>
+          <Text style={styles.sectionTitle}>Aulas</Text>
+          <TouchableOpacity onPress={toggleDateOrder} style={styles.orderToggleButton}>
+            <Text style={styles.orderToggleText}>{dateOrder === "asc" ? "Data asc" : "Data desc"}</Text>
+          </TouchableOpacity>
+        </View>
+
+        {filteredLessons.length === 0 ? (
+          <Text style={styles.empty}>Nenhuma aula encontrada.</Text>
+        ) : (
+          filteredLessons.map((lesson) => {
+            const status = normalizeLessonStatus(lesson.status);
+            return (
+              <AppCard
+                key={lesson.id}
+                title={lesson.titulo}
+                subtitle={formatLessonDate(lesson)}
+                statusLabel={lessonStatusLabel(status)}
+                statusVariant={lessonStatusVariant(status)}
+                onPress={() => router.push({ pathname: "/lessons/[lessonId]", params: { lessonId: lesson.id } } as any)}
+              />
+            );
+          })
+        )}
+      </View>
+    </ScrollView>
+  );
+}
+
+// =========================
+// Componentes auxiliares
+// =========================
 type SectionProps<T> = {
   title: string;
   empty: string;
@@ -396,164 +531,14 @@ function Section<T>({ title, empty, data, children }: SectionProps<T>) {
   );
 }
 
-function SimpleLessonCard({ lesson, onDetails }: { lesson: Lesson; onDetails: () => void }) {
-  return (
-    <Card
-      title={lesson.titulo}
-      subtitle={`Data: ${formatTimestampToDateInput(lesson.data_aula as Timestamp)}`}
-      footer={
-        <View style={styles.cardActions}>
-          <AppButton title="Ver detalhes" variant="outline" fullWidth={false} onPress={onDetails} />
-        </View>
-      }
-    >
-      <Text style={styles.desc}>{lesson.descricao_base}</Text>
-    </Card>
-  );
-}
-
 function StudentLessonCard({ lesson, onPress }: { lesson: Lesson; onPress: () => void }) {
   return (
     <View style={styles.studentCard}>
       <Pressable onPress={onPress} style={styles.studentPressable}>
         <Text style={styles.sectionTitle}>{lesson.titulo}</Text>
-        <Text style={styles.desc}>
-          Data: {formatTimestampToDateInput(lesson.data_aula as Timestamp)}
-        </Text>
+        <Text style={styles.desc}>Data: {formatLessonDate(lesson)}</Text>
       </Pressable>
     </View>
-  );
-}
-
-function AdminDraftCard({
-  lesson,
-  onEdit,
-  onDelete,
-  onMakeAvailable,
-}: {
-  lesson: Lesson;
-  onEdit: () => void;
-  onDelete: () => void;
-  onMakeAvailable: () => void;
-}) {
-  return (
-    <Card
-      title={lesson.titulo}
-      subtitle={`Data: ${formatTimestampToDateInput(lesson.data_aula as Timestamp)}`}
-      footer={
-        <View style={styles.cardActions}>
-          <AppButton title="Editar" variant="outline" fullWidth={false} onPress={onEdit} />
-          <AppButton title="Disponibilizar" variant="primary" fullWidth={false} onPress={onMakeAvailable} />
-          <AppButton title="Excluir" variant="secondary" fullWidth={false} onPress={onDelete} />
-        </View>
-      }
-    >
-      <Text style={styles.desc}>{lesson.descricao_base}</Text>
-    </Card>
-  );
-}
-
-function AdminAvailableCard({
-  lesson,
-  onDetails,
-  onEdit,
-  onPublish,
-  onDelete,
-}: {
-  lesson: Lesson;
-  onDetails: () => void;
-  onEdit: () => void;
-  onPublish: () => void;
-  onDelete: () => void;
-}) {
-  return (
-    <Card
-      title={lesson.titulo}
-      subtitle={`Data: ${formatTimestampToDateInput(lesson.data_aula as Timestamp)}`}
-      footer={
-        <View style={styles.cardActions}>
-          <AppButton title="Ver detalhes" variant="outline" fullWidth={false} onPress={onDetails} />
-          <AppButton title="Editar" variant="secondary" fullWidth={false} onPress={onEdit} />
-          <AppButton title="Publicar agora" variant="primary" fullWidth={false} onPress={onPublish} />
-          <AppButton title="Excluir" variant="secondary" fullWidth={false} onPress={onDelete} />
-        </View>
-      }
-    >
-      <Text style={styles.desc}>{lesson.descricao_base}</Text>
-    </Card>
-  );
-}
-
-function AdminReservedCard({
-  lesson,
-  onDetails,
-  onApprove,
-  onReject,
-  onPublish,
-  onDelete,
-}: {
-  lesson: Lesson;
-  onDetails: () => void;
-  onApprove: () => void;
-  onReject: () => void;
-  onPublish: () => void;
-  onDelete: () => void;
-}) {
-  const reservedBy = lesson.professor_reservado_id ? `Professor: ${lesson.professor_reservado_id}` : "Sem professor";
-  const pending = lesson.status === "pendente_reserva";
-  return (
-    <Card
-      title={lesson.titulo}
-      subtitle={`${reservedBy} â€¢ Status: ${lesson.status}`}
-      footer={
-        <View style={styles.cardActions}>
-          <AppButton title="Ver detalhes" variant="outline" fullWidth={false} onPress={onDetails} />
-          {pending ? (
-            <>
-              <AppButton title="Aprovar" variant="primary" fullWidth={false} onPress={onApprove} />
-              <AppButton title="Rejeitar" variant="secondary" fullWidth={false} onPress={onReject} />
-            </>
-          ) : (
-            <AppButton title="Publicar agora" variant="primary" fullWidth={false} onPress={onPublish} />
-          )}
-          <AppButton title="Excluir" variant="secondary" fullWidth={false} onPress={onDelete} />
-        </View>
-      }
-    >
-      <Text style={styles.desc}>{lesson.descricao_base}</Text>
-    </Card>
-  );
-}
-
-function AdminPublishedCard({
-  lesson,
-  onDetails,
-  onEdit,
-  onDelete,
-}: {
-  lesson: Lesson;
-  onDetails: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  const publishedAt =
-    (lesson.publicado_em as Timestamp | null)?.toDate?.() ??
-    (lesson.publish_at as Timestamp | null)?.toDate?.() ??
-    null;
-  return (
-    <Card
-      title={lesson.titulo}
-      subtitle={`Publicada em: ${publishedAt ? formatDateTime(publishedAt) : "-"}`}
-      footer={
-        <View style={styles.cardActions}>
-          <AppButton title="Ver detalhes" variant="outline" fullWidth={false} onPress={onDetails} />
-          <AppButton title="Editar" variant="secondary" fullWidth={false} onPress={onEdit} />
-          <AppButton title="Excluir" variant="secondary" fullWidth={false} onPress={onDelete} />
-        </View>
-      }
-    >
-      <Text style={styles.desc}>{lesson.descricao_base}</Text>
-    </Card>
   );
 }
 
@@ -590,14 +575,6 @@ const styles = StyleSheet.create({
   desc: {
     color: "#cbd5e1",
     marginTop: 6,
-  },
-  cardActions: {
-    flexDirection: "row",
-    gap: 8,
-    flexWrap: "wrap",
-  },
-  helper: {
-    color: "#cbd5e1",
   },
   actionsRow: {
     marginTop: 12,
@@ -636,7 +613,47 @@ const styles = StyleSheet.create({
   studentPressable: {
     gap: 4,
   },
+  filtersRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 4,
+  },
+  filterChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#1f2937",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "#0b1224",
+  },
+  filterChipActive: {
+    backgroundColor: "#facc15",
+    borderColor: "#facc15",
+  },
+  filterChipText: {
+    color: "#e5e7eb",
+    fontWeight: "600",
+  },
+  filterChipTextActive: {
+    color: "#0f172a",
+  },
+  orderToggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 4,
+  },
+  orderToggleButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#1f2937",
+    backgroundColor: "#0b1224",
+  },
+  orderToggleText: {
+    color: "#e5e7eb",
+    fontWeight: "600",
+  },
 });
-
-
-

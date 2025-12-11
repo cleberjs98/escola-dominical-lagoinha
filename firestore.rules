@@ -23,6 +23,7 @@ service cloud.firestore {
     function isCoordinator() { return requestUserRole() == 'coordenador'; }
     function isProfessor()   { return requestUserRole() == 'professor'; }
     function isApprovedUser() { return isSignedIn() && requestUserStatus() == 'aprovado'; }
+    function isApprovedOrManager() { return isAdmin() || isCoordinator() || isApprovedUser(); }
 
     // Users
     match /users/{userId} {
@@ -203,19 +204,28 @@ service cloud.firestore {
 
     // Theme / Layout / Background / Navegacao / Layout de telas
     match /theme_settings/{id} {
-      allow get, list, create, update, delete: if isAdmin();
+      allow get, list: if isApprovedOrManager();
+      allow create, update, delete: if isAdmin();
     }
     match /layout_settings/{id} {
-      allow get, list, create, update, delete: if isAdmin();
+      allow get, list: if isApprovedOrManager();
+      allow create, update, delete: if isAdmin();
     }
     match /backgrounds/{id} {
-      allow get, list, create, update, delete: if isAdmin();
+      allow get, list: if isApprovedOrManager();
+      allow create, update, delete: if isAdmin();
     }
     match /navigation_tabs/{id} {
-      allow get, list, create, update, delete: if isAdmin();
+      allow get, list: if isApprovedOrManager();
+      allow create, update, delete: if isAdmin();
     }
     match /screen_layouts/{id} {
-      allow get, list, create, update, delete: if isAdmin();
+      allow get, list: if isApprovedOrManager();
+      allow create, update, delete: if isAdmin();
+    }
+    match /navigation_settings/{id} {
+      allow get, list: if isApprovedOrManager();
+      allow create, update, delete: if isAdmin();
     }
   }
 }

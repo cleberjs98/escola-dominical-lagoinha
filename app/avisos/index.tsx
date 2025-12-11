@@ -144,9 +144,6 @@ export default function AvisosListScreen() {
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Avisos</Text>
-          <Text style={styles.subtitle}>
-            Quadros de avisos filtrados pelo seu papel.
-          </Text>
         </View>
         {canCreate ? (
           <AppButton

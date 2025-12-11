@@ -119,7 +119,7 @@ export default function AdminDashboardScreen() {
             title="Gerenciar devocionais"
             variant="outline"
             fullWidth={false}
-            onPress={() => router.push("/admin/devotionals/new" as any)}
+            onPress={() => router.push("/(tabs)/devotionals" as any)}
           />
           <AppButton
             title="Gerenciar avisos"

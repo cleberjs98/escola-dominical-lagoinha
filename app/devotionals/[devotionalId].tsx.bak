@@ -8,7 +8,6 @@ import {
   Alert,
   ScrollView,
   Linking,
-  Platform,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
@@ -24,23 +23,18 @@ import { StatusBadge } from "../../components/ui/StatusBadge";
 import { AppButton } from "../../components/ui/AppButton";
 import { useTheme } from "../../hooks/useTheme";
 import { formatDate } from "../../utils/publishAt";
-import { deleteDevotional } from "../../lib/devotionals";
 
 export default function DevotionalDetailsScreen() {
   const router = useRouter();
   const { devotionalId } = useLocalSearchParams<{ devotionalId: string }>();
   const { firebaseUser, user, isInitializing } = useAuth();
   const { themeSettings } = useTheme();
-  const role = user?.papel;
-  const isStudent = role === "aluno";
-  const isProfessor = role === "professor";
-  const isBasicView = isStudent || isProfessor;
+  const isStudent = user?.papel === "aluno";
 
   const [devotional, setDevotional] = useState<Devotional | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [materials, setMaterials] = useState<SupportMaterial[]>([]);
   const [isLoadingMaterials, setIsLoadingMaterials] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (isInitializing) return;
@@ -128,23 +122,25 @@ export default function DevotionalDetailsScreen() {
     >
       <Card
         title={
-          isBasicView
+          isStudent
             ? `${devotional.titulo} - ${formatDateString(devotional.data_devocional)}`
             : devotional.titulo
         }
         subtitle={
-          isBasicView
+          isStudent
             ? devotional.referencia_biblica
             : `Data: ${formatDateString(devotional.data_devocional)} • ${devotional.referencia_biblica}`
         }
-        footer={isBasicView ? null : <StatusBadge status={devotional.status} variant="devotional" />}
+        footer={
+          isStudent ? null : <StatusBadge status={devotional.status} variant="devotional" />
+        }
       />
 
       <Card title="Devocional">
         <Text style={styles.cardText}>{devotional.devocional_texto}</Text>
       </Card>
 
-      {!isBasicView && (
+      {!isStudent && (
         <Card title="Materiais de apoio">
           {isLoadingMaterials ? (
             <ActivityIndicator size="small" color="#facc15" />
@@ -163,65 +159,14 @@ export default function DevotionalDetailsScreen() {
         </Card>
       )}
 
-      {!isBasicView ? (
-        <View style={styles.actions}>
-          <AppButton
-            title="Editar"
-            variant="primary"
-            fullWidth={false}
-            onPress={() => router.push(`/admin/devotionals/${devotional.id}` as any)}
-          />
-          <AppButton
-            title={submitting ? "Excluindo..." : "Excluir devocional"}
-            variant="secondary"
-            fullWidth={false}
-            onPress={handleDelete}
-            disabled={submitting}
-          />
-        </View>
-      ) : null}
-
-      <View style={styles.footerButtons}>
-        <AppButton
-          title="Voltar"
-          variant="outline"
-          fullWidth={false}
-          onPress={() => router.replace("/(tabs)/devotionals" as any)}
-        />
-      </View>
+      <AppButton
+        title="Voltar"
+        variant="outline"
+        fullWidth={false}
+        onPress={() => router.replace("/devotionals" as any)}
+      />
     </ScrollView>
   );
-
-  async function handleDelete() {
-    if (!devotional) return;
-
-    const doDelete = async () => {
-      try {
-        setSubmitting(true);
-        await deleteDevotional(devotional.id);
-        Alert.alert("Sucesso", "Devocional excluido.");
-        router.replace("/(tabs)/devotionals" as any);
-      } catch (err) {
-        console.error("Erro ao excluir devocional:", err);
-        Alert.alert("Erro", "Nao foi possivel excluir o devocional.");
-      } finally {
-        setSubmitting(false);
-      }
-    };
-
-    if (Platform.OS === "web" && typeof window !== "undefined" && typeof window.confirm === "function") {
-      const ok = window.confirm("Tem certeza que deseja excluir este devocional? Esta ação não pode ser desfeita.");
-      if (ok) {
-        void doDelete();
-      }
-      return;
-    }
-
-    Alert.alert("Excluir devocional", "Esta ação não pode ser desfeita. Deseja excluir?", [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Excluir", style: "destructive", onPress: () => void doDelete() },
-    ]);
-  }
 }
 
 const styles = StyleSheet.create({
@@ -236,14 +181,6 @@ const styles = StyleSheet.create({
   },
   loadingText: { color: "#e5e7eb", marginTop: 12 },
   cardText: { color: "#cbd5e1", fontSize: 14 },
-  actions: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  footerButtons: {
-    marginTop: 12,
-  },
 });
 
 function formatDateString(value: string): string {

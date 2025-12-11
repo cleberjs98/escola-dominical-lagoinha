@@ -1,14 +1,17 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Tabs, useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { doc, getDoc } from "firebase/firestore";
 import { useAuth } from "../../hooks/useAuth";
+import { firebaseDb } from "../../lib/firebase";
 
 /* Ajustes fase de testes - Home, notificacoes, gestao de papeis e permissoes */
 
 export default function TabsLayout() {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [lessonsTabFirst, setLessonsTabFirst] = useState(true);
   const { user, signOut } = useAuth();
   const papel = user?.papel;
   const canCreateAviso =
@@ -16,11 +19,28 @@ export default function TabsLayout() {
   const isCoordinatorOrAdmin =
     papel === "coordenador" || papel === "administrador" || papel === "admin";
   const isStudent = papel === "aluno";
+  const isProfessor = papel === "professor";
+  useEffect(() => {
+    void loadNavSettings();
+  }, []);
+
+  async function loadNavSettings() {
+    try {
+      const snap = await getDoc(doc(firebaseDb, "navigation_settings", "global"));
+      if (snap.exists()) {
+        setLessonsTabFirst(!!snap.data().lessonsTabFirst);
+      }
+    } catch (error) {
+      console.warn("Navegacao padrao mantida (sem permissao ou sem config).", error);
+    }
+  }
+  const isCoordinator = papel === "coordenador";
+  const isAdmin = papel === "administrador" || papel === "admin";
 
   return (
     <>
       <Tabs
-        screenOptions={{
+        screenOptions={({ route }) => ({
           headerShown: true,
           headerStyle: { backgroundColor: "#0f1521" },
           headerTintColor: "#e5e7eb",
@@ -37,37 +57,90 @@ export default function TabsLayout() {
             height: 60,
             paddingBottom: 6,
           },
-        }}
+          tabBarLabel:
+            route.name === "index"
+              ? "Home"
+              : route.name === "lessons/index"
+                ? "Aulas"
+                : route.name === "devotionals/index"
+                  ? "Devocional"
+                  : undefined,
+          tabBarIcon: ({ focused, color, size }) => {
+            const iconSize = size ?? 22;
+            if (route.name === "index") {
+              return (
+                <MaterialCommunityIcons
+                  name={focused ? "home" : "home-outline"}
+                  size={iconSize}
+                  color={color}
+                />
+              );
+            }
+            if (route.name === "lessons/index") {
+              return (
+                <MaterialCommunityIcons
+                  name={focused ? "book-open-page-variant" : "book-outline"}
+                  size={iconSize}
+                  color={color}
+                />
+              );
+            }
+            if (route.name === "devotionals/index") {
+              return (
+                <MaterialCommunityIcons
+                  name={focused ? "heart" : "heart-outline"}
+                  size={iconSize}
+                  color={color}
+                />
+              );
+            }
+            return <MaterialCommunityIcons name="dots-horizontal" size={iconSize} color={color} />;
+          },
+        })}
       >
-        <Tabs.Screen
-          name="lessons/index"
-          options={{
-            title: "Aulas",
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="book-outline" size={size} color={color} />
-            ),
-          }}
-        />
-
         <Tabs.Screen
           name="index"
           options={{
             title: "Home",
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="home-outline" size={size} color={color} />
-            ),
+            tabBarLabel: "Home",
           }}
         />
 
-        <Tabs.Screen
-          name="devotionals/index"
-          options={{
-            title: "Devocional",
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="heart-outline" size={size} color={color} />
-            ),
-          }}
-        />
+        {lessonsTabFirst ? (
+          <>
+            <Tabs.Screen
+              name="lessons/index"
+              options={{
+                title: "Aulas",
+                tabBarLabel: "Aulas",
+              }}
+            />
+            <Tabs.Screen
+              name="devotionals/index"
+              options={{
+                title: "Devocional",
+                tabBarLabel: "Devocional",
+              }}
+            />
+          </>
+        ) : (
+          <>
+            <Tabs.Screen
+              name="devotionals/index"
+              options={{
+                title: "Devocional",
+                tabBarLabel: "Devocional",
+              }}
+            />
+            <Tabs.Screen
+              name="lessons/index"
+              options={{
+                title: "Aulas",
+                tabBarLabel: "Aulas",
+              }}
+            />
+          </>
+        )}
 
         {/* Oculta rotas adicionais da tab bar (acesso via menu/desvios internos) */}
         <Tabs.Screen
@@ -89,26 +162,17 @@ export default function TabsLayout() {
           <Pressable style={styles.backdrop} onPress={() => setMenuOpen(false)} />
           <View style={styles.drawer}>
             <Text style={styles.drawerTitle}>Menu</Text>
-            <MenuItem label="Perfil" onPress={() => handleNavigate("/(tabs)/profile")} />
-            <MenuItem label="Avisos" onPress={() => handleNavigate("/avisos")} />
-            {isStudent ? (
-              <MenuItem label="Sair" onPress={handleLogout} />
-            ) : (
-              <>
-                <MenuItem label="Notificacoes" onPress={() => handleNavigate("/notifications")} />
-                {canCreateAviso ? (
-                  <MenuItem label="Criar aviso" onPress={() => handleNavigate("/avisos/new")} />
-                ) : null}
-                <MenuItem label="Gerenciar" onPress={() => handleNavigate("/(tabs)/manage")} />
-                {isCoordinatorOrAdmin ? (
-                  <MenuItem label="Gestao de usuarios" onPress={() => handleNavigate("/manage/users")} />
-                ) : null}
-                <MenuItem label="Aprovar usuarios" onPress={() => handleNavigate("/manager/pending-users")} />
-                <MenuItem label="Aprovar reservas" onPress={() => handleNavigate("/manager/pending-reservations")} />
-                <MenuItem label="Dashboard Admin" onPress={() => handleNavigate("/admin/dashboard")} />
-                <MenuItem label="Sair" onPress={handleLogout} />
-              </>
-            )}
+            {buildMenuItems().map((item) => (
+              <MenuItem
+                key={item.label}
+                label={item.label}
+                onPress={() => {
+                  setMenuOpen(false);
+                  if (item.path) handleNavigate(item.path);
+                  if (item.action) item.action();
+                }}
+              />
+            ))}
           </View>
         </View>
       ) : null}
@@ -128,6 +192,50 @@ export default function TabsLayout() {
     } catch (err) {
       console.error("Erro ao sair:", err);
     }
+  }
+
+  function buildMenuItems(): { label: string; path?: string; action?: () => void }[] {
+    if (isCoordinator || isAdmin) {
+      return [
+        { label: "Meu Perfil", path: "/(tabs)/profile" },
+        { label: "Aulas", path: "/(tabs)/lessons" },
+        { label: "Devocionais", path: "/(tabs)/devotionals" },
+        { label: "Avisos", path: "/avisos" },
+        { label: "Aprovar usuarios", path: "/manager/pending-users" },
+        { label: "Aprovar reservas", path: "/manager/pending-reservations" },
+        { label: "Sair", action: handleLogout },
+      ];
+    }
+
+    if (isProfessor) {
+      return [
+        { label: "Meu perfil", path: "/(tabs)/profile" },
+        { label: "Criar aviso", path: "/avisos/new" },
+        { label: "Aprovar usuarios", path: "/manager/pending-users" },
+        { label: "Sair", action: handleLogout },
+      ];
+    }
+
+    if (isStudent) {
+      return [
+        { label: "Perfil", path: "/(tabs)/profile" },
+        { label: "Avisos", path: "/avisos" },
+        { label: "Sair", action: handleLogout },
+      ];
+    }
+
+    return [
+      { label: "Perfil", path: "/(tabs)/profile" },
+      { label: "Avisos", path: "/avisos" },
+      { label: "Notificacoes", path: "/notifications" },
+      ...(canCreateAviso ? [{ label: "Criar aviso", path: "/avisos/new" }] : []),
+      { label: "Gerenciar", path: "/(tabs)/manage" },
+      ...(isCoordinatorOrAdmin ? [{ label: "Gestao de usuarios", path: "/manage/users" }] : []),
+      { label: "Aprovar usuarios", path: "/manager/pending-users" },
+      { label: "Aprovar reservas", path: "/manager/pending-reservations" },
+      { label: "Dashboard Admin", path: "/admin/dashboard" },
+      { label: "Sair", action: handleLogout },
+    ];
   }
 }
 

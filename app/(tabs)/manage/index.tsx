@@ -112,13 +112,13 @@ export default function ManageHubScreen() {
         </Pressable>
           <Pressable
             style={styles.button}
-            onPress={() => router.push("/admin/devotionals/new" as any)}
+            onPress={() => router.push("/(tabs)/devotionals" as any)}
           >
             <Text style={styles.buttonText}>Criar devocional</Text>
           </Pressable>
           <Pressable
             style={styles.button}
-            onPress={() => router.push("/admin/devotionals" as any)}
+            onPress={() => router.push("/(tabs)/devotionals" as any)}
           >
             <Text style={styles.buttonText}>Gerenciar devocionais</Text>
           </Pressable>

@@ -130,7 +130,9 @@ export async function getDevotionalById(devotionalId: string): Promise<Devotiona
 export async function listPublishedDevotionals(): Promise<Devotional[]> {
   console.log("[DevotionalsLib] listPublishedDevotionals called");
   const colRef = collection(firebaseDb, COLLECTION);
-  const snap = await getDocs(query(colRef, where("status", "==", DevotionalStatus.PUBLICADO)));
+  const snap = await getDocs(
+    query(colRef, where("status", "in", [DevotionalStatus.PUBLICADO, "publicado", "publicados"]))
+  );
   const list: Devotional[] = [];
   snap.forEach((docSnap) => list.push(convertDoc(docSnap.id, docSnap.data())));
   // Ordena localmente por data_devocional desc (YYYY-MM-DD)
@@ -141,7 +143,20 @@ export async function listAvailableAndPublishedForProfessor(limitCount = 50): Pr
   console.log("[DevotionalsLib] listAvailableAndPublishedForProfessor called");
   const colRef = collection(firebaseDb, COLLECTION);
   const snap = await getDocs(
-    query(colRef, where("status", "in", [DevotionalStatus.PUBLICADO, DevotionalStatus.DISPONIVEL]), limit(limitCount))
+    query(
+      colRef,
+      where("status", "in", [
+        DevotionalStatus.PUBLICADO,
+        DevotionalStatus.DISPONIVEL,
+        "disponivel",
+        "disponiveis",
+        "disponível",
+        "Disponivel",
+        "publicado",
+        "publicados",
+      ]),
+      limit(limitCount)
+    )
   );
   const list: Devotional[] = [];
   snap.forEach((docSnap) => list.push(convertDoc(docSnap.id, docSnap.data())));
@@ -173,8 +188,9 @@ export async function listDevotionalsForAdmin(): Promise<{
   const published: Devotional[] = [];
   snap.forEach((docSnap) => {
     const devo = convertDoc(docSnap.id, docSnap.data());
-    if (devo.status === DevotionalStatus.PUBLICADO) published.push(devo);
-    else if (devo.status === DevotionalStatus.DISPONIVEL) available.push(devo);
+    const bucket = normalizeStatusForBucket(devo.status);
+    if (bucket === "published") published.push(devo);
+    else if (bucket === "available") available.push(devo);
     else drafts.push(devo);
   });
   return { drafts, available, published };
@@ -193,6 +209,7 @@ export async function isDevotionalDateAvailable(dateValue: string, ignoreId?: st
 // Helpers
 
 function convertDoc(id: string, data: Record<string, any>): Devotional {
+  const statusNormalized = normalizeStatusString(data.status ?? DevotionalStatus.RASCUNHO);
   return {
     id,
     titulo: data.titulo ?? "",
@@ -202,7 +219,7 @@ function convertDoc(id: string, data: Record<string, any>): Devotional {
     data_publicacao_auto: data.data_publicacao_auto ?? null,
     conteudo_base: data.conteudo_base ?? data.devocional_texto ?? "",
     devocional_texto: data.devocional_texto ?? data.conteudo_base ?? "",
-    status: data.status ?? DevotionalStatus.RASCUNHO,
+    status: statusNormalized as DevotionalStatus,
     criado_por_id: data.criado_por_id ?? "",
     rascunho_salvo_em: data.rascunho_salvo_em ?? null,
     publicado_em: data.publicado_em ?? null,
@@ -255,4 +272,20 @@ function validateCreate(data: Omit<CreateParams, "publish_at" | "publish_at_text
   if (!data.referencia_biblica?.trim()) throw new Error("Informe a referência bíblica.");
   if (!data.data_devocional?.trim()) throw new Error("Informe a data do devocional.");
   if (!data.conteudo_base?.trim()) throw new Error("Informe o devocional.");
+}
+
+function normalizeStatusForBucket(rawStatus: string): "draft" | "available" | "published" {
+  const s = normalizeStatusString(rawStatus);
+  if (s === DevotionalStatus.PUBLICADO || s === "publicados" || s === "publicado" || s.includes("public")) return "published";
+  if (s === DevotionalStatus.DISPONIVEL || s === "disponiveis" || s === "disponivel" || s.includes("dispon")) return "available";
+  // rascunho, pendente, agendado ou qualquer outro cai em draft/pendente
+  return "draft";
+}
+
+function normalizeStatusString(status: string): string {
+  return `${status ?? ""}`
+    .toLowerCase()
+    .trim()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "");
 }
