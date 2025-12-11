@@ -1,4 +1,4 @@
-// app/admin/devotionals/index.tsx - lista de gestão (admin/coordenador)
+// app/admin/devotionals/index.tsx - lista de devocionais (admin/coordenador)
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View, Pressable, TouchableOpacity } from "react-native";
 import { useRouter } from "expo-router";
@@ -63,7 +63,7 @@ export default function AdminDevotionalsScreen() {
   const allDevotionals = useMemo(() => {
     if (!sections) return [];
     const combined = [
-      ...(sections.scheduledDrafts ?? []),
+      ...((sections as any).scheduledDrafts ?? []),
       ...(sections.drafts ?? []),
       ...(sections.available ?? []),
       ...(sections.published ?? []),
@@ -75,14 +75,14 @@ export default function AdminDevotionalsScreen() {
       }
     });
 
-    // Logs de debug (deixe ou comente se preferir)
-    console.log("[AdminDevotionals] total no Firestore:", combined.length);
+    // Logs de debug
+    console.log("[AdminDevotionals] total:", combined.length);
     console.log(
-      "[AdminDevotionals] disponiveis no bruto:",
+      "[AdminDevotionals] disponiveis (bruto):",
       combined.filter((d) => normalizeStatusForFilter(d.status) === DEVOTIONAL_STATUS.DISPONIVEL).length
     );
     console.log(
-      "[AdminDevotionals] publicados no bruto:",
+      "[AdminDevotionals] publicados (bruto):",
       combined.filter((d) => normalizeStatusForFilter(d.status) === DEVOTIONAL_STATUS.PUBLICADO).length
     );
 
@@ -92,16 +92,16 @@ export default function AdminDevotionalsScreen() {
   const filteredDevotionals = useMemo(() => {
     const base = allDevotionals
       .filter((devo) => {
-        const normalized = normalizeStatusForFilter(devo.status);
+        const status = normalizeStatusForFilter(devo.status);
         switch (filter) {
           case "todos":
             return true;
           case "disponiveis":
-            return normalized === DEVOTIONAL_STATUS.DISPONIVEL;
+            return status === DEVOTIONAL_STATUS.DISPONIVEL;
           case "publicados":
-            return normalized === DEVOTIONAL_STATUS.PUBLICADO;
+            return status === DEVOTIONAL_STATUS.PUBLICADO;
           case "pendentes":
-            return normalized === "rascunho";
+            return status === "rascunho";
           default:
             return true;
         }
