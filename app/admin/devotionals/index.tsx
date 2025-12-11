@@ -1,4 +1,4 @@
-// app/admin/devotionals/index.tsx - lista de gestão de devocionais (layout unificado)
+// app/admin/devotionals/index.tsx - lista de gestão (admin/coordenador)
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View, Pressable, TouchableOpacity } from "react-native";
 import { useRouter } from "expo-router";
@@ -6,18 +6,21 @@ import { useRouter } from "expo-router";
 import { AppButton } from "../../../components/ui/AppButton";
 import { useAuth } from "../../../hooks/useAuth";
 import { useTheme } from "../../../hooks/useTheme";
-import {
-  listDevotionalsForAdmin,
-} from "../../../lib/devotionals";
+import { listDevotionalsForAdmin } from "../../../lib/devotionals";
 import { DevotionalStatus, type Devotional } from "../../../types/devotional";
 import { formatDate } from "../../../utils/publishAt";
 import { DevotionalListItem } from "../../../components/devotionals/DevotionalListItem";
 import { AppCardStatusVariant } from "../../../components/common/AppCard";
 
 type Sections = Awaited<ReturnType<typeof listDevotionalsForAdmin>>;
-type DevotionalFilter = "available" | "published" | "pending" | "mine";
+type DevotionalFilter = "todos" | "disponiveis" | "publicados" | "pendentes";
 type DateOrder = "asc" | "desc";
-type NormalizedDevotionalStatus = "disponivel" | "publicado" | "pendente";
+type NormalizedDevotionalStatus = "disponivel" | "publicado" | "rascunho";
+
+const DEVOTIONAL_STATUS = {
+  DISPONIVEL: "disponivel",
+  PUBLICADO: "publicado",
+} as const;
 
 export default function AdminDevotionalsScreen() {
   const router = useRouter();
@@ -26,7 +29,7 @@ export default function AdminDevotionalsScreen() {
 
   const [sections, setSections] = useState<Sections | null>(null);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<DevotionalFilter>("available");
+  const [filter, setFilter] = useState<DevotionalFilter>("disponiveis");
   const [dateOrder, setDateOrder] = useState<DateOrder>("desc");
 
   useEffect(() => {
@@ -59,44 +62,61 @@ export default function AdminDevotionalsScreen() {
 
   const allDevotionals = useMemo(() => {
     if (!sections) return [];
-    const scheduled = sections.scheduledDrafts ?? [];
-    const drafts = sections.drafts ?? [];
-    const published = sections.published ?? [];
-    const combined = [...scheduled, ...drafts, ...published];
+    const combined = [
+      ...(sections.scheduledDrafts ?? []),
+      ...(sections.drafts ?? []),
+      ...(sections.available ?? []),
+      ...(sections.published ?? []),
+    ];
     const map = new Map<string, Devotional>();
     combined.forEach((devo) => {
       if (!map.has(devo.id)) {
         map.set(devo.id, devo);
       }
     });
+
+    // Logs de debug (deixe ou comente se preferir)
+    console.log("[AdminDevotionals] total no Firestore:", combined.length);
+    console.log(
+      "[AdminDevotionals] disponiveis no bruto:",
+      combined.filter((d) => normalizeStatusForFilter(d.status) === DEVOTIONAL_STATUS.DISPONIVEL).length
+    );
+    console.log(
+      "[AdminDevotionals] publicados no bruto:",
+      combined.filter((d) => normalizeStatusForFilter(d.status) === DEVOTIONAL_STATUS.PUBLICADO).length
+    );
+
     return Array.from(map.values());
   }, [sections]);
 
   const filteredDevotionals = useMemo(() => {
-    return allDevotionals
+    const base = allDevotionals
       .filter((devo) => {
-        const status = normalizeDevotionalStatus(devo.status);
-        const isMine = devo.criado_por_id === firebaseUser?.uid;
+        const normalized = normalizeStatusForFilter(devo.status);
         switch (filter) {
-          case "available":
-            return status === "disponivel";
-          case "published":
-            return status === "publicado";
-          case "pending":
-            return status === "pendente";
-          case "mine":
-            return isMine;
+          case "todos":
+            return true;
+          case "disponiveis":
+            return normalized === DEVOTIONAL_STATUS.DISPONIVEL;
+          case "publicados":
+            return normalized === DEVOTIONAL_STATUS.PUBLICADO;
+          case "pendentes":
+            return normalized === "rascunho";
           default:
             return true;
         }
       })
       .sort((a, b) => {
-        const da = devotionalDateValue(a.data_devocional);
-        const db = devotionalDateValue(b.data_devocional);
-        if (dateOrder === "asc") return da - db;
-        return db - da;
+        const da = devotionalToMillis(a);
+        const db = devotionalToMillis(b);
+        if (da === null || db === null) return 0;
+        return dateOrder === "asc" ? da - db : db - da;
       });
-  }, [allDevotionals, dateOrder, filter, firebaseUser?.uid]);
+
+    console.log("[AdminDevotionals] filtro:", filter, "ordenação:", dateOrder, "resultado:", base.length);
+
+    return base;
+  }, [allDevotionals, dateOrder, filter]);
 
   function toggleDateOrder() {
     setDateOrder((prev) => (prev === "asc" ? "desc" : "asc"));
@@ -132,18 +152,16 @@ export default function AdminDevotionalsScreen() {
 
       <View style={{ gap: 12 }}>
         <View style={styles.filtersRow}>
-          {renderFilterChip("Disponíveis", "available")}
-          {renderFilterChip("Publicados", "published")}
-          {renderFilterChip("Pendentes", "pending")}
-          {renderFilterChip("Meus devocionais", "mine")}
+          {renderFilterChip("Todos", "todos")}
+          {renderFilterChip("Disponíveis", "disponiveis")}
+          {renderFilterChip("Publicados", "publicados")}
+          {renderFilterChip("Pendentes", "pendentes")}
         </View>
 
         <View style={styles.orderToggleRow}>
           <Text style={styles.sectionTitle}>Devocionais</Text>
           <TouchableOpacity onPress={toggleDateOrder} style={styles.orderToggleButton}>
-            <Text style={styles.orderToggleText}>
-              Ordenar por data: {dateOrder === "desc" ? "↓" : "↑"}
-            </Text>
+            <Text style={styles.orderToggleText}>Ordenar por data: {dateOrder === "desc" ? "↓" : "↑"}</Text>
           </TouchableOpacity>
         </View>
 
@@ -151,7 +169,7 @@ export default function AdminDevotionalsScreen() {
           <Text style={styles.empty}>Nenhum devocional encontrado.</Text>
         ) : (
           filteredDevotionals.map((devo) => {
-            const status = normalizeDevotionalStatus(devo.status);
+            const status = normalizeStatusForFilter(devo.status);
             const subtitle = `${formatDevotionalDate(devo.data_devocional)} • ${devotionalStatusLabel(status)}`;
             return (
               <DevotionalListItem
@@ -170,16 +188,23 @@ export default function AdminDevotionalsScreen() {
   );
 }
 
-function normalizeDevotionalStatus(status: DevotionalStatus): NormalizedDevotionalStatus {
-  if (status === DevotionalStatus.DISPONIVEL) return "disponivel";
-  if (status === DevotionalStatus.PUBLICADO) return "publicado";
-  return "pendente";
+function normalizeStatusForFilter(status: DevotionalStatus | string): NormalizedDevotionalStatus {
+  const s = `${status ?? ""}`
+    .toLowerCase()
+    .trim()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/s$/, ""); // remove plural simples
+
+  if (s === DEVOTIONAL_STATUS.DISPONIVEL) return "disponivel";
+  if (s === DEVOTIONAL_STATUS.PUBLICADO) return "publicado";
+  return "rascunho";
 }
 
 function devotionalStatusLabel(status: NormalizedDevotionalStatus) {
   if (status === "disponivel") return "Disponível";
   if (status === "publicado") return "Publicado";
-  if (status === "pendente") return "Pendente";
+  if (status === "rascunho") return "Pendente";
   return status;
 }
 
@@ -189,10 +214,23 @@ function devotionalStatusVariant(status: NormalizedDevotionalStatus): AppCardSta
       return "success";
     case "disponivel":
       return "info";
-    case "pendente":
+    case "rascunho":
     default:
       return "warning";
   }
+}
+
+function devotionalToMillis(dev: any): number | null {
+  const raw = dev?.data_devocional || dev?.data || dev?.created_at;
+  if (!raw) return null;
+
+  if (raw?.toMillis && typeof raw.toMillis === "function") {
+    return raw.toMillis();
+  }
+  const d = new Date(raw);
+  const time = d.getTime();
+  if (Number.isNaN(time)) return null;
+  return time;
 }
 
 function formatDevotionalDate(value: string): string {
@@ -200,12 +238,6 @@ function formatDevotionalDate(value: string): string {
   const [year, month, day] = value.split("-");
   if (!year || !month || !day) return value;
   return formatDate(new Date(Number(year), Number(month) - 1, Number(day)));
-}
-
-function devotionalDateValue(value: string): number {
-  const [year, month, day] = value.split("-");
-  const date = new Date(Number(year), Number(month) - 1, Number(day));
-  return date.getTime();
 }
 
 function Header({ title, onCreate }: { title: string; onCreate: () => void }) {
