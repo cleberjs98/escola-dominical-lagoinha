@@ -11,6 +11,7 @@ import { listLessonsForAdminCoordinator, listLessonsForProfessor, listPublishedL
 import { formatTimestampToDateInput } from "../../../utils/publishAt";
 import { AppCard, AppCardStatusVariant } from "../../../components/common/AppCard";
 import { LessonListItem } from "../../../components/lessons/LessonListItem";
+import { AppBackground } from "../../../components/layout/AppBackground";
 
 type Role = "aluno" | "professor" | "coordenador" | "administrador" | "admin" | undefined;
 
@@ -99,7 +100,7 @@ export default function LessonsTabScreen() {
 // =========================
 function AdminLessonsScreen({ uid }: { uid: string }) {
   const router = useRouter();
-  const { themeSettings } = useTheme();
+  const { theme } = useTheme();
   const [adminSections, setAdminSections] = useState<AdminSections | null>(null);
   const [loading, setLoading] = useState(true);
   const [adminStatusFilter, setAdminStatusFilter] = useState<AdminLessonFilter>("available");
@@ -184,17 +185,33 @@ function AdminLessonsScreen({ uid }: { uid: string }) {
     );
   }
 
-  const bg = themeSettings?.cor_fundo || "#020617";
+  const bg = theme.colors.background;
+  const text = theme.colors.text;
+  const chipBg = theme.colors.surface2 || "#3A1118";
+  const chipActive = theme.colors.primary;
+  const chipBorder = theme.colors.border;
 
   function renderAdminFilterChip(label: string, value: AdminLessonFilter) {
     const active = adminStatusFilter === value;
     return (
       <Pressable
         key={value}
-        style={[styles.filterChip, active && styles.filterChipActive]}
+        style={[
+          styles.filterChip,
+          { backgroundColor: chipBg, borderColor: chipBorder },
+          active && [styles.filterChipActive, { backgroundColor: chipActive, borderColor: chipActive }],
+        ]}
         onPress={() => setAdminStatusFilter(value)}
       >
-        <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{label}</Text>
+        <Text
+          style={[
+            styles.filterChipText,
+            { color: text },
+            active && [styles.filterChipTextActive, { color: theme.colors.onPrimary || "#FFFFFF" }],
+          ]}
+        >
+          {label}
+        </Text>
       </Pressable>
     );
   }
@@ -255,7 +272,7 @@ function AdminLessonsScreen({ uid }: { uid: string }) {
 // =========================
 function StudentLessonsScreen({ uid }: { uid: string }) {
   const router = useRouter();
-  const { themeSettings } = useTheme();
+  const { theme } = useTheme();
   const [publishedForStudent, setPublishedForStudent] = useState<Lesson[]>([]);
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState<DateOrder>("desc");
@@ -290,22 +307,34 @@ function StudentLessonsScreen({ uid }: { uid: string }) {
     );
   }
 
-  const bg = themeSettings?.cor_fundo || "#020617";
+  const bg = theme.colors.background;
+  const text = theme.colors.text;
+  const chipBorder = theme.colors.border;
+  const chipBg = theme.colors.surface2;
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: bg }]} contentContainerStyle={styles.content}>
+    <AppBackground>
+      <ScrollView style={[styles.container, { backgroundColor: bg }]} contentContainerStyle={styles.content}>
       <View style={{ gap: 8 }}>
         <View style={styles.orderRow}>
           <View />
           <View style={styles.orderButtons}>
             <Text
-              style={[styles.orderChip, order === "desc" && styles.orderChipActive]}
+              style={[
+                styles.orderChip,
+                { borderColor: chipBorder, color: text },
+                order === "desc" && [styles.orderChipActive, { backgroundColor: chipBg }],
+              ]}
               onPress={() => setOrder("desc")}
             >
               Mais recentes
             </Text>
             <Text
-              style={[styles.orderChip, order === "asc" && styles.orderChipActive]}
+              style={[
+                styles.orderChip,
+                { borderColor: chipBorder, color: text },
+                order === "asc" && [styles.orderChipActive, { backgroundColor: chipBg }],
+              ]}
               onPress={() => setOrder("asc")}
             >
               Mais antigas
@@ -329,7 +358,8 @@ function StudentLessonsScreen({ uid }: { uid: string }) {
           )}
         </Section>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </AppBackground>
   );
 }
 
@@ -468,7 +498,8 @@ function ProfessorLessonsTabScreen({ uid }: { uid: string }) {
   const bg = themeSettings?.cor_fundo || "#020617";
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: bg }]} contentContainerStyle={styles.content}>
+    <AppBackground>
+      <ScrollView style={[styles.container, { backgroundColor: bg }]} contentContainerStyle={styles.content}>
         <View style={{ gap: 12 }}>
           <View style={styles.filtersRow}>
           {renderFilterChip("Todas", "all", counts.all)}
@@ -495,25 +526,26 @@ function ProfessorLessonsTabScreen({ uid }: { uid: string }) {
           </TouchableOpacity>
         </View>
 
-        {filteredLessons.length === 0 ? (
-          <Text style={styles.empty}>Nenhuma aula encontrada.</Text>
-        ) : (
-          filteredLessons.map((lesson) => {
-            const status = normalizeLessonStatus(lesson.status);
-            return (
-              <AppCard
-                key={lesson.id}
-                title={lesson.titulo}
-                subtitle={formatLessonDate(lesson)}
-                statusLabel={lessonStatusLabel(status)}
-                statusVariant={lessonStatusVariant(status)}
-                onPress={() => router.push({ pathname: "/lessons/[lessonId]", params: { lessonId: lesson.id } } as any)}
-              />
-            );
-          })
-        )}
-      </View>
-    </ScrollView>
+            {filteredLessons.length === 0 ? (
+              <Text style={styles.empty}>Nenhuma aula encontrada.</Text>
+            ) : (
+              filteredLessons.map((lesson) => {
+                const status = normalizeLessonStatus(lesson.status);
+                return (
+                  <AppCard
+                    key={lesson.id}
+                    title={lesson.titulo}
+                    subtitle={formatLessonDate(lesson)}
+                    statusLabel={lessonStatusLabel(status)}
+                    statusVariant={lessonStatusVariant(status)}
+                    onPress={() => router.push({ pathname: "/lessons/[lessonId]", params: { lessonId: lesson.id } } as any)}
+                  />
+                );
+              })
+            )}
+        </View>
+      </ScrollView>
+    </AppBackground>
   );
 }
 
