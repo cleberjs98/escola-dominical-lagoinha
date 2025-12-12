@@ -8,6 +8,7 @@ import { DevotionalListItem } from "../../components/devotionals/DevotionalListI
 import { EmptyState } from "../../components/ui/EmptyState";
 import { useAuth } from "../../hooks/useAuth";
 import { useTheme } from "../../hooks/useTheme";
+import { AppBackground } from "../../components/layout/AppBackground";
 import type { Devotional } from "../../types/devotional";
 import { DevotionalStatus } from "../../types/devotional";
 import {
@@ -155,49 +156,61 @@ function AdminDevotionalsTab({ uid }: { uid: string }) {
   }
 
   const bg = theme.colors.background;
+  const text = theme.colors.text;
+  const chipBg = theme.colors.surface2 || "#3A1118";
+  const chipActive = theme.colors.primary;
+  const chipBorder = theme.colors.border;
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: bg }]} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Devocionais - Gestao</Text>
-        <AppButton title="Criar devocional" variant="primary" fullWidth={false} onPress={() => router.push("/admin/devotionals/new" as any)} />
-      </View>
-
-      <View style={{ gap: 12 }}>
-        <View style={styles.filtersRow}>
-          {renderFilterChip("Todos", "todos", filter, setFilter)}
-          {renderFilterChip("Disponiveis", "disponiveis", filter, setFilter)}
-          {renderFilterChip("Publicados", "publicados", filter, setFilter)}
-          {renderFilterChip("Pendentes", "pendentes", filter, setFilter)}
+    <AppBackground>
+      <ScrollView style={[styles.container, { backgroundColor: bg }]} contentContainerStyle={styles.content}>
+        <View style={styles.header}>
+          <Text style={[styles.sectionTitle, { color: text }]}>Devocionais - Gestao</Text>
+          <AppButton title="Criar devocional" variant="primary" fullWidth={false} onPress={() => router.push("/admin/devotionals/new" as any)} />
         </View>
 
-        <View style={styles.orderToggleRow}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Devocionais</Text>
-          <TouchableOpacity onPress={toggleDateOrder} style={styles.orderToggleButton}>
-            <Text style={styles.orderToggleText}>Ordenar por data: {dateOrder === "desc" ? "↓" : "↑"}</Text>
-          </TouchableOpacity>
-        </View>
+        <View style={{ gap: 12 }}>
+          <View style={styles.filtersRow}>
+            {renderFilterChip("Todos", "todos", filter, setFilter, { chipBg, chipActive, chipBorder, text })}
+            {renderFilterChip("Disponiveis", "disponiveis", filter, setFilter, { chipBg, chipActive, chipBorder, text })}
+            {renderFilterChip("Publicados", "publicados", filter, setFilter, { chipBg, chipActive, chipBorder, text })}
+            {renderFilterChip("Pendentes", "pendentes", filter, setFilter, { chipBg, chipActive, chipBorder, text })}
+          </View>
 
-        {filteredDevotionals.length === 0 ? (
-          <Text style={styles.empty}>Nenhum devocional encontrado.</Text>
-        ) : (
-          filteredDevotionals.map((devo) => {
-            const status = normalizeStatusForFilter(devo.status);
-            const subtitle = `${formatDevotionalDate(devo.data_devocional)} • ${devotionalStatusLabel(status)}`;
-            return (
-              <DevotionalListItem
-                key={devo.id}
-                title={devo.titulo}
-                subtitle={subtitle}
-                statusLabel={devotionalStatusLabel(status)}
-                statusVariant={devotionalStatusVariant(status)}
-                onPress={() => router.push(`/devotionals/${devo.id}` as any)}
-              />
-            );
-          })
-        )}
-      </View>
-    </ScrollView>
+          <View style={styles.orderToggleRow}>
+            <Text style={[styles.sectionTitle, { color: text }]}>Devocionais</Text>
+            <TouchableOpacity
+              onPress={toggleDateOrder}
+              style={[
+                styles.orderToggleButton,
+                { borderColor: chipBorder, backgroundColor: chipBg },
+              ]}
+            >
+              <Text style={[styles.orderToggleText, { color: text }]}>Ordenar por data: {dateOrder === "desc" ? "↓" : "↑"}</Text>
+            </TouchableOpacity>
+          </View>
+
+          {filteredDevotionals.length === 0 ? (
+            <Text style={[styles.empty, { color: theme.colors.muted || "#94A3B8" }]}>Nenhum devocional encontrado.</Text>
+          ) : (
+            filteredDevotionals.map((devo) => {
+              const status = normalizeStatusForFilter(devo.status);
+              const subtitle = `${formatDevotionalDate(devo.data_devocional)} • ${devotionalStatusLabel(status)}`;
+              return (
+                <DevotionalListItem
+                  key={devo.id}
+                  title={devo.titulo}
+                  subtitle={subtitle}
+                  statusLabel={devotionalStatusLabel(status)}
+                  statusVariant={devotionalStatusVariant(status)}
+                  onPress={() => router.push(`/devotionals/${devo.id}` as any)}
+                />
+              );
+            })
+          )}
+        </View>
+      </ScrollView>
+    </AppBackground>
   );
 }
 
@@ -352,15 +365,36 @@ function StudentDevotionalsTab() {
 // =========================
 // Helpers
 // =========================
-function renderFilterChip(label: string, value: DevotionalFilter, current: DevotionalFilter, onChange: (v: DevotionalFilter) => void) {
+function renderFilterChip(
+  label: string,
+  value: DevotionalFilter,
+  current: DevotionalFilter,
+  onChange: (v: DevotionalFilter) => void,
+  theme?: { chipBg: string; chipActive: string; chipBorder?: string; text: string }
+) {
   const active = current === value;
   return (
     <Pressable
       key={value}
-      style={[styles.filterChip, active && styles.filterChipActive]}
+      style={[
+        styles.filterChip,
+        { backgroundColor: theme?.chipBg, borderColor: theme?.chipBorder },
+        active && [
+          styles.filterChipActive,
+          { backgroundColor: theme?.chipActive, borderColor: theme?.chipActive },
+        ],
+      ]}
       onPress={() => onChange(value)}
     >
-      <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{label}</Text>
+      <Text
+        style={[
+          styles.filterChipText,
+          { color: theme?.text },
+          active && [styles.filterChipTextActive, { color: "#FFFFFF" }],
+        ]}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }
