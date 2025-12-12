@@ -7,6 +7,7 @@ import { AuthProvider } from "../contexts/AuthContext";
 import { ThemeProvider } from "../contexts/ThemeContext";
 import { useAuth } from "../hooks/useAuth";
 import { useTheme } from "../hooks/useTheme";
+import { AppBackground } from "../components/layout/AppBackground";
 
 function PendingGuard() {
   const { isAuthenticated, isPending, isInitializing } = useAuth();
@@ -48,19 +49,21 @@ function RootLayoutContent() {
   const textColor = theme.colors.text;
 
   return (
-    <View style={{ flex: 1, backgroundColor: bg }}>
-      <StatusBar style="light" />
-      <PendingGuard />
-      <Stack
-        screenOptions={{
-          headerStyle: { backgroundColor: theme.colors.card },
-          headerTintColor: textColor,
-          headerTitleStyle: { fontWeight: "600" },
-          contentStyle: { backgroundColor: bg },
-        }}
-      >
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      </Stack>
-    </View>
+    <AppBackground>
+      <View style={{ flex: 1, backgroundColor: bg }}>
+        <StatusBar style="light" />
+        <PendingGuard />
+        <Stack
+          screenOptions={{
+            headerStyle: { backgroundColor: theme.colors.card },
+            headerTintColor: textColor,
+            headerTitleStyle: { fontWeight: "600" },
+            contentStyle: { backgroundColor: bg },
+          }}
+        >
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        </Stack>
+      </View>
+    </AppBackground>
   );
 }

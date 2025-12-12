@@ -28,12 +28,16 @@ export function AppCard({
   const backgroundColor = theme?.colors?.card || "#3A1118";
   const titleColor = theme?.colors?.text || "#FFFFFF";
   const subtitleColor = theme?.colors?.muted || "#CFCFCF";
+  const borderColor = theme?.colors?.border || "#3A0E15";
+
+  const badgeStyle = mapStatusVariantToStyle(statusVariant, theme);
+  const badgeTextColor = mapStatusVariantToTextColor(statusVariant, theme);
 
   return (
     <Container
       onPress={onPress}
       activeOpacity={onPress ? 0.85 : 1}
-      style={[cardStyles.container, { backgroundColor }, style]}
+      style={[cardStyles.container, { backgroundColor, borderColor }, style]}
     >
       <Text style={[cardStyles.title, { color: titleColor }]}>{title}</Text>
 
@@ -42,8 +46,8 @@ export function AppCard({
           {subtitle ? <Text style={[cardStyles.subtitle, { color: subtitleColor }]}>{subtitle}</Text> : <View />}
 
           {statusLabel ? (
-            <View style={[cardStyles.statusBadge, mapStatusVariantToStyle(statusVariant)]}>
-              <Text style={cardStyles.statusBadgeText}>{statusLabel}</Text>
+            <View style={[cardStyles.statusBadge, badgeStyle]}>
+              <Text style={[cardStyles.statusBadgeText, { color: badgeTextColor }]}>{statusLabel}</Text>
             </View>
           ) : null}
         </View>
@@ -53,10 +57,10 @@ export function AppCard({
   );
 }
 
-function mapStatusVariantToStyle(variant: AppCardStatusVariant): ViewStyle {
+function mapStatusVariantToStyle(variant: AppCardStatusVariant, theme: any): ViewStyle {
   switch (variant) {
     case "success":
-      return { backgroundColor: "#FFFFFF", borderColor: "#2A0E12", borderWidth: 1 };
+      return { backgroundColor: "#FFFFFF", borderColor: theme?.colors?.border || "#7A1422", borderWidth: 1 };
     case "info":
       return { backgroundColor: "rgba(255,255,255,0.12)" };
     case "warning":
@@ -66,6 +70,19 @@ function mapStatusVariantToStyle(variant: AppCardStatusVariant): ViewStyle {
     case "default":
     default:
       return { backgroundColor: "rgba(255,255,255,0.08)" };
+  }
+}
+
+function mapStatusVariantToTextColor(variant: AppCardStatusVariant, theme: any): string {
+  switch (variant) {
+    case "success":
+      return theme?.colors?.primary || "#7A1422";
+    case "info":
+    case "warning":
+    case "muted":
+    case "default":
+    default:
+      return theme?.colors?.text || "#FFFFFF";
   }
 }
 

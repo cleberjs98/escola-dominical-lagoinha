@@ -71,6 +71,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       tabBarInactive: themeTokens.colors.tabInactive,
       border: themeTokens.colors.border,
       muted: themeTokens.colors.muted,
+      divider: themeTokens.colors.border,
+      inputBg: themeTokens.colors.inputBg,
+      inputBorder: themeTokens.colors.inputBorder,
+      inputBorderFocus: themeTokens.colors.inputBorderFocus,
+      inputText: themeTokens.colors.inputText,
+      inputPlaceholder: themeTokens.colors.inputPlaceholder,
       status: {
         successBg: themeTokens.status.publicada.bg,
         successText: themeTokens.status.publicada.text,

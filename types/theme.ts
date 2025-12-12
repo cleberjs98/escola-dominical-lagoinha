@@ -54,6 +54,12 @@ export interface AppTheme {
     accent: string;
     border?: string;
     muted?: string;
+    divider?: string;
+    inputBg?: string;
+    inputBorder?: string;
+    inputBorderFocus?: string;
+    inputText?: string;
+    inputPlaceholder?: string;
     status?: {
       successBg: string;
       successText: string;

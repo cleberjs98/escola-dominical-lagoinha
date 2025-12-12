@@ -55,7 +55,7 @@ export default function TabsLayout() {
           tabBarInactiveTintColor: theme.colors.tabBarInactive,
           tabBarStyle: {
             backgroundColor: theme.colors.tabBarBackground,
-            borderTopColor: theme.colors.tabBarBackground,
+            borderTopColor: theme.colors.border || theme.colors.tabBarBackground,
             height: 60,
             paddingBottom: 6,
           },
@@ -178,6 +178,8 @@ export default function TabsLayout() {
               <MenuItem
                 key={item.label}
                 label={item.label}
+                color={theme.colors.text}
+                borderColor={theme.colors.border}
                 onPress={() => {
                   setMenuOpen(false);
                   if (item.path) handleNavigate(item.path);
@@ -251,10 +253,20 @@ export default function TabsLayout() {
   }
 }
 
-function MenuItem({ label, onPress }: { label: string; onPress: () => void }) {
+function MenuItem({
+  label,
+  onPress,
+  color,
+  borderColor,
+}: {
+  label: string;
+  onPress: () => void;
+  color?: string;
+  borderColor?: string;
+}) {
   return (
-    <Pressable style={styles.menuItem} onPress={onPress}>
-      <Text style={styles.menuItemText}>{label}</Text>
+    <Pressable style={[styles.menuItem, borderColor ? { borderBottomColor: borderColor } : null]} onPress={onPress}>
+      <Text style={[styles.menuItemText, color ? { color } : null]}>{label}</Text>
     </Pressable>
   );
 }
