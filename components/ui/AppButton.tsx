@@ -30,11 +30,11 @@ export function AppButton({
   style,
 }: Props) {
   const { theme } = useTheme();
-  const primaryBg = theme.colors.buttons?.primaryBg || "#fff";
-  const primaryText = theme.colors.buttons?.primaryText || "#2A0E12";
-  const secondaryBg = theme.colors.buttons?.secondaryBg || "#3A1118";
-  const secondaryText = theme.colors.buttons?.secondaryText || "#fff";
-  const dangerBg = theme.colors.status?.dangerBg || "#4A1520";
+  const primaryBg = theme.colors.buttons?.primaryBg || "#7A1422";
+  const primaryText = theme.colors.buttons?.primaryText || "#FFFFFF";
+  const secondaryBg = theme.colors.buttons?.secondaryBg || "transparent";
+  const secondaryText = theme.colors.buttons?.secondaryText || "#FFFFFF";
+  const dangerBg = theme.colors.status?.dangerBg || "#9F1D2D";
 
   const baseStyle: ViewStyle = {
     backgroundColor:

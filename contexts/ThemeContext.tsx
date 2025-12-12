@@ -7,7 +7,7 @@ import type {
   ScreenLayoutConfig,
   ThemeSettings,
 } from "../types/theme";
-import { bordoTheme, legacyThemeSettings } from "../theme/colors";
+import { themeTokens } from "../theme/tokens";
 
 type BackgroundMap = Record<string, BackgroundSettings | null>;
 
@@ -46,38 +46,46 @@ const defaultLayout: LayoutSettings = {
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [themeSettings] = useState<ThemeSettings | null>({
-    ...legacyThemeSettings,
+    cor_primaria: themeTokens.colors.primary,
+    cor_secundaria: themeTokens.colors.surface2,
+    cor_fundo: themeTokens.colors.background,
+    cor_texto: themeTokens.colors.textPrimary,
+    cor_texto_secundario: themeTokens.colors.textSecondary,
+    cor_sucesso: themeTokens.colors.primary,
+    cor_erro: themeTokens.colors.danger,
+    cor_aviso: themeTokens.colors.primary,
+    cor_info: themeTokens.colors.primary,
     id: "lagoinha-fixed",
     ativo: true,
   } as ThemeSettings);
   const [theme] = useState<AppTheme>({
     colors: {
-      background: bordoTheme.background,
-      card: bordoTheme.surface,
-      primary: bordoTheme.surface,
-      secondary: bordoTheme.surfaceAlt,
-      text: bordoTheme.textPrimary,
-      accent: bordoTheme.accent,
-      tabBarBackground: bordoTheme.tabBackground,
-      tabBarActive: bordoTheme.tabActive,
-      tabBarInactive: bordoTheme.tabInactive,
-      border: bordoTheme.border,
-      muted: bordoTheme.textMuted,
+      background: themeTokens.colors.background,
+      card: themeTokens.colors.surface,
+      primary: themeTokens.colors.primary,
+      secondary: themeTokens.colors.surface2,
+      text: themeTokens.colors.textPrimary,
+      accent: themeTokens.colors.white,
+      tabBarBackground: themeTokens.colors.tabBarBg,
+      tabBarActive: themeTokens.colors.tabActive,
+      tabBarInactive: themeTokens.colors.tabInactive,
+      border: themeTokens.colors.border,
+      muted: themeTokens.colors.muted,
       status: {
-        successBg: bordoTheme.statusSuccessBg,
-        successText: bordoTheme.statusSuccessText,
-        infoBg: bordoTheme.statusInfoBg,
-        infoText: bordoTheme.statusInfoText,
-        warningBg: bordoTheme.statusWarningBg,
-        warningText: bordoTheme.statusWarningText,
-        dangerBg: bordoTheme.statusDangerBg,
-        dangerText: bordoTheme.statusDangerText,
+        successBg: themeTokens.status.publicada.bg,
+        successText: themeTokens.status.publicada.text,
+        infoBg: themeTokens.status.disponivel.bg,
+        infoText: themeTokens.status.disponivel.text,
+        warningBg: themeTokens.status.pendente.bg,
+        warningText: themeTokens.status.pendente.text,
+        dangerBg: themeTokens.colors.danger,
+        dangerText: themeTokens.colors.onDanger,
       },
       buttons: {
-        primaryBg: bordoTheme.buttonPrimaryBg,
-        primaryText: bordoTheme.buttonPrimaryText,
-        secondaryBg: bordoTheme.buttonSecondaryBg,
-        secondaryText: bordoTheme.buttonSecondaryText,
+        primaryBg: themeTokens.colors.primary,
+        primaryText: themeTokens.colors.onPrimary,
+        secondaryBg: "transparent",
+        secondaryText: themeTokens.colors.white,
       },
     },
     background: {
