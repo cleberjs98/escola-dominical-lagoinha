@@ -1,8 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState, ReactNode } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getActiveLayoutSettings } from "../lib/theme";
-import { getActiveBackgrounds, getActiveScreenLayouts, listActiveNavigationTabs } from "../lib/navigationSettings";
-import { getMergedAppTheme, getThemeSettings } from "../lib/themeSettings";
+import React, { createContext, useContext, useMemo, useState, ReactNode } from "react";
 import type {
   AppTheme,
   BackgroundSettings,
@@ -11,6 +7,7 @@ import type {
   ScreenLayoutConfig,
   ThemeSettings,
 } from "../types/theme";
+import { bordoTheme, legacyThemeSettings } from "../theme/colors";
 
 type BackgroundMap = Record<string, BackgroundSettings | null>;
 
@@ -28,14 +25,6 @@ export interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
-
-const STORAGE_KEYS = {
-  theme: "theme_settings_active",
-  layout: "layout_settings_active",
-  backgrounds: "backgrounds_active",
-  tabs: "navigation_tabs_active",
-  screenLayouts: "screen_layouts_active",
-};
 
 const defaultLayout: LayoutSettings = {
   id: "default",
@@ -56,21 +45,51 @@ const defaultLayout: LayoutSettings = {
 };
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [themeSettings, setThemeSettings] = useState<ThemeSettings | null>(null);
-  const [theme, setTheme] = useState<AppTheme>(getMergedAppTheme(null));
+  const [themeSettings] = useState<ThemeSettings | null>({
+    ...legacyThemeSettings,
+    id: "lagoinha-fixed",
+    ativo: true,
+  } as ThemeSettings);
+  const [theme] = useState<AppTheme>({
+    colors: {
+      background: bordoTheme.background,
+      card: bordoTheme.surface,
+      primary: bordoTheme.surface,
+      secondary: bordoTheme.surfaceAlt,
+      text: bordoTheme.textPrimary,
+      accent: bordoTheme.accent,
+      tabBarBackground: bordoTheme.tabBackground,
+      tabBarActive: bordoTheme.tabActive,
+      tabBarInactive: bordoTheme.tabInactive,
+      border: bordoTheme.border,
+      muted: bordoTheme.textMuted,
+      status: {
+        successBg: bordoTheme.statusSuccessBg,
+        successText: bordoTheme.statusSuccessText,
+        infoBg: bordoTheme.statusInfoBg,
+        infoText: bordoTheme.statusInfoText,
+        warningBg: bordoTheme.statusWarningBg,
+        warningText: bordoTheme.statusWarningText,
+        dangerBg: bordoTheme.statusDangerBg,
+        dangerText: bordoTheme.statusDangerText,
+      },
+      buttons: {
+        primaryBg: bordoTheme.buttonPrimaryBg,
+        primaryText: bordoTheme.buttonPrimaryText,
+        secondaryBg: bordoTheme.buttonSecondaryBg,
+        secondaryText: bordoTheme.buttonSecondaryText,
+      },
+    },
+    background: {
+      type: "none",
+      enabled: false,
+    },
+  });
   const [layoutSettings, setLayoutSettings] = useState<LayoutSettings | null>(defaultLayout);
-  const [backgrounds, setBackgrounds] = useState<BackgroundMap>({});
-  const [navigationTabs, setNavigationTabs] = useState<NavigationTabConfig[]>([]);
-  const [screenLayouts, setScreenLayouts] = useState<ScreenLayoutConfig[]>([]);
-  const [isThemeLoading, setIsThemeLoading] = useState<boolean>(true);
-
-  // Carrega cache inicial
-  useEffect(() => {
-    void loadFromCache().finally(() => {
-      // Em seguida, busca remoto
-      void reloadTheme();
-    });
-  }, []);
+  const [backgrounds] = useState<BackgroundMap>({});
+  const [navigationTabs] = useState<NavigationTabConfig[]>([]);
+  const [screenLayouts] = useState<ScreenLayoutConfig[]>([]);
+  const [isThemeLoading] = useState<boolean>(false);
 
   const contextValue: ThemeContextValue = useMemo(
     () => ({
@@ -87,94 +106,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     [theme, themeSettings, layoutSettings, backgrounds, navigationTabs, screenLayouts, isThemeLoading]
   );
 
-  async function loadFromCache() {
-    try {
-      const [themeStr, layoutStr, bgStr, tabsStr, layoutsStr] = await Promise.all([
-        AsyncStorage.getItem(STORAGE_KEYS.theme),
-        AsyncStorage.getItem(STORAGE_KEYS.layout),
-        AsyncStorage.getItem(STORAGE_KEYS.backgrounds),
-        AsyncStorage.getItem(STORAGE_KEYS.tabs),
-        AsyncStorage.getItem(STORAGE_KEYS.screenLayouts),
-      ]);
-
-      if (themeStr) {
-        const parsed: ThemeSettings = JSON.parse(themeStr);
-        setThemeSettings(parsed);
-        setTheme(getMergedAppTheme(parsed));
-      }
-      if (layoutStr) setLayoutSettings(JSON.parse(layoutStr));
-      if (bgStr) {
-        const arr: BackgroundSettings[] = JSON.parse(bgStr);
-        setBackgrounds(mapBackgrounds(arr));
-      }
-      if (tabsStr) setNavigationTabs(JSON.parse(tabsStr));
-      if (layoutsStr) setScreenLayouts(JSON.parse(layoutsStr));
-    } catch (err) {
-      console.error("Erro ao carregar tema do cache:", err);
-    }
-  }
-
   async function reloadTheme() {
-    try {
-      setIsThemeLoading(true);
-
-      const [activeTheme, activeLayout, activeBgs, activeTabs, activeScreenLayouts] = await Promise.all([
-        getThemeSettings(),
-        getActiveLayoutSettings(),
-        getActiveBackgrounds(),
-        listActiveNavigationTabs(),
-        getActiveScreenLayouts(),
-      ]);
-
-      if (activeTheme) {
-        setThemeSettings(activeTheme);
-        setTheme(getMergedAppTheme(activeTheme));
-        await AsyncStorage.setItem(STORAGE_KEYS.theme, JSON.stringify(activeTheme));
-      } else {
-        setThemeSettings(null);
-        setTheme(getMergedAppTheme(null));
-      }
-
-      if (activeLayout) {
-        setLayoutSettings(activeLayout);
-        await AsyncStorage.setItem(STORAGE_KEYS.layout, JSON.stringify(activeLayout));
-      }
-      if (activeBgs) {
-        setBackgrounds(mapBackgrounds(activeBgs));
-        await AsyncStorage.setItem(STORAGE_KEYS.backgrounds, JSON.stringify(activeBgs));
-      }
-      if (activeTabs) {
-        setNavigationTabs(activeTabs);
-        await AsyncStorage.setItem(STORAGE_KEYS.tabs, JSON.stringify(activeTabs));
-      }
-      if (activeScreenLayouts) {
-        setScreenLayouts(activeScreenLayouts);
-        await AsyncStorage.setItem(STORAGE_KEYS.screenLayouts, JSON.stringify(activeScreenLayouts));
-      }
-    } catch (err) {
-      const code = (err as any)?.code || "";
-      const isPermission =
-        code === "permission-denied" || String(err).toLowerCase().includes("missing or insufficient permissions");
-
-      if (isPermission) {
-        console.warn("Tema remoto nao lido: sem permissao. Usando default/cache.");
-      } else {
-        console.error("Erro ao carregar tema do Firestore:", err);
-      }
-    } finally {
-      setIsThemeLoading(false);
-    }
+    // Tema é fixo; mantemos assinatura para compatibilidade
+    return Promise.resolve();
   }
 
   return <ThemeContext.Provider value={contextValue}>{children}</ThemeContext.Provider>;
-}
-
-function mapBackgrounds(arr: BackgroundSettings[]): BackgroundMap {
-  const map: BackgroundMap = {};
-  arr.forEach((bg) => {
-    map[bg.secao] = bg;
-  });
-  return map;
 }
 
 export function useThemeContext(): ThemeContextValue {

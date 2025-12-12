@@ -11,13 +11,13 @@ type Props = {
 };
 
 export function EmptyState({ title, description, actionLabel, onActionPress }: Props) {
-  const { themeSettings } = useTheme();
+  const { theme } = useTheme();
   return (
-    <View style={styles.container}>
-      <Text style={[styles.title, { color: themeSettings?.cor_texto || "#e5e7eb" }]}>
+    <View style={[styles.container, { borderColor: theme.colors.border, backgroundColor: theme.colors.card }]}>
+      <Text style={[styles.title, { color: theme.colors.text }]}>
         {title}
       </Text>
-      {description ? <Text style={styles.desc}>{description}</Text> : null}
+      {description ? <Text style={[styles.desc, { color: theme.colors.muted || "#CFCFCF" }]}>{description}</Text> : null}
       {actionLabel && onActionPress ? (
         <AppButton
           title={actionLabel}
@@ -33,18 +33,15 @@ export function EmptyState({ title, description, actionLabel, onActionPress }: P
 const styles = StyleSheet.create({
   container: {
     borderWidth: 1,
-    borderColor: "#1f2937",
     borderRadius: 12,
     padding: 14,
     gap: 6,
-    backgroundColor: "#0b1224",
   },
   title: {
     fontSize: 14,
     fontWeight: "700",
   },
   desc: {
-    color: "#9ca3af",
     fontSize: 12,
   },
 });

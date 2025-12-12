@@ -29,23 +29,24 @@ export function AppButton({
   fullWidth = true,
   style,
 }: Props) {
-  const { themeSettings } = useTheme();
-  const corPrimaria = themeSettings?.cor_primaria || "#22c55e";
-  const corErro = themeSettings?.cor_erro || "#ef4444";
-  const corTexto = themeSettings?.cor_texto || "#e5e7eb";
-  const corFundo = themeSettings?.cor_fundo || "#020617";
+  const { theme } = useTheme();
+  const primaryBg = theme.colors.buttons?.primaryBg || "#fff";
+  const primaryText = theme.colors.buttons?.primaryText || "#2A0E12";
+  const secondaryBg = theme.colors.buttons?.secondaryBg || "#3A1118";
+  const secondaryText = theme.colors.buttons?.secondaryText || "#fff";
+  const dangerBg = theme.colors.status?.dangerBg || "#4A1520";
 
   const baseStyle: ViewStyle = {
     backgroundColor:
       variant === "primary"
-        ? corPrimaria
+        ? primaryBg
         : variant === "danger"
-        ? corErro
+        ? dangerBg
         : variant === "secondary"
-        ? corFundo
+        ? secondaryBg
         : "transparent",
     borderColor:
-      variant === "outline" ? corPrimaria : variant === "secondary" ? "#334155" : "transparent",
+      variant === "outline" ? primaryBg : variant === "secondary" ? primaryBg : "transparent",
     borderWidth: variant === "outline" || variant === "secondary" ? 1 : 0,
     opacity: disabled ? 0.6 : 1,
     width: fullWidth ? "100%" : undefined,
@@ -58,7 +59,7 @@ export function AppButton({
       onPress={onPress}
     >
       {loading ? (
-        <ActivityIndicator color={variant === "secondary" ? corTexto : "#022c22"} />
+        <ActivityIndicator color={variant === "secondary" ? secondaryText : primaryText} />
       ) : (
         <Text
           style={[
@@ -66,10 +67,10 @@ export function AppButton({
             {
               color:
                 variant === "primary" || variant === "danger"
-                  ? "#022c22"
+                  ? primaryText
                   : variant === "outline"
-                  ? corPrimaria
-                  : corTexto,
+                  ? primaryBg
+                  : secondaryText,
             },
           ]}
         >

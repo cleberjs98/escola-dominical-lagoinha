@@ -4,30 +4,31 @@ import { useTheme } from "../../hooks/useTheme";
 
 type Props = {
   status: string;
-  variant?: "user" | "lesson" | "devotional" | "reservation" | "aviso";
 };
 
 export function StatusBadge({ status }: Props) {
-  const { themeSettings } = useTheme();
-  const corSucesso = themeSettings?.cor_sucesso || "#22c55e";
-  const corErro = themeSettings?.cor_erro || "#ef4444";
-  const corAviso = themeSettings?.cor_aviso || "#f59e0b";
-  const corInfo = themeSettings?.cor_info || "#38bdf8";
+  const { theme } = useTheme();
+  const statusColors = theme.colors.status;
 
-  function getColor() {
+  function getPalette() {
     const s = status.toLowerCase();
-    if (["aprovado", "publicada", "publicado", "aprovada", "ativa"].includes(s)) return corSucesso;
-    if (["rejeitado", "rejeitada", "erro"].includes(s)) return corErro;
-    if (["pendente", "pendente de aprovacao", "disponivel", "rascunho"].includes(s))
-      return corAviso;
-    return corInfo;
+    if (["aprovado", "publicada", "publicado", "aprovada", "ativa"].includes(s)) {
+      return { bg: statusColors?.successBg, text: statusColors?.successText };
+    }
+    if (["rejeitado", "rejeitada", "erro"].includes(s)) {
+      return { bg: statusColors?.dangerBg, text: statusColors?.dangerText };
+    }
+    if (["pendente", "pendente de aprovacao", "disponivel", "rascunho"].includes(s)) {
+      return { bg: statusColors?.warningBg, text: statusColors?.warningText };
+    }
+    return { bg: statusColors?.infoBg, text: statusColors?.infoText };
   }
 
-  const color = getColor();
+  const palette = getPalette();
 
   return (
-    <View style={[styles.badge, { borderColor: color, backgroundColor: color + "22" }]}>
-      <Text style={[styles.text, { color }]}>{status}</Text>
+    <View style={[styles.badge, { borderColor: theme.colors.border, backgroundColor: palette.bg }]}>
+      <Text style={[styles.text, { color: palette.text || theme.colors.text }]}>{status}</Text>
     </View>
   );
 }

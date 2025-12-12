@@ -55,7 +55,7 @@ export default function TabsLayout() {
           tabBarInactiveTintColor: theme.colors.tabBarInactive,
           tabBarStyle: {
             backgroundColor: theme.colors.tabBarBackground,
-            borderTopColor: "#1d2738",
+            borderTopColor: theme.colors.tabBarBackground,
             height: 60,
             paddingBottom: 6,
           },
@@ -168,8 +168,8 @@ export default function TabsLayout() {
             style={[
               styles.drawer,
               {
-                backgroundColor: theme.colors.card,
-                borderLeftColor: theme.colors.tabBarBackground,
+                backgroundColor: theme.colors.primaryDark,
+                borderLeftColor: theme.colors.border || "#3B1C24",
               },
             ]}
           >

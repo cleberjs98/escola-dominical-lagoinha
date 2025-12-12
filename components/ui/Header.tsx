@@ -9,13 +9,13 @@ type Props = {
 };
 
 export function Header({ title, subtitle, rightContent }: Props) {
-  const { themeSettings } = useTheme();
-  const color = themeSettings?.cor_texto ?? "#e5e7eb";
+  const { theme } = useTheme();
+  const color = theme.colors.text;
   return (
     <View style={styles.row}>
       <View style={{ flex: 1 }}>
         <Text style={[styles.title, { color }]}>{title}</Text>
-        {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+        {subtitle ? <Text style={[styles.subtitle, { color: theme.colors.muted || "#CFCFCF" }]}>{subtitle}</Text> : null}
       </View>
       {rightContent ? rightContent : null}
     </View>
@@ -34,7 +34,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   subtitle: {
-    color: "#9ca3af",
     fontSize: 13,
   },
 });

@@ -63,7 +63,7 @@ export default function DevotionalsScreen() {
 // =========================
 function AdminDevotionalsTab({ uid }: { uid: string }) {
   const router = useRouter();
-  const { themeSettings } = useTheme();
+  const { themeSettings, theme } = useTheme();
   const [sections, setSections] = useState<Awaited<ReturnType<typeof listDevotionalsForAdmin>> | null>(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<DevotionalFilter>("disponiveis");
@@ -154,12 +154,12 @@ function AdminDevotionalsTab({ uid }: { uid: string }) {
     );
   }
 
-  const bg = themeSettings?.cor_fundo || "#020617";
+  const bg = theme.colors.background;
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: bg }]} contentContainerStyle={styles.content}>
       <View style={styles.header}>
-        <Text style={styles.sectionTitle}>Devocionais - Gestao</Text>
+        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Devocionais - Gestao</Text>
         <AppButton title="Criar devocional" variant="primary" fullWidth={false} onPress={() => router.push("/admin/devotionals/new" as any)} />
       </View>
 
@@ -172,7 +172,7 @@ function AdminDevotionalsTab({ uid }: { uid: string }) {
         </View>
 
         <View style={styles.orderToggleRow}>
-          <Text style={styles.sectionTitle}>Devocionais</Text>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Devocionais</Text>
           <TouchableOpacity onPress={toggleDateOrder} style={styles.orderToggleButton}>
             <Text style={styles.orderToggleText}>Ordenar por data: {dateOrder === "desc" ? "↓" : "↑"}</Text>
           </TouchableOpacity>

@@ -52,6 +52,24 @@ export interface AppTheme {
     secondary: string;
     text: string;
     accent: string;
+    border?: string;
+    muted?: string;
+    status?: {
+      successBg: string;
+      successText: string;
+      infoBg: string;
+      infoText: string;
+      warningBg: string;
+      warningText: string;
+      dangerBg: string;
+      dangerText: string;
+    };
+    buttons?: {
+      primaryBg: string;
+      primaryText: string;
+      secondaryBg: string;
+      secondaryText: string;
+    };
     tabBarBackground: string;
     tabBarActive: string;
     tabBarInactive: string;

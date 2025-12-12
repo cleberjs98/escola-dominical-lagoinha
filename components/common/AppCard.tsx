@@ -25,9 +25,9 @@ export function AppCard({
 }: AppCardProps) {
   const { theme } = useTheme();
   const Container: React.ComponentType<any> = onPress ? TouchableOpacity : View;
-  const backgroundColor = theme?.colors?.card || "#020617";
-  const titleColor = theme?.colors?.text || "#e5e7eb";
-  const subtitleColor = "#9ca3af";
+  const backgroundColor = theme?.colors?.card || "#3A1118";
+  const titleColor = theme?.colors?.text || "#FFFFFF";
+  const subtitleColor = theme?.colors?.muted || "#CFCFCF";
 
   return (
     <Container
@@ -56,16 +56,16 @@ export function AppCard({
 function mapStatusVariantToStyle(variant: AppCardStatusVariant): ViewStyle {
   switch (variant) {
     case "success":
-      return { backgroundColor: "#22c55e" };
+      return { backgroundColor: "#FFFFFF", borderColor: "#2A0E12", borderWidth: 1 };
     case "info":
-      return { backgroundColor: "#3b82f6" };
+      return { backgroundColor: "rgba(255,255,255,0.12)" };
     case "warning":
-      return { backgroundColor: "#facc15" };
+      return { backgroundColor: "#45141D" };
     case "muted":
-      return { backgroundColor: "#6b7280" };
+      return { backgroundColor: "rgba(255,255,255,0.08)" };
     case "default":
     default:
-      return { backgroundColor: "#4b5563" };
+      return { backgroundColor: "rgba(255,255,255,0.08)" };
   }
 }
 
@@ -75,12 +75,14 @@ const cardStyles = {
     paddingVertical: 12,
     paddingHorizontal: 16,
     marginBottom: 8,
-    backgroundColor: "#020617",
+    backgroundColor: "#1A0A0F",
+    borderWidth: 1,
+    borderColor: "#3B1C24",
   } as ViewStyle,
   title: {
-    color: "#e5e7eb",
+    color: "#FDF5F6",
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "700",
     marginBottom: 6,
   } as TextStyle,
   footerRow: {
@@ -98,7 +100,7 @@ const cardStyles = {
     borderRadius: 999,
   } as ViewStyle,
   statusBadgeText: {
-    color: "#0f172a",
+    color: "#FDF5F6",
     fontSize: 12,
     fontWeight: "600",
   } as TextStyle,
