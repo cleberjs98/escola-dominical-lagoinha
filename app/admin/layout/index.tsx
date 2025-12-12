@@ -4,46 +4,31 @@ import {
   Alert,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   View,
+  Pressable,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import * as ImagePicker from "expo-image-picker";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 import { useAuth } from "../../../hooks/useAuth";
 import { useTheme } from "../../../hooks/useTheme";
-import { firebaseDb } from "../../../lib/firebase";
+import { firebaseStorage } from "../../../lib/firebase";
+import {
+  buildThemeFromPalette,
+  defaultThemeSettings,
+  getThemeSettings,
+  normalizeThemeSettings,
+  saveThemeSettings,
+} from "../../../lib/themeSettings";
+import { extractPaletteFromImage } from "../../../lib/imagePalette";
+import type { ThemeMode, ThemeSettings } from "../../../types/theme";
 
-type LayoutSettings = {
-  showDevotional: boolean;
-  showAvisosRecentes: boolean;
-  homeOrder: string[];
-};
+type BackgroundChoice = "none" | "color" | "image";
 
-type NavigationSettings = {
-  lessonsTabFirst: boolean;
-};
-
-type BackgroundSettings = {
-  enabled: boolean;
-  backgroundType: "none" | "default" | "image";
-  imageUrl?: string;
-};
-
-type ThemeOption = {
-  key: string;
-  label: string;
-  colors: {
-    primaryColor: string;
-    secondaryColor: string;
-    backgroundColor: string;
-    textColor: string;
-  };
-};
-
-const themeOptions: ThemeOption[] = [
+const themePresets: { key: ThemeMode; label: string; colors: Partial<ThemeSettings> }[] = [
   {
     key: "dark",
     label: "Tema Escuro",
@@ -51,7 +36,9 @@ const themeOptions: ThemeOption[] = [
       primaryColor: "#22c55e",
       secondaryColor: "#1f2937",
       backgroundColor: "#020617",
+      cardBackgroundColor: "#0b1224",
       textColor: "#e5e7eb",
+      accentColor: "#22c55e",
     },
   },
   {
@@ -61,7 +48,9 @@ const themeOptions: ThemeOption[] = [
       primaryColor: "#2563eb",
       secondaryColor: "#e5e7eb",
       backgroundColor: "#f8fafc",
+      cardBackgroundColor: "#e5e7eb",
       textColor: "#0f172a",
+      accentColor: "#2563eb",
     },
   },
   {
@@ -71,7 +60,9 @@ const themeOptions: ThemeOption[] = [
       primaryColor: "#38bdf8",
       secondaryColor: "#0f172a",
       backgroundColor: "#0b1224",
+      cardBackgroundColor: "#0f172a",
       textColor: "#e0f2fe",
+      accentColor: "#38bdf8",
     },
   },
   {
@@ -81,37 +72,27 @@ const themeOptions: ThemeOption[] = [
       primaryColor: "#10b981",
       secondaryColor: "#064e3b",
       backgroundColor: "#022c22",
+      cardBackgroundColor: "#064e3b",
       textColor: "#ecfdf3",
+      accentColor: "#10b981",
     },
   },
-];
-
-const orderPresets: LayoutSettings["homeOrder"][] = [
-  ["pendencias", "conteudos", "devocional", "avisos", "analytics"],
-  ["pendencias", "analytics", "conteudos", "devocional", "avisos"],
-  ["conteudos", "pendencias", "devocional", "avisos", "analytics"],
 ];
 
 export default function AdminLayoutScreen() {
   const router = useRouter();
   const { firebaseUser, user, isInitializing } = useAuth();
   const { reloadTheme, isThemeLoading } = useTheme();
-
-  const [themeKey, setThemeKey] = useState<string>("dark");
-  const [layoutSettings, setLayoutSettings] = useState<LayoutSettings>({
-    showDevotional: true,
-    showAvisosRecentes: true,
-    homeOrder: orderPresets[0],
-  });
-  const [navSettings, setNavSettings] = useState<NavigationSettings>({ lessonsTabFirst: false });
-  const [backgroundSettings, setBackgroundSettings] = useState<BackgroundSettings>({
-    enabled: false,
-    backgroundType: "none",
-    imageUrl: "",
-  });
+  const [localSettings, setLocalSettings] = useState<ThemeSettings>(defaultThemeSettings);
+  const [backgroundChoice, setBackgroundChoice] = useState<BackgroundChoice>("none");
+  const [bgColor, setBgColor] = useState(defaultThemeSettings.backgroundSolidColor || "#020617");
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
-  const isAdmin = useMemo(() => user?.papel === "administrador", [user?.papel]);
+  const isAdmin = useMemo(
+    () => user?.papel === "administrador" || user?.papel === "admin",
+    [user?.papel]
+  );
 
   useEffect(() => {
     if (isInitializing) return;
@@ -124,52 +105,119 @@ export default function AdminLayoutScreen() {
       router.replace("/" as any);
       return;
     }
-    void loadExisting();
   }, [firebaseUser, isInitializing, isAdmin, router]);
 
-  async function loadExisting() {
+  useEffect(() => {
+    // carrega tema atual do contexto quando disponível
+    // reloadTheme já roda ao montar a aplicação, então esperamos o isThemeLoading finalizar
+    if (!isThemeLoading && user) {
+      void loadExistingTheme();
+    }
+  }, [isThemeLoading, user]);
+
+  async function loadExistingTheme() {
     try {
-      const [themeSnap, layoutSnap, navSnap, bgSnap] = await Promise.all([
-        getDoc(doc(firebaseDb, "theme_settings", "global")),
-        getDoc(doc(firebaseDb, "layout_settings", "global")),
-        getDoc(doc(firebaseDb, "navigation_settings", "global")),
-        getDoc(doc(firebaseDb, "backgrounds", "home_background")),
-      ]);
+      const settings = await getThemeSettings();
+      if (settings) {
+        const normalized = normalizeThemeSettings(settings);
+        setLocalSettings(normalized);
+        setBackgroundChoice(
+          normalized.backgroundType === "image"
+            ? "image"
+            : normalized.backgroundType === "color"
+              ? "color"
+              : "none"
+        );
+        setBgColor(normalized.backgroundSolidColor || "#020617");
+      }
+    } catch (err) {
+      console.warn("[AdminLayout] Não foi possível carregar tema atual", err);
+    }
+  }
 
-      if (themeSnap.exists()) {
-        const data = themeSnap.data() as any;
-        const matched = themeOptions.find((opt) => opt.colors.primaryColor === data.primaryColor);
-        setThemeKey(matched?.key || themeOptions[0].key);
+  const selectedPresetKey = useMemo(() => {
+    const preset = themePresets.find((p) =>
+      p.colors.primaryColor === localSettings.primaryColor &&
+      p.colors.backgroundColor === localSettings.backgroundColor
+    );
+    return preset?.key || localSettings.mode || "custom";
+  }, [localSettings]);
+
+  function applyPreset(key: ThemeMode) {
+    const preset = themePresets.find((p) => p.key === key);
+    if (!preset) return;
+    setLocalSettings((prev) => ({
+      ...prev,
+      ...preset.colors,
+      mode: key,
+    }));
+  }
+
+  function updateColor(field: keyof Pick<ThemeSettings, "primaryColor" | "secondaryColor" | "backgroundColor" | "cardBackgroundColor" | "textColor" | "accentColor">, value: string) {
+    setLocalSettings((prev) => ({
+      ...prev,
+      [field]: value,
+      mode: prev.mode === "auto-image" ? "custom" : prev.mode,
+    }));
+  }
+
+  function updateBackgroundType(choice: BackgroundChoice) {
+    setBackgroundChoice(choice);
+    setLocalSettings((prev) => ({
+      ...prev,
+      backgroundType: choice === "none" ? "none" : choice,
+      backgroundEnabled: choice !== "none",
+      backgroundSolidColor: choice === "color" ? bgColor : prev.backgroundSolidColor,
+    }));
+  }
+
+  async function handleUploadBackground() {
+    try {
+      setIsUploading(true);
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (permission.status !== "granted") {
+        Alert.alert("Permissão negada", "Precisamos de acesso à galeria para enviar a imagem.");
+        setIsUploading(false);
+        return;
       }
 
-      if (layoutSnap.exists()) {
-        const data = layoutSnap.data() as Partial<LayoutSettings>;
-        setLayoutSettings((prev) => ({
-          ...prev,
-          ...data,
-          homeOrder:
-            Array.isArray(data.homeOrder) && data.homeOrder.length
-              ? data.homeOrder
-              : prev.homeOrder,
-        }));
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (result.canceled) {
+        setIsUploading(false);
+        return;
       }
 
-      if (navSnap.exists()) {
-        const data = navSnap.data() as Partial<NavigationSettings>;
-        setNavSettings((prev) => ({ ...prev, ...data }));
-      }
+      const asset = result.assets[0];
+      const response = await fetch(asset.uri);
+      const blob = await response.blob();
+      const ext = (asset.fileName?.split(".").pop() || asset.uri.split(".").pop() || "jpg").toLowerCase();
+      const storageRef = ref(firebaseStorage, `backgrounds/global/${Date.now()}.${ext}`);
+      await uploadBytes(storageRef, blob);
+      const url = await getDownloadURL(storageRef);
 
-      if (bgSnap.exists()) {
-        const data = bgSnap.data() as any;
-        setBackgroundSettings({
-          enabled: data.enabled ?? false,
-          backgroundType: data.backgroundType ?? "none",
-          imageUrl: data.imageUrl ?? "",
-        });
-      }
-    } catch (error) {
-      console.error("Erro ao carregar configurações:", error);
-      Alert.alert("Erro", "Não foi possível carregar as configurações atuais.");
+      // tenta gerar tema automático
+      const palette = await extractPaletteFromImage(url);
+      setLocalSettings((prev) => {
+        const next = palette ? buildThemeFromPalette(palette, prev) : prev;
+        return {
+          ...next,
+          backgroundType: "image",
+          backgroundEnabled: true,
+          backgroundImageUrl: url,
+          mode: palette ? "auto-image" : (next.mode || "custom"),
+        };
+      });
+      setBackgroundChoice("image");
+      Alert.alert("Imagem carregada", "Fundo definido. Salve para aplicar para todos.");
+    } catch (err) {
+      console.error("[AdminLayout] Erro ao fazer upload do fundo", err);
+      Alert.alert("Erro", "Não foi possível enviar a imagem. Tente novamente.");
+    } finally {
+      setIsUploading(false);
     }
   }
 
@@ -177,79 +225,29 @@ export default function AdminLayoutScreen() {
     if (!firebaseUser || !isAdmin) return;
     try {
       setIsSaving(true);
-      const selectedTheme = themeOptions.find((opt) => opt.key === themeKey) || themeOptions[0];
+      const payload: ThemeSettings = {
+        ...localSettings,
+        mode: localSettings.mode || selectedPresetKey || "custom",
+        backgroundType: backgroundChoice === "none" ? "none" : localSettings.backgroundType,
+        backgroundEnabled: backgroundChoice !== "none",
+        backgroundSolidColor: backgroundChoice === "color" ? bgColor : localSettings.backgroundSolidColor,
+      };
 
-      await Promise.all([
-        setDoc(
-          doc(firebaseDb, "theme_settings", "global"),
-          {
-            ...selectedTheme.colors,
-            cor_primaria: selectedTheme.colors.primaryColor,
-            cor_secundaria: selectedTheme.colors.secondaryColor,
-            cor_fundo: selectedTheme.colors.backgroundColor,
-            cor_texto: selectedTheme.colors.textColor,
-            cor_texto_secundario: selectedTheme.colors.textColor,
-            cor_sucesso: "#22c55e",
-            cor_erro: "#ef4444",
-            cor_aviso: "#f59e0b",
-            cor_info: "#38bdf8",
-            ativo: true,
-            updated_at: serverTimestamp() as any,
-          },
-          { merge: true }
-        ),
-        setDoc(
-          doc(firebaseDb, "layout_settings", "global"),
-          {
-            ...layoutSettings,
-            updated_at: serverTimestamp() as any,
-            ativo: true,
-            // Campos legados de layout para manter compatibilidade
-            espacamento_xs: 4,
-            espacamento_sm: 8,
-            espacamento_md: 12,
-            espacamento_lg: 16,
-            espacamento_xl: 20,
-            espacamento_xxl: 24,
-            escala_fonte: 1,
-            raio_borda: 12,
-            intensidade_sombra: 1,
-            estilo_card: "padrao",
-            padding_componente: 12,
-          },
-          { merge: true }
-        ),
-        setDoc(
-          doc(firebaseDb, "navigation_settings", "global"),
-          {
-            ...navSettings,
-            updated_at: serverTimestamp() as any,
-          },
-          { merge: true }
-        ),
-        setDoc(
-          doc(firebaseDb, "backgrounds", "home_background"),
-          {
-            ...backgroundSettings,
-            updated_at: serverTimestamp() as any,
-            secao: "home",
-            ativo: backgroundSettings.enabled,
-            url_imagem: backgroundSettings.backgroundType === "image" ? backgroundSettings.imageUrl : "",
-            opacidade: 1,
-            posicao: "cover",
-          },
-          { merge: true }
-        ),
-      ]);
-
+      await saveThemeSettings(payload, firebaseUser.uid);
       await reloadTheme();
-      Alert.alert("Sucesso", "Configurações salvas.");
-    } catch (error) {
-      console.error("Erro ao salvar configurações:", error);
+      Alert.alert("Sucesso", "Configurações salvas e aplicadas.");
+    } catch (err) {
+      console.error("[AdminLayout] Erro ao salvar tema", err);
       Alert.alert("Erro", "Não foi possível salvar as configurações.");
     } finally {
       setIsSaving(false);
     }
+  }
+
+  function handleReset() {
+    setLocalSettings(defaultThemeSettings);
+    setBackgroundChoice("none");
+    setBgColor(defaultThemeSettings.backgroundSolidColor || "#020617");
   }
 
   const bg = "#020617";
@@ -267,135 +265,97 @@ export default function AdminLayoutScreen() {
     <ScrollView style={[styles.container, { backgroundColor: bg }]} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Configurações de Layout / Tema</Text>
       <Text style={styles.subtitle}>
-        Escolha tema base, ordem da home, navegação e fundo. Apenas administradores podem alterar.
+        Ajuste cores globais e o fundo do app. Apenas administradores podem alterar.
       </Text>
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Tema de cores</Text>
         <View style={styles.row}>
-          {themeOptions.map((opt) => {
-            const active = themeKey === opt.key;
+          {themePresets.map((preset) => {
+            const active = selectedPresetKey === preset.key;
             return (
-              <Text
-                key={opt.key}
-                onPress={() => setThemeKey(opt.key)}
-                style={[
-                  styles.chip,
-                  active && styles.chipActive,
-                ]}
-              >
-                {opt.label}
-              </Text>
+              <Pressable key={preset.key} onPress={() => applyPreset(preset.key)} style={[styles.chip, active && styles.chipActive]}>
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>{preset.label}</Text>
+              </Pressable>
             );
           })}
         </View>
-      </View>
 
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Visibilidade de seções</Text>
-        <View style={styles.toggleRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.label}>Mostrar Devocional</Text>
-          </View>
-          <Switch
-            value={layoutSettings.showDevotional}
-            onValueChange={(val) => setLayoutSettings((prev) => ({ ...prev, showDevotional: val }))}
-          />
-        </View>
-        <View style={styles.toggleRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.label}>Mostrar Avisos Recentes</Text>
-          </View>
-          <Switch
-            value={layoutSettings.showAvisosRecentes}
-            onValueChange={(val) =>
-              setLayoutSettings((prev) => ({ ...prev, showAvisosRecentes: val }))
-            }
-          />
-        </View>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Ordem da Home</Text>
-        <Text style={styles.helper}>Selecione um preset simples.</Text>
-        <View style={styles.row}>
-          {orderPresets.map((preset, idx) => {
-            const active = preset.join(",") === layoutSettings.homeOrder.join(",");
-            return (
-              <Text
-                key={idx}
-                onPress={() => setLayoutSettings((prev) => ({ ...prev, homeOrder: preset }))}
-                style={[styles.chip, active && styles.chipActive]}
-              >
-                {preset.join(" • ")}
-              </Text>
-            );
-          })}
-        </View>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Barra de navegação</Text>
-        <View style={styles.toggleRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.label}>Aulas primeiro no Tab</Text>
-            <Text style={styles.helper}>Define se a aba de Aulas deve vir antes de Devocionais.</Text>
-          </View>
-          <Switch
-            value={navSettings.lessonsTabFirst}
-            onValueChange={(val) => setNavSettings((prev) => ({ ...prev, lessonsTabFirst: val }))}
-          />
+        <View style={styles.colorsGrid}>
+          {(
+            [
+              { key: "primaryColor", label: "Primária" },
+              { key: "secondaryColor", label: "Secundária" },
+              { key: "backgroundColor", label: "Fundo" },
+              { key: "cardBackgroundColor", label: "Card" },
+              { key: "textColor", label: "Texto" },
+              { key: "accentColor", label: "Destaque" },
+            ] as const
+          ).map((field) => (
+            <View key={field.key} style={styles.inputGroup}>
+              <Text style={styles.label}>{field.label}</Text>
+              <TextInput
+                value={(localSettings as any)[field.key] || ""}
+                onChangeText={(text) => updateColor(field.key, text)}
+                placeholder="#000000"
+                placeholderTextColor="#6b7280"
+                style={styles.input}
+              />
+            </View>
+          ))}
         </View>
       </View>
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Fundo visual</Text>
         <View style={styles.row}>
-          {(["none", "default", "image"] as BackgroundSettings["backgroundType"][]).map((option) => {
-            const active = backgroundSettings.backgroundType === option;
+          {(["none", "color", "image"] as BackgroundChoice[]).map((option) => {
+            const active = backgroundChoice === option;
             return (
-              <Text
-                key={option}
-                onPress={() =>
-                  setBackgroundSettings((prev) => ({ ...prev, backgroundType: option }))
-                }
-                style={[styles.chip, active && styles.chipActive]}
-              >
-                {option === "none" ? "Nenhum" : option === "default" ? "Padrão" : "Imagem"}
-              </Text>
+              <Pressable key={option} onPress={() => updateBackgroundType(option)} style={[styles.chip, active && styles.chipActive]}>
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                  {option === "none" ? "Nenhum" : option === "color" ? "Cor sólida" : "Imagem"}
+                </Text>
+              </Pressable>
             );
           })}
         </View>
 
-        {backgroundSettings.backgroundType === "image" ? (
-          <TextInput
-            style={styles.input}
-            placeholder="URL da imagem"
-            placeholderTextColor="#6b7280"
-            value={backgroundSettings.imageUrl}
-            onChangeText={(text) =>
-              setBackgroundSettings((prev) => ({ ...prev, imageUrl: text }))
-            }
-          />
+        {backgroundChoice === "color" ? (
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Cor do fundo</Text>
+            <TextInput
+              value={bgColor}
+              onChangeText={(text) => {
+                setBgColor(text);
+                setLocalSettings((prev) => ({ ...prev, backgroundSolidColor: text }));
+              }}
+              placeholder="#020617"
+              placeholderTextColor="#6b7280"
+              style={styles.input}
+            />
+          </View>
         ) : null}
 
-        <View style={styles.toggleRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.label}>Ativar fundo</Text>
+        {backgroundChoice === "image" ? (
+          <View style={{ gap: 8 }}>
+            <Pressable style={[styles.button, styles.buttonSecondary]} onPress={() => void handleUploadBackground()} disabled={isUploading}>
+              <Text style={styles.buttonSecondaryText}>{isUploading ? "Enviando..." : "Enviar imagem de fundo"}</Text>
+            </Pressable>
+            {localSettings.backgroundImageUrl ? (
+              <Text style={styles.helper}>Imagem atual: {localSettings.backgroundImageUrl}</Text>
+            ) : null}
           </View>
-          <Switch
-            value={backgroundSettings.enabled}
-            onValueChange={(val) =>
-              setBackgroundSettings((prev) => ({ ...prev, enabled: val }))
-            }
-          />
-        </View>
+        ) : null}
       </View>
 
       <View style={styles.actions}>
-        <Text style={styles.saveButton} onPress={() => void handleSave()}>
-          {isSaving ? "Salvando..." : "Salvar configurações"}
-        </Text>
+        <Pressable style={[styles.button, styles.buttonSecondary]} onPress={handleReset}>
+          <Text style={styles.buttonSecondaryText}>Reverter para padrão</Text>
+        </Pressable>
+        <Pressable style={[styles.button, styles.buttonPrimary]} onPress={() => void handleSave()} disabled={isSaving}>
+          <Text style={styles.buttonText}>{isSaving ? "Salvando..." : "Salvar configurações"}</Text>
+        </Pressable>
       </View>
     </ScrollView>
   );
@@ -421,6 +381,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginBottom: 8,
   },
+  center: {
+    flex: 1,
+    backgroundColor: "#020617",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadingText: {
+    color: "#e5e7eb",
+    marginTop: 12,
+  },
   card: {
     borderWidth: 1,
     borderColor: "#1f2937",
@@ -445,23 +415,28 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#334155",
-    color: "#e5e7eb",
+    backgroundColor: "transparent",
   },
   chipActive: {
     backgroundColor: "#22c55e22",
     borderColor: "#22c55e",
+  },
+  chipText: {
+    color: "#e5e7eb",
+  },
+  chipTextActive: {
     color: "#bbf7d0",
   },
-  toggleRow: {
+  colorsGrid: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  inputGroup: {
+    width: "48%",
+    gap: 4,
   },
   label: {
-    color: "#e5e7eb",
-    fontSize: 14,
-  },
-  helper: {
     color: "#9ca3af",
     fontSize: 12,
   },
@@ -473,25 +448,39 @@ const styles = StyleSheet.create({
     color: "#e5e7eb",
     backgroundColor: "#0f172a",
   },
+  helper: {
+    color: "#94a3b8",
+    fontSize: 12,
+  },
   actions: {
-    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 8,
   },
-  saveButton: {
-    backgroundColor: "#22c55e",
-    color: "#022c22",
-    fontWeight: "700",
-    paddingHorizontal: 14,
+  button: {
     paddingVertical: 12,
+    paddingHorizontal: 14,
     borderRadius: 12,
-  },
-  center: {
-    flex: 1,
-    backgroundColor: "#020617",
     alignItems: "center",
     justifyContent: "center",
+    flex: 1,
   },
-  loadingText: {
+  buttonPrimary: {
+    backgroundColor: "#22c55e",
+  },
+  buttonSecondary: {
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: "#334155",
+  },
+  buttonText: {
+    color: "#022c22",
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  buttonSecondaryText: {
     color: "#e5e7eb",
-    marginTop: 12,
+    fontWeight: "600",
+    fontSize: 14,
   },
 });

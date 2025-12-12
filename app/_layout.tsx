@@ -2,10 +2,11 @@
 import { Stack, useSegments, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
-import { View } from "react-native";
+import { View, Image, StyleSheet } from "react-native";
 import { AuthProvider } from "../contexts/AuthContext";
 import { ThemeProvider } from "../contexts/ThemeContext";
 import { useAuth } from "../hooks/useAuth";
+import { useTheme } from "../hooks/useTheme";
 
 function PendingGuard() {
   const { isAuthenticated, isPending, isInitializing } = useAuth();
@@ -35,19 +36,36 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <ThemeProvider>
-        <View style={{ flex: 1, backgroundColor: "#020617" }}>
-          <StatusBar style="light" />
-          <PendingGuard />
-          <Stack
-            screenOptions={{
-              headerStyle: { backgroundColor: "#020617" },
-              headerTintColor: "#e5e7eb",
-              headerTitleStyle: { fontWeight: "600" },
-              contentStyle: { backgroundColor: "#020617" },
-            }}
-          />
-        </View>
+        <RootLayoutContent />
       </ThemeProvider>
     </AuthProvider>
+  );
+}
+
+function RootLayoutContent() {
+  const { theme } = useTheme();
+  const bg = theme.colors.background;
+  const textColor = theme.colors.text;
+  const bgImage = theme.background.enabled && theme.background.type === "image" ? theme.background.imageUrl : undefined;
+  const bgColor = theme.background.enabled && theme.background.type === "color" ? theme.background.color || bg : bg;
+
+  return (
+    <View style={{ flex: 1, backgroundColor: bgColor }}>
+      {bgImage ? (
+        <Image source={{ uri: bgImage }} style={StyleSheet.absoluteFillObject} resizeMode="cover" blurRadius={2} />
+      ) : null}
+      <StatusBar style="light" />
+      <PendingGuard />
+      <Stack
+        screenOptions={{
+          headerStyle: { backgroundColor: theme.colors.card },
+          headerTintColor: textColor,
+          headerTitleStyle: { fontWeight: "600" },
+          contentStyle: { backgroundColor: bg },
+        }}
+      >
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      </Stack>
+    </View>
   );
 }

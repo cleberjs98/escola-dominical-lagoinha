@@ -20,8 +20,18 @@ import { AppCardStatusVariant } from "../../components/common/AppCard";
 
 type Role = "aluno" | "professor" | "coordenador" | "administrador" | "admin" | undefined;
 type DateOrder = "asc" | "desc";
-type DevotionalFilter = "all" | "available" | "published" | "pending";
-type NormalizedDevotionalStatus = "disponivel" | "publicado" | "pendente";
+type DevotionalFilter = "todos" | "disponiveis" | "publicados" | "pendentes";
+type NormalizedDevotionalStatus = "disponivel" | "publicado" | "rascunho";
+
+const DEVOTIONAL_STATUS = {
+  DISPONIVEL: "disponivel",
+  PUBLICADO: "publicado",
+} as const;
+
+export const options = {
+  title: "Devocionais",
+  headerBackVisible: true,
+};
 
 export default function DevotionalsScreen() {
   const { firebaseUser, user, isInitializing } = useAuth();
@@ -56,7 +66,7 @@ function AdminDevotionalsTab({ uid }: { uid: string }) {
   const { themeSettings } = useTheme();
   const [sections, setSections] = useState<Awaited<ReturnType<typeof listDevotionalsForAdmin>> | null>(null);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<DevotionalFilter>("all");
+  const [filter, setFilter] = useState<DevotionalFilter>("disponiveis");
   const [dateOrder, setDateOrder] = useState<DateOrder>("desc");
 
   useEffect(() => {
@@ -78,35 +88,57 @@ function AdminDevotionalsTab({ uid }: { uid: string }) {
 
   const allDevotionals = useMemo(() => {
     if (!sections) return [];
-    const scheduled = sections.scheduledDrafts ?? [];
-    const drafts = sections.drafts ?? [];
-    const published = sections.published ?? [];
-    const combined = [...scheduled, ...drafts, ...published];
+    const combined: Devotional[] = [
+      ...(sections.drafts ?? []),
+      ...(sections.available ?? []),
+      ...(sections.published ?? []),
+    ];
     const map = new Map<string, Devotional>();
     combined.forEach((devo) => {
       if (!map.has(devo.id)) {
         map.set(devo.id, devo);
       }
     });
+
+    // Debug logs (deixe ou comente se preferir)
+    console.log("[DevotionalsScreen] drafts:", sections.drafts?.length ?? 0);
+    console.log("[DevotionalsScreen] available:", sections.available?.length ?? 0);
+    console.log("[DevotionalsScreen] published:", sections.published?.length ?? 0);
+    console.log(
+      "[DevotionalsScreen] available status=disponivel:",
+      combined.filter((d) => d.status === DEVOTIONAL_STATUS.DISPONIVEL).length
+    );
+
     return Array.from(map.values());
   }, [sections]);
 
   const filteredDevotionals = useMemo(() => {
-    return allDevotionals
+    const base = allDevotionals
       .filter((devo) => {
-        const normalized = normalizeStatusForFilter(devo.status);
-        if (filter === "all") return true;
-        if (filter === "available") return normalized === "disponivel";
-        if (filter === "published") return normalized === "publicado";
-        if (filter === "pending") return normalized === "rascunho";
-        return true;
+        const status = (devo.status ?? "") as string;
+        const creatorId = (devo as any).criado_por_id as string | undefined;
+
+        switch (filter) {
+          case "disponiveis":
+            return status === DEVOTIONAL_STATUS.DISPONIVEL;
+          case "publicados":
+            return status === DEVOTIONAL_STATUS.PUBLICADO;
+          case "pendentes":
+            return status !== DEVOTIONAL_STATUS.DISPONIVEL && status !== DEVOTIONAL_STATUS.PUBLICADO;
+          case "todos":
+          default:
+            return true;
+        }
       })
       .sort((a, b) => {
-        const da = devotionalDateValue(a.data_devocional);
-        const db = devotionalDateValue(b.data_devocional);
-        if (dateOrder === "asc") return da - db;
-        return db - da;
+        const da = devotionalToMillis(a);
+        const db = devotionalToMillis(b);
+        return dateOrder === "asc" ? da - db : db - da;
       });
+
+    console.log("[DevotionalsScreen] filtro:", filter, "resultado:", base.length);
+
+    return base;
   }, [allDevotionals, dateOrder, filter, uid]);
 
   function toggleDateOrder() {
@@ -133,10 +165,10 @@ function AdminDevotionalsTab({ uid }: { uid: string }) {
 
       <View style={{ gap: 12 }}>
         <View style={styles.filtersRow}>
-          {renderFilterChip("Todos", "all", filter, setFilter)}
-          {renderFilterChip("Disponiveis", "available", filter, setFilter)}
-          {renderFilterChip("Publicados", "published", filter, setFilter)}
-          {renderFilterChip("Pendentes", "pending", filter, setFilter)}
+          {renderFilterChip("Todos", "todos", filter, setFilter)}
+          {renderFilterChip("Disponiveis", "disponiveis", filter, setFilter)}
+          {renderFilterChip("Publicados", "publicados", filter, setFilter)}
+          {renderFilterChip("Pendentes", "pendentes", filter, setFilter)}
         </View>
 
         <View style={styles.orderToggleRow}>
@@ -207,8 +239,8 @@ function ProfessorDevotionalsTab() {
 
   const bg = themeSettings?.cor_fundo || "#020617";
   const sorted = [...list].sort((a, b) => {
-    const da = devotionalDateValue(a.data_devocional);
-    const db = devotionalDateValue(b.data_devocional);
+    const da = devotionalToMillis(a);
+    const db = devotionalToMillis(b);
     return order === "asc" ? da - db : db - da;
   });
 
@@ -281,8 +313,8 @@ function StudentDevotionalsTab() {
 
   const bg = themeSettings?.cor_fundo || "#020617";
   const sorted = [...list].sort((a, b) => {
-    const da = devotionalDateValue(a.data_devocional);
-    const db = devotionalDateValue(b.data_devocional);
+    const da = devotionalToMillis(a);
+    const db = devotionalToMillis(b);
     return order === "asc" ? da - db : db - da;
   });
 
@@ -339,18 +371,17 @@ function normalizeStatusForFilter(status: DevotionalStatus | string): Normalized
     .trim()
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
-    .replace(/s$/, ""); // remove plural simples
+    .replace(/s$/, "");
 
-  if (s === "disponivel" || s === "disponive" || s === "disponivel" || s === "disponivel") return "disponivel";
-  if (s === "publicado" || s === "publicad" || s === "publico" || s === "publicado") return "publicado";
-  // trata rascunho/pendente/agendado como pendente
-  return "pendente";
+  if (s === DEVOTIONAL_STATUS.DISPONIVEL) return "disponivel";
+  if (s === DEVOTIONAL_STATUS.PUBLICADO) return "publicado";
+  return "rascunho";
 }
 
 function devotionalStatusLabel(status: NormalizedDevotionalStatus) {
   if (status === "disponivel") return "Disponivel";
   if (status === "publicado") return "Publicado";
-  if (status === "pendente") return "Pendente";
+  if (status === "rascunho") return "Pendente";
   return status;
 }
 
@@ -360,10 +391,23 @@ function devotionalStatusVariant(status: NormalizedDevotionalStatus): AppCardSta
       return "success";
     case "disponivel":
       return "info";
-    case "pendente":
+    case "rascunho":
     default:
       return "warning";
   }
+}
+
+function devotionalToMillis(dev: any): number {
+  const raw = dev?.data_devocional || dev?.data || dev?.created_at;
+  if (!raw) return 0;
+
+  if (raw?.toMillis && typeof raw.toMillis === "function") {
+    return raw.toMillis();
+  }
+  const d = new Date(raw);
+  const time = d.getTime();
+  if (Number.isNaN(time)) return 0;
+  return time;
 }
 
 function formatDevotionalDate(value: string): string {
@@ -371,12 +415,6 @@ function formatDevotionalDate(value: string): string {
   const [year, month, day] = value.split("-");
   if (!year || !month || !day) return value;
   return formatDate(new Date(Number(year), Number(month) - 1, Number(day)));
-}
-
-function devotionalDateValue(value: string): number {
-  const [year, month, day] = value.split("-");
-  const date = new Date(Number(year), Number(month) - 1, Number(day));
-  return date.getTime();
 }
 
 // =========================
@@ -457,4 +495,3 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 });
-

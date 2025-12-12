@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, TouchableOpacity, ViewStyle, TextStyle } from "react-native";
+import { useTheme } from "../../hooks/useTheme";
 
 export type AppCardStatusVariant = "default" | "success" | "info" | "warning" | "muted";
 
@@ -22,19 +23,23 @@ export function AppCard({
   onPress,
   children,
 }: AppCardProps) {
+  const { theme } = useTheme();
   const Container: React.ComponentType<any> = onPress ? TouchableOpacity : View;
+  const backgroundColor = theme?.colors?.card || "#020617";
+  const titleColor = theme?.colors?.text || "#e5e7eb";
+  const subtitleColor = "#9ca3af";
 
   return (
     <Container
       onPress={onPress}
       activeOpacity={onPress ? 0.85 : 1}
-      style={[cardStyles.container, style]}
+      style={[cardStyles.container, { backgroundColor }, style]}
     >
-      <Text style={cardStyles.title}>{title}</Text>
+      <Text style={[cardStyles.title, { color: titleColor }]}>{title}</Text>
 
       {(subtitle || statusLabel) && (
         <View style={cardStyles.footerRow}>
-          {subtitle ? <Text style={cardStyles.subtitle}>{subtitle}</Text> : <View />}
+          {subtitle ? <Text style={[cardStyles.subtitle, { color: subtitleColor }]}>{subtitle}</Text> : <View />}
 
           {statusLabel ? (
             <View style={[cardStyles.statusBadge, mapStatusVariantToStyle(statusVariant)]}>

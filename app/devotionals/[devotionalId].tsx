@@ -34,6 +34,8 @@ export default function DevotionalDetailsScreen() {
   const role = user?.papel;
   const isStudent = role === "aluno";
   const isProfessor = role === "professor";
+  const isAdminOrCoordinator =
+    role === "administrador" || role === "admin" || role === "coordenador";
   const isBasicView = isStudent || isProfessor;
 
   const [devotional, setDevotional] = useState<Devotional | null>(null);
@@ -48,7 +50,7 @@ export default function DevotionalDetailsScreen() {
       router.replace("/auth/login" as any);
       return;
     }
-    if (user?.status !== "aprovado") {
+    if (!isAdminOrCoordinator && user?.status !== "aprovado") {
       router.replace("/auth/pending" as any);
       return;
     }
@@ -144,7 +146,7 @@ export default function DevotionalDetailsScreen() {
         <Text style={styles.cardText}>{devotional.devocional_texto}</Text>
       </Card>
 
-      {!isBasicView && (
+      {isBasicView && (
         <Card title="Materiais de apoio">
           {isLoadingMaterials ? (
             <ActivityIndicator size="small" color="#facc15" />
@@ -254,4 +256,5 @@ function formatDateString(value: string): string {
   const date = new Date(Number(year), Number(month) - 1, Number(day));
   return formatDate(date);
 }
+
 

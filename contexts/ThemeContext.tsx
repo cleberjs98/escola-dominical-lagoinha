@@ -1,22 +1,10 @@
-import React, {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  ReactNode,
-} from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import {
-  getActiveLayoutSettings,
-  getActiveThemeSettings,
-} from "../lib/theme";
-import {
-  getActiveBackgrounds,
-  getActiveScreenLayouts,
-  listActiveNavigationTabs,
-} from "../lib/navigationSettings";
+import { getActiveLayoutSettings } from "../lib/theme";
+import { getActiveBackgrounds, getActiveScreenLayouts, listActiveNavigationTabs } from "../lib/navigationSettings";
+import { getMergedAppTheme, getThemeSettings } from "../lib/themeSettings";
 import type {
+  AppTheme,
   BackgroundSettings,
   LayoutSettings,
   NavigationTabConfig,
@@ -26,15 +14,15 @@ import type {
 
 type BackgroundMap = Record<string, BackgroundSettings | null>;
 
-export interface AppTheme {
+export interface ThemeContextValue {
+  theme: AppTheme;
+  settings: ThemeSettings | null;
+  // Alias para compatibilidade com o nome antigo usado no app
   themeSettings: ThemeSettings | null;
   layoutSettings: LayoutSettings | null;
   backgrounds: BackgroundMap;
   navigationTabs: NavigationTabConfig[];
   screenLayouts: ScreenLayoutConfig[];
-}
-
-export interface ThemeContextValue extends AppTheme {
   isThemeLoading: boolean;
   reloadTheme: () => Promise<void>;
 }
@@ -47,22 +35,6 @@ const STORAGE_KEYS = {
   backgrounds: "backgrounds_active",
   tabs: "navigation_tabs_active",
   screenLayouts: "screen_layouts_active",
-};
-
-const defaultTheme: ThemeSettings = {
-  id: "default",
-  cor_primaria: "#22c55e",
-  cor_secundaria: "#334155",
-  cor_fundo: "#020617",
-  cor_texto: "#e5e7eb",
-  cor_texto_secundario: "#9ca3af",
-  cor_sucesso: "#22c55e",
-  cor_erro: "#ef4444",
-  cor_aviso: "#f59e0b",
-  cor_info: "#38bdf8",
-  ativo: true,
-  created_at: null as any,
-  updated_at: null as any,
 };
 
 const defaultLayout: LayoutSettings = {
@@ -79,25 +51,14 @@ const defaultLayout: LayoutSettings = {
   estilo_card: "padrao",
   padding_componente: 12,
   ativo: true,
-  created_at: null as any,
-  updated_at: null as any,
-};
-
-const defaultContext: AppTheme = {
-  themeSettings: defaultTheme,
-  layoutSettings: defaultLayout,
-  backgrounds: {},
-  navigationTabs: [],
-  screenLayouts: [],
+  created_at: null,
+  updated_at: null,
 };
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [themeSettings, setThemeSettings] = useState<ThemeSettings | null>(
-    defaultTheme
-  );
-  const [layoutSettings, setLayoutSettings] = useState<LayoutSettings | null>(
-    defaultLayout
-  );
+  const [themeSettings, setThemeSettings] = useState<ThemeSettings | null>(null);
+  const [theme, setTheme] = useState<AppTheme>(getMergedAppTheme(null));
+  const [layoutSettings, setLayoutSettings] = useState<LayoutSettings | null>(defaultLayout);
   const [backgrounds, setBackgrounds] = useState<BackgroundMap>({});
   const [navigationTabs, setNavigationTabs] = useState<NavigationTabConfig[]>([]);
   const [screenLayouts, setScreenLayouts] = useState<ScreenLayoutConfig[]>([]);
@@ -113,6 +74,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const contextValue: ThemeContextValue = useMemo(
     () => ({
+      theme,
+      settings: themeSettings,
       themeSettings,
       layoutSettings,
       backgrounds,
@@ -121,7 +84,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       isThemeLoading,
       reloadTheme,
     }),
-    [themeSettings, layoutSettings, backgrounds, navigationTabs, screenLayouts, isThemeLoading]
+    [theme, themeSettings, layoutSettings, backgrounds, navigationTabs, screenLayouts, isThemeLoading]
   );
 
   async function loadFromCache() {
@@ -134,7 +97,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         AsyncStorage.getItem(STORAGE_KEYS.screenLayouts),
       ]);
 
-      if (themeStr) setThemeSettings(JSON.parse(themeStr));
+      if (themeStr) {
+        const parsed: ThemeSettings = JSON.parse(themeStr);
+        setThemeSettings(parsed);
+        setTheme(getMergedAppTheme(parsed));
+      }
       if (layoutStr) setLayoutSettings(JSON.parse(layoutStr));
       if (bgStr) {
         const arr: BackgroundSettings[] = JSON.parse(bgStr);
@@ -151,14 +118,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     try {
       setIsThemeLoading(true);
 
-      const [
-        activeTheme,
-        activeLayout,
-        activeBgs,
-        activeTabs,
-        activeScreenLayouts,
-      ] = await Promise.all([
-        getActiveThemeSettings(),
+      const [activeTheme, activeLayout, activeBgs, activeTabs, activeScreenLayouts] = await Promise.all([
+        getThemeSettings(),
         getActiveLayoutSettings(),
         getActiveBackgrounds(),
         listActiveNavigationTabs(),
@@ -167,8 +128,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
       if (activeTheme) {
         setThemeSettings(activeTheme);
+        setTheme(getMergedAppTheme(activeTheme));
         await AsyncStorage.setItem(STORAGE_KEYS.theme, JSON.stringify(activeTheme));
+      } else {
+        setThemeSettings(null);
+        setTheme(getMergedAppTheme(null));
       }
+
       if (activeLayout) {
         setLayoutSettings(activeLayout);
         await AsyncStorage.setItem(STORAGE_KEYS.layout, JSON.stringify(activeLayout));
@@ -183,20 +149,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       }
       if (activeScreenLayouts) {
         setScreenLayouts(activeScreenLayouts);
-        await AsyncStorage.setItem(
-          STORAGE_KEYS.screenLayouts,
-          JSON.stringify(activeScreenLayouts)
-        );
+        await AsyncStorage.setItem(STORAGE_KEYS.screenLayouts, JSON.stringify(activeScreenLayouts));
       }
     } catch (err) {
       const code = (err as any)?.code || "";
       const isPermission =
-        code === "permission-denied" ||
-        String(err).toLowerCase().includes("missing or insufficient permissions");
+        code === "permission-denied" || String(err).toLowerCase().includes("missing or insufficient permissions");
 
       if (isPermission) {
-        // Usuário sem permissão para ler configurações remotas (ex.: não-admin).
-        // Mantemos os valores padrão/cache e evitamos quebrar o app.
         console.warn("Tema remoto nao lido: sem permissao. Usando default/cache.");
       } else {
         console.error("Erro ao carregar tema do Firestore:", err);
@@ -206,11 +166,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  return (
-    <ThemeContext.Provider value={contextValue}>
-      {children}
-    </ThemeContext.Provider>
-  );
+  return <ThemeContext.Provider value={contextValue}>{children}</ThemeContext.Provider>;
 }
 
 function mapBackgrounds(arr: BackgroundSettings[]): BackgroundMap {

@@ -23,6 +23,11 @@ type AdminLessonFilter = "all" | "available" | "published" | "reservedPending" |
 
 type NormalizedLessonStatus = "disponivel" | "reservada" | "publicada" | "pendente";
 
+export const options = {
+  title: "Aulas",
+  headerTitle: "Aulas",
+};
+
 function normalizeLessonStatus(status: Lesson["status"]): NormalizedLessonStatus {
   if (status === "pendente_reserva") return "pendente";
   return status as NormalizedLessonStatus;
@@ -291,7 +296,7 @@ function StudentLessonsScreen({ uid }: { uid: string }) {
     <ScrollView style={[styles.container, { backgroundColor: bg }]} contentContainerStyle={styles.content}>
       <View style={{ gap: 8 }}>
         <View style={styles.orderRow}>
-          <Text style={styles.sectionTitle}>Aulas publicadas</Text>
+          <View />
           <View style={styles.orderButtons}>
             <Text
               style={[styles.orderChip, order === "desc" && styles.orderChipActive]}

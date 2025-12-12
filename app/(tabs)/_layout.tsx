@@ -4,12 +4,14 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { doc, getDoc } from "firebase/firestore";
 import { useAuth } from "../../hooks/useAuth";
+import { useTheme } from "../../hooks/useTheme";
 import { firebaseDb } from "../../lib/firebase";
 
 /* Ajustes fase de testes - Home, notificacoes, gestao de papeis e permissoes */
 
 export default function TabsLayout() {
   const router = useRouter();
+  const { theme } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
   const [lessonsTabFirst, setLessonsTabFirst] = useState(true);
   const { user, signOut } = useAuth();
@@ -42,17 +44,17 @@ export default function TabsLayout() {
       <Tabs
         screenOptions={({ route }) => ({
           headerShown: true,
-          headerStyle: { backgroundColor: "#0f1521" },
-          headerTintColor: "#e5e7eb",
+          headerStyle: { backgroundColor: theme.colors.card },
+          headerTintColor: theme.colors.text,
           headerRight: () => (
             <Pressable style={styles.menuButton} onPress={() => setMenuOpen(true)}>
-              <Ionicons name="menu" size={22} color="#e5e7eb" />
+              <Ionicons name="menu" size={22} color={theme.colors.text} />
             </Pressable>
           ),
-          tabBarActiveTintColor: "#00ff7f",
-          tabBarInactiveTintColor: "#aaa",
+          tabBarActiveTintColor: theme.colors.tabBarActive,
+          tabBarInactiveTintColor: theme.colors.tabBarInactive,
           tabBarStyle: {
-            backgroundColor: "#0f1521",
+            backgroundColor: theme.colors.tabBarBackground,
             borderTopColor: "#1d2738",
             height: 60,
             paddingBottom: 6,
@@ -112,13 +114,15 @@ export default function TabsLayout() {
               name="lessons/index"
               options={{
                 title: "Aulas",
+                headerTitle: "Aulas",
                 tabBarLabel: "Aulas",
               }}
             />
             <Tabs.Screen
               name="devotionals/index"
               options={{
-                title: "Devocional",
+                title: "Devocionais",
+                headerTitle: "Devocionais",
                 tabBarLabel: "Devocional",
               }}
             />
@@ -160,8 +164,16 @@ export default function TabsLayout() {
       {menuOpen ? (
         <View style={styles.menuOverlay}>
           <Pressable style={styles.backdrop} onPress={() => setMenuOpen(false)} />
-          <View style={styles.drawer}>
-            <Text style={styles.drawerTitle}>Menu</Text>
+          <View
+            style={[
+              styles.drawer,
+              {
+                backgroundColor: theme.colors.card,
+                borderLeftColor: theme.colors.tabBarBackground,
+              },
+            ]}
+          >
+            <Text style={[styles.drawerTitle, { color: theme.colors.text }]}>Menu</Text>
             {buildMenuItems().map((item) => (
               <MenuItem
                 key={item.label}
