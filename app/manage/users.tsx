@@ -448,7 +448,7 @@ const styles = StyleSheet.create({
     borderColor: "#1f2937",
     borderRadius: 12,
     padding: 12,
-    backgroundColor: "#0b1224",
+    backgroundColor: "transparent",
     gap: 6,
   },
   cardHeader: {
@@ -545,7 +545,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   modalCard: {
-    backgroundColor: "#0b1224",
+    backgroundColor: "transparent",
     borderRadius: 12,
     padding: 16,
     width: "100%",
@@ -596,3 +596,4 @@ const styles = StyleSheet.create({
   },
 });
 import { Platform } from "react-native";
+

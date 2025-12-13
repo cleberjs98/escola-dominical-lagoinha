@@ -46,7 +46,7 @@ const styles = StyleSheet.create({
     borderColor: "#1f2937",
     borderRadius: 10,
     padding: 10,
-    backgroundColor: "#0b1224",
+    backgroundColor: "#2A0E12",
     marginBottom: 8,
     gap: 6,
   },
@@ -57,3 +57,4 @@ const styles = StyleSheet.create({
   meta: { color: "#94a3b8", fontSize: 12 },
   previewImage: { height: 120, borderRadius: 8, resizeMode: "cover" },
 });
+

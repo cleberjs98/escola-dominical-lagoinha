@@ -94,7 +94,7 @@ export default function RegisterScreen() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const corFundo = themeSettings?.cor_fundo || "#020617";
+  const corFundo = themeSettings?.cor_fundo || "#1A0509";
 
   const flag = useMemo(() => {
     const digits = codigoPais.replace(/\D/g, "");
@@ -427,3 +427,4 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 });
+

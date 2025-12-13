@@ -289,7 +289,7 @@ const styles = StyleSheet.create({
     borderColor: "#1f2937",
     borderRadius: 12,
     padding: 12,
-    backgroundColor: "#0b1224",
+    backgroundColor: "#2A0E12",
     marginTop: 12,
   },
   title: {
@@ -312,7 +312,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 10,
     marginBottom: 8,
-    backgroundColor: "#020617",
+    backgroundColor: "#1A0509",
   },
   cardTitle: { color: "#e5e7eb", fontWeight: "700", fontSize: 14 },
   cardDesc: { color: "#cbd5e1", fontSize: 13, marginBottom: 4 },
@@ -324,16 +324,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     alignItems: "center",
   },
-  buttonPrimary: { backgroundColor: "#22c55e" },
+  buttonPrimary: { backgroundColor: "#7A1422" },
   buttonPrimaryText: { color: "#022c22", fontWeight: "700" },
-  buttonSecondary: { backgroundColor: "#111827", borderWidth: 1, borderColor: "#475569" },
+  buttonSecondary: { backgroundColor: "#2A0E12", borderWidth: 1, borderColor: "#5A1622" },
   buttonSecondaryText: { color: "#e5e7eb", fontWeight: "600" },
-  buttonDanger: { backgroundColor: "#b91c1c" },
+  buttonDanger: { backgroundColor: "#9F1D2D" },
   buttonDangerText: { color: "#fee2e2", fontWeight: "700" },
   disabled: { opacity: 0.7 },
   section: { marginTop: 12, gap: 8 },
   input: {
-    backgroundColor: "#020617",
+    backgroundColor: "#1A0509",
     borderWidth: 1,
     borderColor: "#334155",
     borderRadius: 10,
@@ -342,3 +342,4 @@ const styles = StyleSheet.create({
     color: "#e5e7eb",
   },
 });
+

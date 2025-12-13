@@ -62,7 +62,7 @@ export default function LessonDetailsScreen() {
     }
   }
 
-  const bg = themeSettings?.cor_fundo || "#020617";
+  const bg = themeSettings?.cor_fundo || "#1A0509";
 
   const isAdmin = role === "administrador" || role === "coordenador";
   const isProfessor = role === "professor";
@@ -290,7 +290,7 @@ const styles = StyleSheet.create({
   },
   center: {
     flex: 1,
-    backgroundColor: "#020617",
+    backgroundColor: "#1A0509",
     alignItems: "center",
     justifyContent: "center",
   },

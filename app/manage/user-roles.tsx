@@ -293,7 +293,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 10,
     color: "#e5e7eb",
-    backgroundColor: "#0b1224",
+    backgroundColor: "transparent",
   },
   roleFilterRow: {
     flexDirection: "row",
@@ -329,7 +329,7 @@ const styles = StyleSheet.create({
     borderColor: "#1f2937",
     borderRadius: 12,
     padding: 12,
-    backgroundColor: "#0b1224",
+    backgroundColor: "transparent",
   },
   row: {
     flexDirection: "row",
@@ -386,7 +386,7 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: "100%",
-    backgroundColor: "#0b1224",
+    backgroundColor: "transparent",
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
@@ -451,3 +451,4 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
 });
+

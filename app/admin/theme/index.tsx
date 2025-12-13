@@ -27,7 +27,7 @@ const defaultTheme: ThemeSettings = {
   id: "default",
   cor_primaria: "#22c55e",
   cor_secundaria: "#334155",
-  cor_fundo: "#020617",
+  cor_fundo: "#1A0509",
   cor_texto: "#e5e7eb",
   cor_texto_secundario: "#9ca3af",
   cor_sucesso: "#22c55e",
@@ -196,7 +196,7 @@ export default function AdminThemeScreen() {
     }
   }
 
-  const previewBg = localTheme?.cor_fundo || "#020617";
+  const previewBg = localTheme?.cor_fundo || "#1A0509";
   const previewText = localTheme?.cor_texto || "#e5e7eb";
   const previewPrimary = localTheme?.cor_primaria || "#22c55e";
 
@@ -288,7 +288,7 @@ export default function AdminThemeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#020617",
+    backgroundColor: "#1A0509",
   },
   content: {
     paddingHorizontal: 16,
@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
   },
   center: {
     flex: 1,
-    backgroundColor: "#020617",
+    backgroundColor: "#1A0509",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -342,7 +342,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   sectionCard: {
-    backgroundColor: "#0b1224",
+    backgroundColor: "#2A0E12",
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#1f2937",
@@ -406,3 +406,4 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 });
+

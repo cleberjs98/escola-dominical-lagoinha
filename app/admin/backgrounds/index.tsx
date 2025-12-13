@@ -311,7 +311,7 @@ export default function BackgroundsAdminScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#020617",
+    backgroundColor: "#1A0509",
   },
   content: {
     paddingHorizontal: 16,
@@ -330,7 +330,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   sectionCard: {
-    backgroundColor: "#0b1224",
+    backgroundColor: "#2A0E12",
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#1f2937",
@@ -424,3 +424,4 @@ const styles = StyleSheet.create({
     backgroundColor: "#0f172a",
   },
 });
+

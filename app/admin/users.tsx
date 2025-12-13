@@ -448,7 +448,7 @@ const styles = StyleSheet.create({
     borderColor: "#1f2937",
     borderRadius: 12,
     padding: 12,
-    backgroundColor: "#0b1224",
+    backgroundColor: "transparent",
     gap: 6,
   },
   cardHeader: {
@@ -543,7 +543,7 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     borderRadius: 12,
-    backgroundColor: "#0b1224",
+    backgroundColor: "transparent",
     padding: 16,
     borderWidth: 1,
     borderColor: "#1f2937",
@@ -588,3 +588,4 @@ const styles = StyleSheet.create({
     backgroundColor: "#22c55e",
   },
 });
+

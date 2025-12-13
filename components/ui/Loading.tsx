@@ -10,9 +10,10 @@ export function Loading({ label = "Carregando..." }: Props) {
   const { theme } = useTheme();
   const color = theme.colors.accent;
   const textColor = theme.colors.text;
+  const bg = theme.colors.background;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: bg }]}>
       <ActivityIndicator size="large" color={color} />
       <Text style={[styles.label, { color: textColor }]}>{label}</Text>
     </View>

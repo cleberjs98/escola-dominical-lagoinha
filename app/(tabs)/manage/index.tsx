@@ -137,7 +137,7 @@ export default function ManageHubScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#020617",
+    backgroundColor: "#1A0509",
   },
   content: {
     paddingHorizontal: 16,
@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
   },
   center: {
     flex: 1,
-    backgroundColor: "#020617",
+    backgroundColor: "#1A0509",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   card: {
-    backgroundColor: "#0b1224",
+    backgroundColor: "#2A0E12",
     borderWidth: 1,
     borderColor: "#1f2937",
     borderRadius: 14,
@@ -192,3 +192,4 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 });
+

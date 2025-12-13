@@ -175,7 +175,7 @@ export default function NotificationsScreen() {
     <ScrollView
       style={[
         styles.container,
-        { backgroundColor: themeSettings?.cor_fundo || "#020617" },
+        { backgroundColor: themeSettings?.cor_fundo || "#1A0509" },
       ]}
       contentContainerStyle={styles.content}
     >
@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
     borderColor: "#1f2937",
     borderRadius: 12,
     padding: 12,
-    backgroundColor: "#0b1224",
+    backgroundColor: "#2A0E12",
     gap: 6,
   },
   cardUnread: {
@@ -333,3 +333,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
 });
+
+
