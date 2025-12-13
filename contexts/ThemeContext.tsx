@@ -8,6 +8,7 @@ import type {
   ThemeSettings,
 } from "../types/theme";
 import { themeTokens } from "../theme/tokens";
+import { withAlpha } from "../theme/utils";
 
 type BackgroundMap = Record<string, BackgroundSettings | null>;
 
@@ -61,36 +62,37 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme] = useState<AppTheme>({
     colors: {
       background: themeTokens.colors.background,
-      card: themeTokens.colors.surface,
+      card: withAlpha(themeTokens.colors.surface, 0.78),
       primary: themeTokens.colors.primary,
-      secondary: themeTokens.colors.surface2,
+      secondary: withAlpha(themeTokens.colors.surface2, 0.78),
       text: themeTokens.colors.textPrimary,
+      textSecondary: themeTokens.colors.textSecondary,
       accent: themeTokens.colors.white,
-      tabBarBackground: themeTokens.colors.tabBarBg,
+      tabBarBackground: withAlpha(themeTokens.colors.tabBarBg, 0.85),
       tabBarActive: themeTokens.colors.tabActive,
       tabBarInactive: themeTokens.colors.tabInactive,
-      border: themeTokens.colors.border,
+      border: withAlpha(themeTokens.colors.border, 0.5),
       muted: themeTokens.colors.muted,
-      divider: themeTokens.colors.border,
-      inputBg: themeTokens.colors.inputBg,
-      inputBorder: themeTokens.colors.inputBorder,
+      divider: withAlpha(themeTokens.colors.border, 0.35),
+      inputBg: withAlpha(themeTokens.colors.inputBg, 0.65),
+      inputBorder: withAlpha(themeTokens.colors.inputBorder, 0.5),
       inputBorderFocus: themeTokens.colors.inputBorderFocus,
       inputText: themeTokens.colors.inputText,
       inputPlaceholder: themeTokens.colors.inputPlaceholder,
       status: {
-        successBg: themeTokens.status.publicada.bg,
+        successBg: withAlpha(themeTokens.status.publicada.bg, 0.85),
         successText: themeTokens.status.publicada.text,
-        infoBg: themeTokens.status.disponivel.bg,
+        infoBg: withAlpha(themeTokens.status.disponivel.bg, 0.8),
         infoText: themeTokens.status.disponivel.text,
-        warningBg: themeTokens.status.pendente.bg,
+        warningBg: withAlpha(themeTokens.status.pendente.bg, 0.8),
         warningText: themeTokens.status.pendente.text,
-        dangerBg: themeTokens.colors.danger,
+        dangerBg: withAlpha(themeTokens.colors.danger, 0.85),
         dangerText: themeTokens.colors.onDanger,
       },
       buttons: {
-        primaryBg: themeTokens.colors.primary,
+        primaryBg: withAlpha(themeTokens.colors.primary, 0.82),
         primaryText: themeTokens.colors.onPrimary,
-        secondaryBg: "transparent",
+        secondaryBg: withAlpha(themeTokens.colors.white, 0.08),
         secondaryText: themeTokens.colors.white,
       },
     },

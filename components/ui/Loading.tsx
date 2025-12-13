@@ -7,9 +7,9 @@ type Props = {
 };
 
 export function Loading({ label = "Carregando..." }: Props) {
-  const { themeSettings } = useTheme();
-  const color = themeSettings?.cor_primaria ?? "#facc15";
-  const textColor = themeSettings?.cor_texto ?? "#e5e7eb";
+  const { theme } = useTheme();
+  const color = theme.colors.accent;
+  const textColor = theme.colors.text;
 
   return (
     <View style={styles.container}>

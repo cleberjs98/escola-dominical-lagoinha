@@ -11,11 +11,11 @@ type Props = {
 };
 
 export function KpiCard({ label, value, icon, onPress, style }: Props) {
-  const { themeSettings } = useTheme();
-  const bg = themeSettings?.cor_fundo || "#020617";
-  const border = themeSettings?.cor_secundaria || "#1f2937";
-  const text = themeSettings?.cor_texto || "#e5e7eb";
-  const muted = themeSettings?.cor_texto_secundario || "#9ca3af";
+  const { theme } = useTheme();
+  const bg = withAlpha(theme.colors.card, 0.7);
+  const border = withAlpha(theme.colors.border || theme.colors.card, 0.35);
+  const text = theme.colors.text;
+  const muted = theme.colors.muted || theme.colors.textSecondary || theme.colors.text;
 
   return (
     <Pressable
@@ -49,6 +49,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     minWidth: 140,
     flex: 1,
+    backgroundColor: "transparent",
   },
   clickable: {
     opacity: 0.95,
@@ -72,3 +73,13 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
 });
+
+function withAlpha(color: string, alpha: number): string {
+  if (color.startsWith("#") && (color.length === 7 || color.length === 9)) {
+    const r = parseInt(color.slice(1, 3), 16);
+    const g = parseInt(color.slice(3, 5), 16);
+    const b = parseInt(color.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  return color;
+}

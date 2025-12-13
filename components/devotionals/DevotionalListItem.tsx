@@ -34,11 +34,7 @@ export function DevotionalListItem({
 }
 
 const styles = StyleSheet.create({
-  card: {
-    borderWidth: 1,
-    borderColor: "#1f2937",
-    backgroundColor: "#0b1224",
-  },
+  card: {},
   actions: {
     marginTop: 10,
     flexDirection: "row",

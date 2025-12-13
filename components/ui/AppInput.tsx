@@ -21,21 +21,21 @@ export function AppInput({ label, error, helperText, style, ...rest }: Props) {
 
   return (
     <View style={{ gap: 4 }}>
-      {label ? <Text style={styles.label}>{label}</Text> : null}
+      {label ? <Text style={[styles.label, { color: theme.colors.text }]}>{label}</Text> : null}
       <TextInput
         style={[
           styles.input,
           {
             color: corTexto,
-            backgroundColor: theme.colors.inputBg || "#0E1626",
-            borderColor: theme.colors.border || "#3A0E15",
+            backgroundColor: theme.colors.inputBg || theme.colors.card,
+            borderColor: theme.colors.inputBorder || theme.colors.border || theme.colors.card,
           },
           style,
         ]}
-        placeholderTextColor={theme.colors.muted || "#94A3B8"}
+        placeholderTextColor={theme.colors.inputPlaceholder || theme.colors.muted || "#94A3B8"}
         {...rest}
       />
-      {helperText ? <Text style={styles.helper}>{helperText}</Text> : null}
+      {helperText ? <Text style={[styles.helper, { color: theme.colors.muted || "#94A3B8" }]}>{helperText}</Text> : null}
       {error ? <Text style={[styles.helper, { color: corErro }]}>{error}</Text> : null}
     </View>
   );
@@ -43,7 +43,6 @@ export function AppInput({ label, error, helperText, style, ...rest }: Props) {
 
 const styles = StyleSheet.create({
   label: {
-    color: "#CBD5E1",
     fontSize: 12,
   },
   input: {

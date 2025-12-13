@@ -35,11 +35,11 @@ export const themeTokens = {
     tabIndicator: "#7A1422",
 
     // Inputs
-    inputBg: "#0E1626",
-    inputBorder: "#2A3448",
+    inputBg: "#2A0E12",
+    inputBorder: "#3A0E15",
     inputBorderFocus: "#7A1422",
     inputText: "#FFFFFF",
-    inputPlaceholder: "#94A3B8",
+    inputPlaceholder: "#CFCFCF",
   },
 
   status: {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View, Platform } from "react-native";
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { useAuth } from "../../../hooks/useAuth";
@@ -9,214 +9,151 @@ import { AppButton } from "../../../components/ui/AppButton";
 import { Card } from "../../../components/ui/Card";
 import { RichTextEditor } from "../../../components/editor/RichTextEditor";
 import { StatusFilter } from "../../../components/filters/StatusFilter";
-import { getAvisoById, updateAviso, deleteAviso } from "../../../lib/avisos";
-import type { Aviso, AvisoDestino, AvisoStatus, AvisoTipo } from "../../../types/aviso";
-import { StatusBadge } from "../../../components/ui/StatusBadge";
+import { getAvisoById, updateAviso } from "../../../lib/avisos";
+import type { Aviso, AvisoDestino, AvisoTipo } from "../../../types/aviso";
+import { AppBackground } from "../../../components/layout/AppBackground";
+import type { AppTheme } from "../../../types/theme";
 
 export default function EditAvisoScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ avisoId: string }>();
-  const avisoId = params.avisoId;
-
+  const params = useLocalSearchParams();
+  const avisoId = params.avisoId as string;
   const { firebaseUser, user, isInitializing } = useAuth();
-  const { themeSettings } = useTheme();
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   const papel = user?.papel;
-  const isCoordinatorOrAdmin = papel === "coordenador" || papel === "administrador";
-  const destinoOptions =
-    papel === "professor"
-      ? (["todos", "professores"] as AvisoDestino[])
-      : (["todos", "alunos", "professores", "coordenadores", "admin"] as AvisoDestino[]);
+  const canEdit = papel === "professor" || papel === "coordenador" || papel === "administrador";
+
+  const destinoOptions = useMemo(
+    () =>
+      papel === "professor"
+        ? (["todos", "professores"] as AvisoDestino[])
+        : (["todos", "alunos", "professores", "coordenadores", "admin"] as AvisoDestino[]),
+    [papel]
+  );
 
   const [aviso, setAviso] = useState<Aviso | null>(null);
   const [titulo, setTitulo] = useState("");
   const [destino, setDestino] = useState<AvisoDestino>("todos");
   const [tipo, setTipo] = useState<AvisoTipo>("informativo");
   const [conteudo, setConteudo] = useState("");
-  const [status, setStatus] = useState<AvisoStatus>("rascunho");
-  const [isSaving, setIsSaving] = useState(false);
-
-  const canEdit = useMemo(() => {
-    if (!firebaseUser || !aviso) return false;
-    if (isCoordinatorOrAdmin) return true;
-    return aviso.criado_por_id === firebaseUser.uid && papel === "professor";
-  }, [aviso, firebaseUser, isCoordinatorOrAdmin, papel]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (isInitializing) return;
     if (!firebaseUser) {
-      router.replace("/auth/login" as any);
+      router.replace("/auth/login");
       return;
     }
-    if (papel && !["professor", "coordenador", "administrador"].includes(papel)) {
-      Alert.alert("Sem permissao", "Voce nao pode editar avisos.");
-      router.replace("/avisos" as any);
-      return;
-    }
-    if (avisoId) {
-      void loadAviso(avisoId);
-    }
-  }, [avisoId, firebaseUser, isInitializing, papel, router]);
+    void loadAviso();
+  }, [firebaseUser, isInitializing]);
 
-  async function loadAviso(id: string) {
+  async function loadAviso() {
     try {
-      const data = await getAvisoById(id);
-      if (!data) {
-        Alert.alert("Aviso", "Aviso nao encontrado.");
-        router.replace("/avisos" as any);
+      setIsLoading(true);
+      const fetched = await getAvisoById(avisoId);
+      if (!fetched) {
+        Alert.alert("Aviso não encontrado", "Ele pode ter sido removido.");
+        router.replace("/avisos");
         return;
       }
-      if (papel === "professor" && data.criado_por_id !== firebaseUser?.uid) {
-        Alert.alert("Permissao", "Voce nao tem permissao para editar este aviso.");
-        router.replace("/avisos" as any);
-        return;
-      }
-      setAviso(data);
-      setTitulo(data.titulo);
-      setDestino(data.destino);
-      setTipo(data.tipo);
-      setConteudo(data.conteudo);
-      setStatus(data.status);
-    } catch (err) {
-      console.error("[Avisos] erro ao carregar aviso:", err);
+      setAviso(fetched);
+      setTitulo(fetched.titulo || "");
+      setDestino((fetched.destino as AvisoDestino) || "todos");
+      setTipo((fetched.tipo as AvisoTipo) || "informativo");
+      setConteudo(fetched.conteudo || "");
+    } catch (error) {
+      console.error("[Avisos] Erro ao carregar aviso", error);
       Alert.alert("Erro", "Nao foi possivel carregar o aviso.");
-      router.replace("/avisos" as any);
+    } finally {
+      setIsLoading(false);
     }
   }
 
-  async function handleSave(nextStatus?: AvisoStatus) {
-    if (!aviso || !canEdit) return;
+  async function handleSubmit(status: "rascunho" | "publicado") {
+    if (!firebaseUser || !canEdit || !aviso) return;
     if (!titulo.trim() || !conteudo.trim()) {
-      Alert.alert("Erro", "Preencha titulo e conteudo.");
+      Alert.alert("Campos obrigatorios", "Titulo e conteudo sao obrigatorios.");
       return;
     }
+
     try {
-      setIsSaving(true);
-      const newStatus = nextStatus || status;
-      await updateAviso(aviso.id, {
-        titulo: titulo.trim(),
-        conteudo: conteudo.trim(),
+      setIsSubmitting(true);
+      await updateAviso(avisoId, {
+        titulo,
+        conteudo,
         destino,
         tipo,
-        status: newStatus,
+        status,
       });
-      setStatus(newStatus);
-      Alert.alert("Sucesso", "Aviso atualizado.");
-      router.replace("/avisos" as any);
-    } catch (err: any) {
-      console.error("[Avisos] erro ao salvar aviso:", err);
-      Alert.alert("Erro", err?.message || "Nao foi possivel atualizar o aviso.");
+      Alert.alert("Sucesso", status === "publicado" ? "Aviso atualizado e publicado." : "Rascunho atualizado.");
+      router.replace("/avisos");
+    } catch (error) {
+      console.error("[Avisos] Erro ao atualizar aviso", error);
+      Alert.alert("Erro", "Nao foi possivel salvar o aviso agora.");
     } finally {
-      setIsSaving(false);
+      setIsSubmitting(false);
     }
   }
 
-  async function handleDelete() {
-    if (!aviso || !canEdit) return;
-    const doDelete = async () => {
-      try {
-        console.log("[Avisos] deleting from edit", aviso.id);
-        setIsSaving(true);
-        await deleteAviso(aviso.id);
-        router.replace("/avisos" as any);
-      } catch (err) {
-        console.error("[Avisos] erro ao excluir aviso:", err);
-        Alert.alert("Erro", "Nao foi possivel excluir o aviso.");
-      } finally {
-        setIsSaving(false);
-      }
-    };
-
-    if (Platform.OS === "web" && typeof window !== "undefined") {
-      const ok = window.confirm("Deseja excluir este aviso?");
-      if (ok) void doDelete();
-      return;
-    }
-
-    Alert.alert("Excluir aviso", "Deseja excluir este aviso?", [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Excluir", style: "destructive", onPress: () => void doDelete() },
-    ]);
-  }
-
-  if (isInitializing || !aviso) {
+  if (isInitializing || isLoading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#facc15" />
-        <Text style={styles.loadingText}>Carregando aviso...</Text>
-      </View>
+      <AppBackground>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={theme.colors.accent} />
+          <Text style={styles.loadingText}>Carregando aviso...</Text>
+        </View>
+      </AppBackground>
     );
   }
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: themeSettings?.cor_fundo || "#020617" }]}
-      contentContainerStyle={styles.content}
-    >
-      <Card
-        title="Editar aviso"
-        subtitle={aviso?.titulo}
-        footer={<StatusBadge status={status} />}
-      >
-        <AppInput label="Titulo" value={titulo} onChangeText={setTitulo} />
+    <AppBackground>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <Card title="Editar aviso" subtitle="Atualize as informacoes do aviso.">
+          <AppInput label="Titulo" value={titulo} onChangeText={setTitulo} placeholder="Ex: Atualizacao importante" />
 
-        <StatusFilter
-          label="Destino"
-          value={destino}
-          onChange={(v) => setDestino(v as AvisoDestino)}
-          options={destinoOptions.map((opt) => ({ value: opt, label: destinoLabel(opt) }))}
-        />
-
-        <StatusFilter
-          label="Tipo"
-          value={tipo}
-          onChange={(v) => setTipo(v as AvisoTipo)}
-          options={[
-            { value: "informativo", label: "Informativo" },
-            { value: "urgente", label: "Urgente" },
-            { value: "interno", label: "Interno" },
-            { value: "espiritual", label: "Espiritual" },
-          ]}
-        />
-
-        <RichTextEditor
-          value={conteudo}
-          onChange={setConteudo}
-          placeholder="Conteudo do aviso..."
-          minHeight={180}
-        />
-
-        <View style={styles.actions}>
-          <AppButton
-            title={isSaving ? "Salvando..." : "Salvar alteracoes"}
-            variant="primary"
-            onPress={() => handleSave()}
-            disabled={isSaving || !canEdit}
+          <StatusFilter
+            label="Destino"
+            options={destinoOptions.map((d) => ({ label: destinoLabel(d), value: d }))}
+            value={destino}
+            onChange={(v) => setDestino(v as AvisoDestino)}
           />
-          {status === "rascunho" ? (
-            <AppButton
-              title={isSaving ? "Publicando..." : "Publicar"}
-              variant="secondary"
-              onPress={() => handleSave("publicado")}
-              disabled={isSaving || !canEdit}
-            />
-          ) : (
-            <AppButton
-              title={isSaving ? "Atualizando..." : "Salvar como rascunho"}
-              variant="secondary"
-              onPress={() => handleSave("rascunho")}
-              disabled={isSaving || !canEdit}
-            />
-          )}
-          <AppButton
-            title={isSaving ? "Excluindo..." : "Excluir aviso"}
-            variant="danger"
-            onPress={handleDelete}
-            disabled={isSaving || !canEdit}
+
+          <StatusFilter
+            label="Tipo"
+            options={[
+              { label: "Informativo", value: "informativo" },
+              { label: "Urgente", value: "urgente" },
+              { label: "Interno", value: "interno" },
+              { label: "Espiritual", value: "espiritual" },
+            ]}
+            value={tipo}
+            onChange={(v) => setTipo(v as AvisoTipo)}
           />
-        </View>
-      </Card>
-    </ScrollView>
+
+          <RichTextEditor value={conteudo} onChange={setConteudo} placeholder="Conteudo do aviso..." minHeight={180} />
+
+          <View style={styles.actions}>
+            <AppButton
+              title={isSubmitting ? "Salvando..." : "Salvar como rascunho"}
+              variant="secondary"
+              onPress={() => handleSubmit("rascunho")}
+              disabled={isSubmitting}
+            />
+            <AppButton
+              title={isSubmitting ? "Publicando..." : "Publicar agora"}
+              variant="primary"
+              onPress={() => handleSubmit("publicado")}
+              disabled={isSubmitting}
+            />
+            <AppButton title="Cancelar" variant="outline" onPress={() => router.back()} fullWidth={false} disabled={isSubmitting} />
+          </View>
+        </Card>
+      </ScrollView>
+    </AppBackground>
   );
 }
 
@@ -237,10 +174,12 @@ function destinoLabel(destino: AvisoDestino) {
   }
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { paddingHorizontal: 16, paddingTop: 56, paddingBottom: 24, gap: 12 },
-  center: { flex: 1, backgroundColor: "#020617", alignItems: "center", justifyContent: "center" },
-  loadingText: { color: "#e5e7eb", marginTop: 12 },
-  actions: { gap: 8, marginTop: 12 },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    container: { flex: 1 },
+    content: { paddingHorizontal: 16, paddingTop: 56, paddingBottom: 24, gap: 12 },
+    center: { flex: 1, backgroundColor: theme.colors.background, alignItems: "center", justifyContent: "center" },
+    loadingText: { color: theme.colors.text, marginTop: 12 },
+    actions: { gap: 8, marginTop: 12 },
+  });
+}

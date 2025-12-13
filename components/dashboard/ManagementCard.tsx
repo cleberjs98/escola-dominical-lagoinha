@@ -11,17 +11,14 @@ type Props = {
 };
 
 export function ManagementCard({ title, subtitle, icon, onPress, style }: Props) {
-  const { themeSettings } = useTheme();
-  const bg = themeSettings?.cor_fundo || "#020617";
-  const border = themeSettings?.cor_secundaria || "#1f2937";
-  const text = themeSettings?.cor_texto || "#e5e7eb";
-  const muted = themeSettings?.cor_texto_secundario || "#94a3af";
+  const { theme } = useTheme();
+  const bg = theme.colors.card;
+  const border = theme.colors.border || theme.colors.card;
+  const text = theme.colors.text;
+  const muted = theme.colors.muted || theme.colors.textSecondary || theme.colors.text;
 
   return (
-    <Pressable
-      style={[styles.container, { backgroundColor: bg, borderColor: border }, style]}
-      onPress={onPress}
-    >
+    <Pressable style={[styles.container, { backgroundColor: bg, borderColor: border }, style]} onPress={onPress}>
       <View style={styles.iconSlot}>{icon ? <Text style={styles.icon}>{icon}</Text> : null}</View>
       <View style={{ flex: 1 }}>
         <Text style={[styles.title, { color: text }]} numberOfLines={1}>
@@ -52,7 +49,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#0b1224",
+    backgroundColor: "rgba(255,255,255,0.08)",
   },
   icon: {
     fontSize: 16,

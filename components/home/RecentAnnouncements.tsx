@@ -11,9 +11,9 @@ type Props = {
 };
 
 export function RecentAnnouncements({ avisos, onPressAll }: Props) {
-  const { themeSettings } = useTheme();
-  const bg = themeSettings?.cor_fundo || "#0b1224";
-  const border = "#1f2937";
+  const { theme } = useTheme();
+  const bg = theme.colors.card;
+  const border = theme.colors.border || theme.colors.card;
 
   const data = avisos.slice(0, 3);
 
@@ -21,14 +21,16 @@ export function RecentAnnouncements({ avisos, onPressAll }: Props) {
     <View style={[styles.container, { backgroundColor: bg, borderColor: border }]}>
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>📌 Avisos recentes</Text>
-          <Text style={styles.subtitle}>Comunicados para seu perfil.</Text>
+          <Text style={[styles.title, { color: theme.colors.text }]}>Avisos recentes</Text>
+          <Text style={[styles.subtitle, { color: theme.colors.muted }]} numberOfLines={1}>
+            Comunicados para seu perfil.
+          </Text>
         </View>
         <AppButton title="Ver todos" variant="outline" fullWidth={false} onPress={onPressAll} />
       </View>
 
       {data.length === 0 ? (
-        <Text style={styles.empty}>Nenhum aviso no momento.</Text>
+        <Text style={[styles.empty, { color: theme.colors.muted }]}>Nenhum aviso no momento.</Text>
       ) : (
         <FlatList
           data={data}
@@ -43,20 +45,20 @@ export function RecentAnnouncements({ avisos, onPressAll }: Props) {
 }
 
 function AnnouncementCard({ aviso }: { aviso: Aviso }) {
-  const { themeSettings } = useTheme();
+  const { theme } = useTheme();
   const colors: Record<Aviso["tipo"], string> = {
-    informativo: "#38bdf8",
-    urgente: "#ef4444",
-    interno: "#f59e0b",
-    espiritual: "#a855f7",
+    informativo: theme.colors.text,
+    urgente: theme.colors.status?.dangerBg || theme.colors.primary,
+    interno: theme.colors.primary,
+    espiritual: theme.colors.text,
   };
-  const color = colors[aviso.tipo] || "#38bdf8";
-  const text = themeSettings?.cor_texto || "#e5e7eb";
-  const muted = themeSettings?.cor_texto_secundario || "#94a3b8";
+  const color = colors[aviso.tipo] || theme.colors.text;
+  const text = theme.colors.text;
+  const muted = theme.colors.muted || theme.colors.textSecondary || theme.colors.text;
   const summary = aviso.conteudo?.replace(/\s+/g, " ").trim();
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, { borderColor: theme.colors.border, backgroundColor: theme.colors.card }]}>
       <View style={[styles.bar, { backgroundColor: color }]} />
       <View style={styles.cardBody}>
         <View style={styles.cardHeader}>
@@ -80,7 +82,7 @@ function AnnouncementCard({ aviso }: { aviso: Aviso }) {
           </Text>
         ) : null}
         <Text style={[styles.cardMeta, { color: muted }]}>
-          {aviso.criado_por_nome} · {formatRelative(aviso.criado_em)}
+          {aviso.criado_por_nome} - {formatRelative(aviso.criado_em)}
         </Text>
       </View>
     </View>
@@ -120,41 +122,38 @@ function formatRelative(value: any) {
 const styles = StyleSheet.create({
   container: {
     borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 12,
-    gap: 10,
   },
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
   },
   title: {
-    color: "#e5e7eb",
     fontSize: 16,
     fontWeight: "700",
   },
   subtitle: {
-    color: "#9ca3af",
     fontSize: 13,
   },
   empty: {
-    color: "#94a3b8",
     fontSize: 13,
   },
   card: {
+    flexDirection: "row",
     borderWidth: 1,
-    borderColor: "#1f2937",
-    borderRadius: 10,
+    borderRadius: 12,
     overflow: "hidden",
   },
   bar: {
-    height: 3,
+    width: 6,
   },
   cardBody: {
+    flex: 1,
     padding: 10,
     gap: 6,
-    backgroundColor: "#0b1224",
   },
   cardHeader: {
     flexDirection: "row",
@@ -171,22 +170,21 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 14,
     fontWeight: "700",
-    flex: 1,
+  },
+  cardSummary: {
+    fontSize: 13,
+  },
+  cardMeta: {
+    fontSize: 12,
   },
   pill: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 999,
     borderWidth: 1,
   },
   pillText: {
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  cardSummary: {
     fontSize: 12,
-  },
-  cardMeta: {
-    fontSize: 11,
+    fontWeight: "600",
   },
 });

@@ -1,5 +1,13 @@
-import { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator } from "react-native";
+﻿import { useEffect, useMemo, useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Alert,
+  ActivityIndicator,
+  ImageBackground,
+} from "react-native";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../../hooks/useAuth";
 import { useTheme } from "../../../hooks/useTheme";
@@ -8,11 +16,14 @@ import { AppButton } from "../../../components/ui/AppButton";
 import { RichTextEditor } from "../../../components/editor/RichTextEditor";
 import { maskDate, maskDateTime, parseDateTimeToTimestamp } from "../../../utils/publishAt";
 import { createLessonAvailable, createLessonDraft } from "../../../lib/lessons";
+import { AppBackground } from "../../../components/layout/AppBackground";
+import type { AppTheme } from "../../../theme/tokens";
 
 export default function NewLessonScreen() {
   const router = useRouter();
   const { firebaseUser, user, isInitializing } = useAuth();
-  const { themeSettings } = useTheme();
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   const [titulo, setTitulo] = useState("");
   const [referencia, setReferencia] = useState("");
@@ -118,104 +129,121 @@ export default function NewLessonScreen() {
 
   if (isInitializing) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#facc15" />
-        <Text style={styles.loadingText}>Carregando...</Text>
-      </View>
+      <AppBackground>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={theme.colors.textPrimary} />
+          <Text style={styles.loadingText}>Carregando...</Text>
+        </View>
+      </AppBackground>
     );
   }
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: themeSettings?.cor_fundo || "#020617" }]}
-      contentContainerStyle={styles.content}
-    >
-      <Text style={styles.title}>Criar aula</Text>
-      <AppInput
-        label="Título da aula"
-        placeholder="Ex.: Aula sobre Romanos 8"
-        value={titulo}
-        onChangeText={setTitulo}
-      />
-      <AppInput
-        label="Referência bíblica"
-        placeholder="Ex.: Romanos 8"
-        value={referencia}
-        onChangeText={setReferencia}
-      />
-      <AppInput
-        label="Data da aula"
-        placeholder="dd/mm/aaaa"
-        keyboardType="number-pad"
-        value={dataAula}
-        onChangeText={(v) => {
-          setDataAula(maskDate(v));
-          setErrors((prev) => ({ ...prev, data: undefined }));
-        }}
-        error={errors.data}
-      />
-      <AppInput
-        label="Publicar automaticamente em (opcional)"
-        placeholder="dd/mm/aaaa hh:mm"
-        keyboardType="number-pad"
-        value={publishAt}
-        onChangeText={(v) => {
-          setPublishAt(maskDateTime(v));
-          setErrors((prev) => ({ ...prev, publish: undefined }));
-        }}
-        error={errors.publish}
-        helperText="Digite ddmmaaaa hh:mm. Deixe vazio para não agendar."
-      />
-      <RichTextEditor
-        value={descricao}
-        onChange={setDescricao}
-        placeholder="Descrição base da aula..."
-        minHeight={180}
-      />
+    <AppBackground>
+      <ImageBackground
+        source={require("../../../assets/brand/lagoinha-badge-watermark.png")}
+        style={styles.bgImage}
+        imageStyle={styles.bgImageStyle}
+      >
+        <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+          <Text style={styles.title}>Criar aula</Text>
+          <AppInput
+            label="Título da aula"
+            placeholder="Ex.: Aula sobre Romanos 8"
+            value={titulo}
+            onChangeText={setTitulo}
+          />
+          <AppInput
+            label="Referência bíblica"
+            placeholder="Ex.: Romanos 8"
+            value={referencia}
+            onChangeText={setReferencia}
+          />
+          <AppInput
+            label="Data da aula"
+            placeholder="dd/mm/aaaa"
+            keyboardType="number-pad"
+            value={dataAula}
+            onChangeText={(v) => {
+              setDataAula(maskDate(v));
+              setErrors((prev) => ({ ...prev, data: undefined }));
+            }}
+            error={errors.data}
+          />
+          <AppInput
+            label="Publicar automaticamente em (opcional)"
+            placeholder="dd/mm/aaaa hh:mm"
+            keyboardType="number-pad"
+            value={publishAt}
+            onChangeText={(v) => {
+              setPublishAt(maskDateTime(v));
+              setErrors((prev) => ({ ...prev, publish: undefined }));
+            }}
+            error={errors.publish}
+            helperText="Digite ddmmaaaa hh:mm. Deixe vazio para não agendar."
+          />
+          <RichTextEditor
+            value={descricao}
+            onChange={setDescricao}
+            placeholder="Descrição base da aula..."
+            minHeight={180}
+          />
 
-      <View style={styles.actions}>
-        <AppButton
-          title={submitting ? "Salvando..." : "Salvar rascunho"}
-          variant="secondary"
-          onPress={() => handleSubmit("rascunho")}
-          disabled={submitting}
-        />
-        <AppButton
-          title={submitting ? "Criando..." : "Criar aula disponível"}
-          variant="primary"
-          onPress={() => handleSubmit("disponivel")}
-          disabled={submitting}
-        />
-      </View>
-    </ScrollView>
+          <View style={styles.actions}>
+            <AppButton
+              title={submitting ? "Salvando..." : "Salvar rascunho"}
+              variant="secondary"
+              onPress={() => handleSubmit("rascunho")}
+              disabled={submitting}
+            />
+            <AppButton
+              title={submitting ? "Criando..." : "Criar aula disponível"}
+              variant="primary"
+              onPress={() => handleSubmit("disponivel")}
+              disabled={submitting}
+            />
+          </View>
+        </ScrollView>
+      </ImageBackground>
+    </AppBackground>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  content: {
-    padding: 16,
-    gap: 12,
-  },
-  center: {
-    flex: 1,
-    backgroundColor: "#020617",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  loadingText: {
-    color: "#e5e7eb",
-    marginTop: 12,
-  },
-  title: {
-    color: "#e5e7eb",
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  actions: {
-    gap: 8,
-    marginTop: 12,
-  },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: "transparent",
+    },
+    content: {
+      padding: 16,
+      gap: 12,
+      paddingBottom: 24,
+    },
+    center: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    loadingText: {
+      color: theme.colors.textSecondary,
+      marginTop: 12,
+    },
+    title: {
+      color: theme.colors.textPrimary || "#FFFFFF",
+      fontSize: 20,
+      fontWeight: "700",
+    },
+    actions: {
+      gap: 8,
+      marginTop: 12,
+    },
+    bgImage: {
+      flex: 1,
+    },
+    bgImageStyle: {
+      opacity: 0.05,
+      resizeMode: "cover",
+    },
+  });
+}

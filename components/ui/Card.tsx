@@ -12,13 +12,13 @@ type Props = {
 };
 
 export function Card({ title, subtitle, children, onPress, footer, style }: Props) {
-  const { themeSettings, layoutSettings } = useTheme();
+  const { theme, themeSettings, layoutSettings } = useTheme();
   const padding = layoutSettings?.padding_componente ?? 12;
   const radius = layoutSettings?.raio_borda ?? 12;
-  const border = "#1f2937";
-  const bg = "#0b1224";
-  const titleColor = themeSettings?.cor_texto ?? "#e5e7eb";
-  const subtitleColor = "#9ca3af";
+  const border = withAlpha(theme?.colors?.border || "#3A0E15", 0.35);
+  const bg = withAlpha(theme?.colors?.card || themeSettings?.cor_fundo || "#3A1118", 0.7);
+  const titleColor = theme?.colors?.text || themeSettings?.cor_texto || "#FFFFFF";
+  const subtitleColor = theme?.colors?.muted || "#CFCFCF";
 
   const content = (
     <View
@@ -62,3 +62,13 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
 });
+
+function withAlpha(color: string, alpha: number): string {
+  if (color.startsWith("#") && (color.length === 7 || color.length === 9)) {
+    const r = parseInt(color.slice(1, 3), 16);
+    const g = parseInt(color.slice(3, 5), 16);
+    const b = parseInt(color.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  return color;
+}

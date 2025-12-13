@@ -25,10 +25,10 @@ export function AppCard({
 }: AppCardProps) {
   const { theme } = useTheme();
   const Container: React.ComponentType<any> = onPress ? TouchableOpacity : View;
-  const backgroundColor = theme?.colors?.card || "#3A1118";
+  const backgroundColor = withAlpha(theme?.colors?.card || "#3A1118", 0.7);
   const titleColor = theme?.colors?.text || "#FFFFFF";
   const subtitleColor = theme?.colors?.muted || "#CFCFCF";
-  const borderColor = theme?.colors?.border || "#3A0E15";
+  const borderColor = withAlpha(theme?.colors?.border || "#3A0E15", 0.35);
 
   const badgeStyle = mapStatusVariantToStyle(statusVariant, theme);
   const badgeTextColor = mapStatusVariantToTextColor(statusVariant, theme);
@@ -60,30 +60,44 @@ export function AppCard({
 function mapStatusVariantToStyle(variant: AppCardStatusVariant, theme: any): ViewStyle {
   switch (variant) {
     case "success":
-      return { backgroundColor: "#FFFFFF", borderColor: theme?.colors?.border || "#7A1422", borderWidth: 1 };
+      return {
+        backgroundColor: withAlpha(theme?.colors?.status?.successBg || "#FFFFFF", 0.85),
+        borderColor: theme?.colors?.border || "#7A1422",
+        borderWidth: 1,
+      };
     case "info":
-      return { backgroundColor: "rgba(255,255,255,0.12)" };
+      return { backgroundColor: withAlpha(theme?.colors?.status?.infoBg || "rgba(255,255,255,0.12)", 0.8) };
     case "warning":
-      return { backgroundColor: "#45141D" };
+      return { backgroundColor: withAlpha(theme?.colors?.status?.warningBg || "#45141D", 0.8) };
     case "muted":
-      return { backgroundColor: "rgba(255,255,255,0.08)" };
+      return { backgroundColor: theme?.colors?.muted ? `${theme.colors.muted}33` : "rgba(255,255,255,0.08)" };
     case "default":
     default:
-      return { backgroundColor: "rgba(255,255,255,0.08)" };
+      return { backgroundColor: theme?.colors?.status?.infoBg || "rgba(255,255,255,0.08)" };
   }
 }
 
 function mapStatusVariantToTextColor(variant: AppCardStatusVariant, theme: any): string {
   switch (variant) {
     case "success":
-      return theme?.colors?.primary || "#7A1422";
+      return theme?.colors?.status?.successText || theme?.colors?.primary || "#7A1422";
     case "info":
     case "warning":
     case "muted":
     case "default":
     default:
-      return theme?.colors?.text || "#FFFFFF";
+      return theme?.colors?.status?.infoText || theme?.colors?.text || "#FFFFFF";
   }
+}
+
+function withAlpha(color: string, alpha: number): string {
+  if (color.startsWith("#") && (color.length === 7 || color.length === 9)) {
+    const r = parseInt(color.slice(1, 3), 16);
+    const g = parseInt(color.slice(3, 5), 16);
+    const b = parseInt(color.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  return color;
 }
 
 const cardStyles = {

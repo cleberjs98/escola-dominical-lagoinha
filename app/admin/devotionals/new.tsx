@@ -1,22 +1,24 @@
-// app/admin/devotionals/new.tsx - criação de devocional espelhada no fluxo de aulas
-import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert } from "react-native";
+// app/admin/devotionals/new.tsx - criação de devocional (layout alinhado à criação de aula)
+import React, { useEffect, useMemo, useState } from "react";
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, ImageBackground } from "react-native";
 import { useRouter } from "expo-router";
 
 import { AppButton } from "../../../components/ui/AppButton";
 import { AppInput } from "../../../components/ui/AppInput";
-import { Card } from "../../../components/ui/Card";
 import { RichTextEditor } from "../../../components/editor/RichTextEditor";
 import { useAuth } from "../../../hooks/useAuth";
 import { useTheme } from "../../../hooks/useTheme";
 import { createDevotional, isDevotionalDateAvailable } from "../../../lib/devotionals";
 import { DevotionalStatus } from "../../../types/devotional";
 import { maskDate, maskDateTime, parseDateTimeToTimestamp } from "../../../utils/publishAt";
+import { AppBackground } from "../../../components/layout/AppBackground";
+import type { AppTheme } from "../../../theme/tokens";
 
 export default function NewDevotionalScreen() {
   const router = useRouter();
   const { firebaseUser, user, isInitializing } = useAuth();
-  const { themeSettings } = useTheme();
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   const [titulo, setTitulo] = useState("");
   const [referenciaBiblica, setReferenciaBiblica] = useState("");
@@ -32,7 +34,7 @@ export default function NewDevotionalScreen() {
       return;
     }
     const papel = user?.papel;
-    if (papel !== "coordenador" && papel !== "administrador") {
+    if (papel !== "coordenador" && papel !== "administrador" && papel !== "admin") {
       Alert.alert("Sem permissão", "Apenas coordenador/admin podem criar devocionais.");
       router.replace("/" as any);
     }
@@ -56,70 +58,55 @@ export default function NewDevotionalScreen() {
       return false;
     }
     if (publishAtInput.trim() && !parseDateTimeToTimestamp(publishAtInput)) {
-      Alert.alert("Erro", "Data e hora de publicação automática inválidas (dd/mm/aaaa hh:mm).");
+      Alert.alert("Erro", "Data e hora inválidas (dd/mm/aaaa hh:mm).");
       return false;
     }
     return true;
   }
 
   async function handleSaveDraft() {
-    await handleSubmit(DevotionalStatus.RASCUNHO, "[NewDevotional] handleSaveDraft chamado");
+    await handleSubmit(DevotionalStatus.RASCUNHO);
   }
 
   async function handleMakeAvailable() {
-    await handleSubmit(DevotionalStatus.DISPONIVEL, "[NewDevotional] handleMakeAvailable chamado");
+    await handleSubmit(DevotionalStatus.DISPONIVEL);
   }
 
   async function handlePublishNow() {
-    await handleSubmit(DevotionalStatus.PUBLICADO, "[NewDevotional] handlePublishNow chamado", true);
+    await handleSubmit(DevotionalStatus.PUBLICADO, true);
   }
 
-  async function handleSubmit(status: DevotionalStatus, logPrefix: string, publishNow = false) {
+  async function handleSubmit(status: DevotionalStatus, publishNow = false) {
     if (!firebaseUser) return;
     if (!validate()) return;
     const isoDate = toISODate(dataDevocional);
     if (!isoDate) return;
 
     try {
-      const publishInfo = parseDateTimeToTimestamp(publishAtInput);
-      console.log(logPrefix, {
-        isoDate,
-        publishAtInput,
-        publishAtDisplay: publishInfo?.display,
-        publishAtTimestamp: publishInfo?.timestamp?.toDate?.() ?? null,
-        status,
-        publishNow,
-      });
       setIsSubmitting(true);
-
-      const available = await isDevotionalDateAvailable(isoDate);
-      console.log("[NewDevotional] data available?", available);
-      // Se já existir devocional na mesma data, apenas avisa mas deixa seguir (evita travar criação)
-      if (!available) {
-        console.warn("[NewDevotional] já existe devocional nessa data, prosseguindo mesmo assim.");
+      const isAvailable = await isDevotionalDateAvailable(isoDate);
+      if (!isAvailable) {
+        console.warn("[NewDevotional] já existe devocional nesta data, prosseguindo mesmo assim.");
       }
-
-      const id = await createDevotional({
+      const parsed = parseDateTimeToTimestamp(publishAtInput);
+      await createDevotional({
         titulo: titulo.trim(),
         referencia_biblica: referenciaBiblica.trim(),
         conteudo_base: conteudoBase.trim(),
         data_devocional: isoDate,
+        status,
         publish_at_text: publishAtInput.trim() || null,
-        publish_at: publishInfo?.timestamp ?? null,
-        data_publicacao_auto: publishInfo?.display ?? null,
-        criado_por_id: firebaseUser.uid,
-        status: publishNow ? DevotionalStatus.PUBLICADO : status,
-        publishNow,
+        publish_at: parsed?.timestamp ?? null,
+        data_publicacao_auto: parsed?.display ?? null,
+        publish_now: publishNow,
+        criado_por: firebaseUser.uid,
       });
-
-      console.log(`${logPrefix} sucesso:`, id);
-      Alert.alert("Sucesso", status === DevotionalStatus.PUBLICADO ? "Devocional publicado." : "Devocional salvo.");
+      Alert.alert("Sucesso", "Devocional criado.");
       resetForm();
       router.replace("/(tabs)/devotionals" as any);
     } catch (error) {
-      console.error("[NewDevotional] Erro ao salvar devocional:", error);
-      const message = (error as any)?.message || "Não foi possível salvar o devocional.";
-      Alert.alert("Erro", message);
+      console.error("[NewDevotional] erro ao criar:", error);
+      Alert.alert("Erro", "Não foi possível criar o devocional.");
     } finally {
       setIsSubmitting(false);
     }
@@ -127,62 +114,77 @@ export default function NewDevotionalScreen() {
 
   if (isInitializing) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#facc15" />
-        <Text style={styles.loadingText}>Carregando...</Text>
-      </View>
+      <AppBackground>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={theme.colors.accent} />
+          <Text style={styles.loadingText}>Carregando devocional...</Text>
+        </View>
+      </AppBackground>
     );
   }
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: themeSettings?.cor_fundo || "#020617" }]}
-      contentContainerStyle={styles.content}
-    >
-      <Card title="Criar devocional" subtitle="Preencha os campos e escolha a ação.">
-        <AppInput label="Título" placeholder="Ex.: Devocional sobre fé" value={titulo} onChangeText={setTitulo} />
-        <AppInput
-          label="Referência bíblica"
-          placeholder="Ex.: João 3:16"
-          value={referenciaBiblica}
-          onChangeText={setReferenciaBiblica}
-        />
-        <AppInput
-          label="Data do devocional"
-          placeholder="dd/mm/aaaa"
-          value={dataDevocional}
-          onChangeText={(text) => setDataDevocional(maskDate(text))}
-        />
-        <AppInput
-          label="Publicar automaticamente em (data e hora)"
-          placeholder="dd/mm/aaaa hh:mm"
-          value={publishAtInput}
-          onChangeText={(text) => setPublishAtInput(maskDateTime(text))}
-        />
-        <RichTextEditor value={conteudoBase} onChange={setConteudoBase} placeholder="Digite o devocional..." minHeight={180} />
+    <AppBackground>
+      <ImageBackground
+        source={require("../../../assets/brand/lagoinha-badge-watermark.png")}
+        style={styles.bgImage}
+        imageStyle={styles.bgImageStyle}
+      >
+        <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+          <Text style={styles.title}>Criar devocional</Text>
 
-        <View style={styles.actions}>
-          <AppButton
-            title={isSubmitting ? "Salvando..." : "Salvar como rascunho"}
-            variant="secondary"
-            onPress={handleSaveDraft}
-            disabled={isSubmitting}
+          <AppInput label="Título" placeholder="Ex.: Devocional sobre fé" value={titulo} onChangeText={setTitulo} />
+          <AppInput
+            label="Referência bíblica"
+            placeholder="Ex.: João 3:16"
+            value={referenciaBiblica}
+            onChangeText={setReferenciaBiblica}
           />
-          <AppButton
-            title={isSubmitting ? "Disponibilizando..." : "Disponibilizar para professores"}
-            variant="secondary"
-            onPress={handleMakeAvailable}
-            disabled={isSubmitting}
+          <AppInput
+            label="Data do devocional"
+            placeholder="dd/mm/aaaa"
+            value={dataDevocional}
+            onChangeText={(text) => setDataDevocional(maskDate(text))}
           />
-          <AppButton
-            title={isSubmitting ? "Publicando..." : "Publicar agora"}
-            variant="primary"
-            onPress={handlePublishNow}
-            disabled={isSubmitting}
+          <AppInput
+            label="Publicar automaticamente em (data e hora)"
+            placeholder="dd/mm/aaaa hh:mm"
+            value={publishAtInput}
+            onChangeText={(text) => setPublishAtInput(maskDateTime(text))}
           />
-        </View>
-      </Card>
-    </ScrollView>
+          <RichTextEditor
+            value={conteudoBase}
+            onChange={setConteudoBase}
+            placeholder="Digite o devocional..."
+            minHeight={180}
+          />
+
+          <View style={styles.actions}>
+            <AppButton
+              title={isSubmitting ? "Salvando..." : "Salvar como rascunho"}
+              variant="secondary"
+              onPress={handleSaveDraft}
+              disabled={isSubmitting}
+            />
+            <AppButton
+              title={isSubmitting ? "Disponibilizando..." : "Disponibilizar"}
+              variant="secondary"
+              onPress={handleMakeAvailable}
+              disabled={isSubmitting}
+            />
+          </View>
+
+          <View style={[styles.actions, { marginTop: 8 }]}>
+            <AppButton
+              title={isSubmitting ? "Publicando..." : "Publicar agora"}
+              variant="primary"
+              onPress={handlePublishNow}
+              disabled={isSubmitting}
+            />
+          </View>
+        </ScrollView>
+      </ImageBackground>
+    </AppBackground>
   );
 
   function resetForm() {
@@ -194,18 +196,18 @@ export default function NewDevotionalScreen() {
   }
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { paddingHorizontal: 16, paddingTop: 56, paddingBottom: 24, gap: 12 },
-  center: {
-    flex: 1,
-    backgroundColor: "#020617",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  loadingText: { color: "#e5e7eb", marginTop: 12 },
-  actions: { flexDirection: "row", gap: 8, marginTop: 12, flexWrap: "wrap" },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: "transparent" },
+    content: { padding: 16, gap: 12, paddingBottom: 24 },
+    center: { flex: 1, backgroundColor: "transparent", alignItems: "center", justifyContent: "center" },
+    loadingText: { color: theme.colors.text, marginTop: 12 },
+    actions: { flexDirection: "row", gap: 8, marginTop: 12, flexWrap: "wrap" },
+    title: { color: theme.colors.textPrimary || "#FFFFFF", fontSize: 20, fontWeight: "700" },
+    bgImage: { flex: 1 },
+    bgImageStyle: { opacity: 0.05, resizeMode: "cover" },
+  });
+}
 
 function toISODate(input: string): string | null {
   const digits = input.replace(/\D/g, "");

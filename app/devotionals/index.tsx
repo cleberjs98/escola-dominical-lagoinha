@@ -18,6 +18,7 @@ import {
 } from "../../lib/devotionals";
 import { formatDate } from "../../utils/publishAt";
 import { AppCardStatusVariant } from "../../components/common/AppCard";
+import type { AppTheme } from "../../types/theme";
 
 type Role = "aluno" | "professor" | "coordenador" | "administrador" | "admin" | undefined;
 type DateOrder = "asc" | "desc";
@@ -36,15 +37,19 @@ export const options = {
 
 export default function DevotionalsScreen() {
   const { firebaseUser, user, isInitializing } = useAuth();
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const role = (user?.papel as Role) || "aluno";
   const isAdminOrCoordinator = role === "coordenador" || role === "administrador" || role === "admin";
 
   if (isInitializing || !firebaseUser || !user) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#facc15" />
-        <Text style={styles.loadingText}>Carregando devocionais...</Text>
-      </View>
+      <AppBackground>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={theme.colors.accent} />
+          <Text style={styles.loadingText}>Carregando devocionais...</Text>
+        </View>
+      </AppBackground>
     );
   }
 
@@ -64,7 +69,8 @@ export default function DevotionalsScreen() {
 // =========================
 function AdminDevotionalsTab({ uid }: { uid: string }) {
   const router = useRouter();
-  const { themeSettings, theme } = useTheme();
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [sections, setSections] = useState<Awaited<ReturnType<typeof listDevotionalsForAdmin>> | null>(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<DevotionalFilter>("disponiveis");
@@ -100,16 +106,6 @@ function AdminDevotionalsTab({ uid }: { uid: string }) {
         map.set(devo.id, devo);
       }
     });
-
-    // Debug logs (deixe ou comente se preferir)
-    console.log("[DevotionalsScreen] drafts:", sections.drafts?.length ?? 0);
-    console.log("[DevotionalsScreen] available:", sections.available?.length ?? 0);
-    console.log("[DevotionalsScreen] published:", sections.published?.length ?? 0);
-    console.log(
-      "[DevotionalsScreen] available status=disponivel:",
-      combined.filter((d) => d.status === DEVOTIONAL_STATUS.DISPONIVEL).length
-    );
-
     return Array.from(map.values());
   }, [sections]);
 
@@ -136,9 +132,6 @@ function AdminDevotionalsTab({ uid }: { uid: string }) {
         const db = devotionalToMillis(b);
         return dateOrder === "asc" ? da - db : db - da;
       });
-
-    console.log("[DevotionalsScreen] filtro:", filter, "resultado:", base.length);
-
     return base;
   }, [allDevotionals, dateOrder, filter, uid]);
 
@@ -148,54 +141,54 @@ function AdminDevotionalsTab({ uid }: { uid: string }) {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#facc15" />
-        <Text style={styles.loadingText}>Carregando devocionais...</Text>
-      </View>
+      <AppBackground>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={theme.colors.accent} />
+          <Text style={styles.loadingText}>Carregando devocionais...</Text>
+        </View>
+      </AppBackground>
     );
   }
 
-  const bg = theme.colors.background;
-  const text = theme.colors.text;
-  const chipBg = theme.colors.surface2 || "#3A1118";
-  const chipActive = theme.colors.primary;
-  const chipBorder = theme.colors.border;
+  const chipColors = {
+    chipBg: theme.colors.card,
+    chipActive: theme.colors.primary,
+    chipBorder: theme.colors.border,
+    text: theme.colors.text,
+  };
 
   return (
     <AppBackground>
-      <ScrollView style={[styles.container, { backgroundColor: bg }]} contentContainerStyle={styles.content}>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         <View style={styles.header}>
-          <Text style={[styles.sectionTitle, { color: text }]}>Devocionais - Gestao</Text>
+          <Text style={styles.sectionTitle}>Devocionais - Gestao</Text>
           <AppButton title="Criar devocional" variant="primary" fullWidth={false} onPress={() => router.push("/admin/devotionals/new" as any)} />
         </View>
 
         <View style={{ gap: 12 }}>
           <View style={styles.filtersRow}>
-            {renderFilterChip("Todos", "todos", filter, setFilter, { chipBg, chipActive, chipBorder, text })}
-            {renderFilterChip("Disponiveis", "disponiveis", filter, setFilter, { chipBg, chipActive, chipBorder, text })}
-            {renderFilterChip("Publicados", "publicados", filter, setFilter, { chipBg, chipActive, chipBorder, text })}
-            {renderFilterChip("Pendentes", "pendentes", filter, setFilter, { chipBg, chipActive, chipBorder, text })}
+            {renderFilterChip("Todos", "todos", filter, setFilter, chipColors)}
+            {renderFilterChip("Disponiveis", "disponiveis", filter, setFilter, chipColors)}
+            {renderFilterChip("Publicados", "publicados", filter, setFilter, chipColors)}
+            {renderFilterChip("Pendentes", "pendentes", filter, setFilter, chipColors)}
           </View>
 
           <View style={styles.orderToggleRow}>
-            <Text style={[styles.sectionTitle, { color: text }]}>Devocionais</Text>
+            <Text style={styles.sectionTitle}>Devocionais</Text>
             <TouchableOpacity
               onPress={toggleDateOrder}
-              style={[
-                styles.orderToggleButton,
-                { borderColor: chipBorder, backgroundColor: chipBg },
-              ]}
+              style={[styles.orderToggleButton, { borderColor: chipColors.chipBorder, backgroundColor: chipColors.chipBg }]}
             >
-              <Text style={[styles.orderToggleText, { color: text }]}>Ordenar por data: {dateOrder === "desc" ? "↓" : "↑"}</Text>
+              <Text style={styles.orderToggleText}>Ordenar por data: {dateOrder === "desc" ? "desc" : "asc"}</Text>
             </TouchableOpacity>
           </View>
 
           {filteredDevotionals.length === 0 ? (
-            <Text style={[styles.empty, { color: theme.colors.muted || "#94A3B8" }]}>Nenhum devocional encontrado.</Text>
+            <Text style={styles.empty}>Nenhum devocional encontrado.</Text>
           ) : (
             filteredDevotionals.map((devo) => {
               const status = normalizeStatusForFilter(devo.status);
-              const subtitle = `${formatDevotionalDate(devo.data_devocional)} • ${devotionalStatusLabel(status)}`;
+              const subtitle = `${formatDevotionalDate(devo.data_devocional)} - ${devotionalStatusLabel(status)}`;
               return (
                 <DevotionalListItem
                   key={devo.id}
@@ -219,7 +212,8 @@ function AdminDevotionalsTab({ uid }: { uid: string }) {
 // =========================
 function ProfessorDevotionalsTab() {
   const router = useRouter();
-  const { themeSettings } = useTheme();
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [list, setList] = useState<Devotional[]>([]);
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState<DateOrder>("desc");
@@ -243,14 +237,15 @@ function ProfessorDevotionalsTab() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#facc15" />
-        <Text style={styles.loadingText}>Carregando devocionais...</Text>
-      </View>
+      <AppBackground>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={theme.colors.accent} />
+          <Text style={styles.loadingText}>Carregando devocionais...</Text>
+        </View>
+      </AppBackground>
     );
   }
 
-  const bg = themeSettings?.cor_fundo || "#020617";
   const sorted = [...list].sort((a, b) => {
     const da = devotionalToMillis(a);
     const db = devotionalToMillis(b);
@@ -258,33 +253,35 @@ function ProfessorDevotionalsTab() {
   });
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: bg }]} contentContainerStyle={styles.content}>
-      <View style={styles.orderToggleRow}>
-        <Text style={styles.sectionTitle}>Devocionais</Text>
-        <TouchableOpacity onPress={() => setOrder((prev) => (prev === "asc" ? "desc" : "asc"))} style={styles.orderToggleButton}>
-          <Text style={styles.orderToggleText}>Ordenar por data: {order === "desc" ? "↓" : "↑"}</Text>
-        </TouchableOpacity>
-      </View>
+    <AppBackground>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <View style={styles.orderToggleRow}>
+          <Text style={styles.sectionTitle}>Devocionais</Text>
+          <TouchableOpacity onPress={() => setOrder((prev) => (prev === "asc" ? "desc" : "asc"))} style={styles.orderToggleButton}>
+            <Text style={styles.orderToggleText}>Ordenar por data: {order === "desc" ? "desc" : "asc"}</Text>
+          </TouchableOpacity>
+        </View>
 
-      {sorted.length === 0 ? (
-        <EmptyState title="Nenhum devocional disponivel no momento." />
-      ) : (
-        sorted.map((devo) => {
-          const status = normalizeStatusForFilter(devo.status);
-          const subtitle = `${formatDevotionalDate(devo.data_devocional)} • ${devotionalStatusLabel(status)}`;
-          return (
-            <DevotionalListItem
-              key={devo.id}
-              title={devo.titulo}
-              subtitle={subtitle}
-              statusLabel={devotionalStatusLabel(status)}
-              statusVariant={devotionalStatusVariant(status)}
-              onPress={() => router.push(`/devotionals/${devo.id}` as any)}
-            />
-          );
-        })
-      )}
-    </ScrollView>
+        {sorted.length === 0 ? (
+          <EmptyState title="Nenhum devocional disponivel no momento." />
+        ) : (
+          sorted.map((devo) => {
+            const status = normalizeStatusForFilter(devo.status);
+            const subtitle = `${formatDevotionalDate(devo.data_devocional)} - ${devotionalStatusLabel(status)}`;
+            return (
+              <DevotionalListItem
+                key={devo.id}
+                title={devo.titulo}
+                subtitle={subtitle}
+                statusLabel={devotionalStatusLabel(status)}
+                statusVariant={devotionalStatusVariant(status)}
+                onPress={() => router.push(`/devotionals/${devo.id}` as any)}
+              />
+            );
+          })
+        )}
+      </ScrollView>
+    </AppBackground>
   );
 }
 
@@ -293,7 +290,8 @@ function ProfessorDevotionalsTab() {
 // =========================
 function StudentDevotionalsTab() {
   const router = useRouter();
-  const { themeSettings } = useTheme();
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [list, setList] = useState<Devotional[]>([]);
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState<DateOrder>("desc");
@@ -317,14 +315,15 @@ function StudentDevotionalsTab() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#facc15" />
-        <Text style={styles.loadingText}>Carregando devocionais...</Text>
-      </View>
+      <AppBackground>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={theme.colors.accent} />
+          <Text style={styles.loadingText}>Carregando devocionais...</Text>
+        </View>
+      </AppBackground>
     );
   }
 
-  const bg = themeSettings?.cor_fundo || "#020617";
   const sorted = [...list].sort((a, b) => {
     const da = devotionalToMillis(a);
     const db = devotionalToMillis(b);
@@ -332,33 +331,35 @@ function StudentDevotionalsTab() {
   });
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: bg }]} contentContainerStyle={styles.content}>
-      <View style={styles.orderToggleRow}>
-        <Text style={styles.sectionTitle}>Devocionais</Text>
-        <TouchableOpacity onPress={() => setOrder((prev) => (prev === "asc" ? "desc" : "asc"))} style={styles.orderToggleButton}>
-          <Text style={styles.orderToggleText}>Ordenar por data: {order === "desc" ? "↓" : "↑"}</Text>
-        </TouchableOpacity>
-      </View>
+    <AppBackground>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <View style={styles.orderToggleRow}>
+          <Text style={styles.sectionTitle}>Devocionais</Text>
+          <TouchableOpacity onPress={() => setOrder((prev) => (prev === "asc" ? "desc" : "asc"))} style={styles.orderToggleButton}>
+            <Text style={styles.orderToggleText}>Ordenar por data: {order === "desc" ? "desc" : "asc"}</Text>
+          </TouchableOpacity>
+        </View>
 
-      {sorted.length === 0 ? (
-        <EmptyState title="Nenhum devocional publicado no momento." />
-      ) : (
-        sorted.map((devo) => {
-          const status = normalizeStatusForFilter(devo.status);
-          const subtitle = `${formatDevotionalDate(devo.data_devocional)} • ${devotionalStatusLabel(status)}`;
-          return (
-            <DevotionalListItem
-              key={devo.id}
-              title={devo.titulo}
-              subtitle={subtitle}
-              statusLabel={devotionalStatusLabel(status)}
-              statusVariant={devotionalStatusVariant(status)}
-              onPress={() => router.push(`/devotionals/${devo.id}` as any)}
-            />
-          );
-        })
-      )}
-    </ScrollView>
+        {sorted.length === 0 ? (
+          <EmptyState title="Nenhum devocional publicado no momento." />
+        ) : (
+          sorted.map((devo) => {
+            const status = normalizeStatusForFilter(devo.status);
+            const subtitle = `${formatDevotionalDate(devo.data_devocional)} - ${devotionalStatusLabel(status)}`;
+            return (
+              <DevotionalListItem
+                key={devo.id}
+                title={devo.titulo}
+                subtitle={subtitle}
+                statusLabel={devotionalStatusLabel(status)}
+                statusVariant={devotionalStatusVariant(status)}
+                onPress={() => router.push(`/devotionals/${devo.id}` as any)}
+              />
+            );
+          })
+        )}
+      </ScrollView>
+    </AppBackground>
   );
 }
 
@@ -370,42 +371,26 @@ function renderFilterChip(
   value: DevotionalFilter,
   current: DevotionalFilter,
   onChange: (v: DevotionalFilter) => void,
-  theme?: { chipBg: string; chipActive: string; chipBorder?: string; text: string }
+  colors: { chipBg: string; chipActive: string; chipBorder?: string; text: string }
 ) {
   const active = current === value;
   return (
     <Pressable
       key={value}
       style={[
-        styles.filterChip,
-        { backgroundColor: theme?.chipBg, borderColor: theme?.chipBorder },
-        active && [
-          styles.filterChipActive,
-          { backgroundColor: theme?.chipActive, borderColor: theme?.chipActive },
-        ],
+        stylesChip.chipBase,
+        { borderColor: colors.chipBorder, backgroundColor: colors.chipBg },
+        active && { backgroundColor: colors.chipActive, borderColor: colors.chipActive },
       ]}
       onPress={() => onChange(value)}
     >
-      <Text
-        style={[
-          styles.filterChipText,
-          { color: theme?.text },
-          active && [styles.filterChipTextActive, { color: "#FFFFFF" }],
-        ]}
-      >
-        {label}
-      </Text>
+      <Text style={[stylesChip.chipText, { color: colors.text }]}>{label}</Text>
     </Pressable>
   );
 }
 
 function normalizeStatusForFilter(status: DevotionalStatus | string): NormalizedDevotionalStatus {
-  const s = `${status ?? ""}`
-    .toLowerCase()
-    .trim()
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .replace(/s$/, "");
+  const s = `${status ?? ""}`.toLowerCase().trim().normalize("NFD").replace(/\p{Diacritic}/gu, "").replace(/s$/, "");
 
   if (s === DEVOTIONAL_STATUS.DISPONIVEL) return "disponivel";
   if (s === DEVOTIONAL_STATUS.PUBLICADO) return "publicado";
@@ -451,81 +436,71 @@ function formatDevotionalDate(value: string): string {
   return formatDate(new Date(Number(year), Number(month) - 1, Number(day)));
 }
 
-// =========================
-// Styles
-// =========================
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: 16,
-    paddingTop: 56,
-    paddingBottom: 32,
-    gap: 12,
-  },
-  center: {
-    flex: 1,
-    backgroundColor: "#020617",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  loadingText: { color: "#e5e7eb", marginTop: 12 },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  sectionTitle: {
-    color: "#e5e7eb",
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  empty: {
-    color: "#cbd5e1",
-  },
-  filtersRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 4,
-  },
-  filterChip: {
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+    },
+    content: {
+      paddingHorizontal: 16,
+      paddingTop: 56,
+      paddingBottom: 32,
+      gap: 12,
+    },
+    center: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    loadingText: { color: theme.colors.text, marginTop: 12 },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+    },
+    sectionTitle: {
+      color: theme.colors.text,
+      fontSize: 18,
+      fontWeight: "700",
+    },
+    empty: {
+      color: theme.colors.muted || theme.colors.text,
+    },
+    filtersRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      marginBottom: 4,
+    },
+    orderToggleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginTop: 4,
+    },
+    orderToggleButton: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 999,
+      borderWidth: 1,
+    },
+    orderToggleText: {
+      color: theme.colors.text,
+      fontWeight: "600",
+    },
+  });
+}
+
+const stylesChip = StyleSheet.create({
+  chipBase: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "#1f2937",
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: "#0b1224",
   },
-  filterChipActive: {
-    backgroundColor: "#facc15",
-    borderColor: "#facc15",
-  },
-  filterChipText: {
-    color: "#e5e7eb",
-    fontWeight: "600",
-  },
-  filterChipTextActive: {
-    color: "#0f172a",
-  },
-  orderToggleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 4,
-  },
-  orderToggleButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "#1f2937",
-    backgroundColor: "#0b1224",
-  },
-  orderToggleText: {
-    color: "#e5e7eb",
+  chipText: {
     fontWeight: "600",
   },
 });

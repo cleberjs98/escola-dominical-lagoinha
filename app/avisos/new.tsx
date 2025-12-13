@@ -11,15 +11,17 @@ import { RichTextEditor } from "../../components/editor/RichTextEditor";
 import { StatusFilter } from "../../components/filters/StatusFilter";
 import { createAviso } from "../../lib/avisos";
 import type { AvisoDestino, AvisoTipo } from "../../types/aviso";
+import { AppBackground } from "../../components/layout/AppBackground";
+import type { AppTheme } from "../../types/theme";
 
 export default function NewAvisoScreen() {
   const router = useRouter();
   const { firebaseUser, user, isInitializing } = useAuth();
-  const { themeSettings } = useTheme();
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   const papel = user?.papel;
-  const canPost =
-    papel === "professor" || papel === "coordenador" || papel === "administrador";
+  const canPost = papel === "professor" || papel === "coordenador" || papel === "administrador";
 
   const destinoOptions = useMemo(
     () =>
@@ -38,48 +40,35 @@ export default function NewAvisoScreen() {
   useEffect(() => {
     if (isInitializing) return;
     if (!firebaseUser) {
-      router.replace("/auth/login" as any);
-      return;
+      router.replace("/auth/login");
     }
-    if (!canPost) {
-      Alert.alert("Sem permissao", "Voce nao tem permissao para criar avisos.");
-      router.replace("/" as any);
-    }
-  }, [canPost, firebaseUser, isInitializing, router]);
-
-  function validate() {
-    if (!titulo.trim()) {
-      Alert.alert("Erro", "Informe o titulo do aviso.");
-      return false;
-    }
-    if (!conteudo.trim()) {
-      Alert.alert("Erro", "Informe o conteudo do aviso.");
-      return false;
-    }
-    return true;
-  }
+  }, [firebaseUser, isInitializing, router]);
 
   async function handleSubmit(status: "rascunho" | "publicado") {
-    if (!firebaseUser || !user || !canPost) return;
-    if (!validate()) return;
+    if (!firebaseUser || !canPost) return;
+    if (!titulo.trim() || !conteudo.trim()) {
+      Alert.alert("Campos obrigatorios", "Titulo e conteudo sao obrigatorios.");
+      return;
+    }
 
     try {
       setIsSubmitting(true);
-      await createAviso(
-        {
-          titulo: titulo.trim(),
-          conteudo: conteudo.trim(),
-          destino,
-          tipo,
-          status,
-        },
-        { id: firebaseUser.uid, nome: user.nome, papel: user.papel }
-      );
+      await createAviso({
+        titulo,
+        conteudo,
+        destino,
+        tipo,
+        status,
+        criado_por: firebaseUser.displayName || firebaseUser.email || "",
+        criado_por_id: firebaseUser.uid,
+        criado_por_nome: user?.nome || "",
+        criado_em: new Date(),
+      });
       Alert.alert("Sucesso", status === "publicado" ? "Aviso publicado." : "Rascunho salvo.");
-      router.replace("/avisos" as any);
-    } catch (err: any) {
-      console.error("[Avisos] erro ao criar aviso:", err);
-      Alert.alert("Erro", err?.message || "Nao foi possivel salvar o aviso.");
+      router.replace("/avisos");
+    } catch (error) {
+      console.error("[Avisos] Erro ao salvar aviso", error);
+      Alert.alert("Erro", "Nao foi possivel salvar o aviso agora.");
     } finally {
       setIsSubmitting(false);
     }
@@ -87,75 +76,60 @@ export default function NewAvisoScreen() {
 
   if (isInitializing) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#facc15" />
-        <Text style={styles.loadingText}>Carregando...</Text>
-      </View>
+      <AppBackground>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={theme.colors.accent} />
+          <Text style={styles.loadingText}>Carregando...</Text>
+        </View>
+      </AppBackground>
     );
   }
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: themeSettings?.cor_fundo || "#020617" }]}
-      contentContainerStyle={styles.content}
-    >
-      <Card title="Criar aviso" subtitle="Defina titulo, destino, tipo e conteudo.">
-        <AppInput
-          label="Titulo"
-          placeholder="Ex.: Comunicados da aula de domingo"
-          value={titulo}
-          onChangeText={setTitulo}
-        />
+    <AppBackground>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <Card title="Novo aviso" subtitle="Preencha os campos para criar um aviso.">
+          <AppInput label="Titulo" value={titulo} onChangeText={setTitulo} placeholder="Ex: Reuniao de equipe" />
 
-        <StatusFilter
-          label="Destino"
-          value={destino}
-          onChange={(v) => setDestino(v as AvisoDestino)}
-          options={destinoOptions.map((opt) => ({ value: opt, label: destinoLabel(opt) }))}
-        />
-
-        <StatusFilter
-          label="Tipo"
-          value={tipo}
-          onChange={(v) => setTipo(v as AvisoTipo)}
-          options={[
-            { value: "informativo", label: "Informativo" },
-            { value: "urgente", label: "Urgente" },
-            { value: "interno", label: "Interno" },
-            { value: "espiritual", label: "Espiritual" },
-          ]}
-        />
-
-        <RichTextEditor
-          value={conteudo}
-          onChange={setConteudo}
-          placeholder="Conteudo do aviso..."
-          minHeight={180}
-        />
-
-        <View style={styles.actions}>
-          <AppButton
-            title={isSubmitting ? "Salvando..." : "Salvar como rascunho"}
-            variant="secondary"
-            onPress={() => handleSubmit("rascunho")}
-            disabled={isSubmitting}
+          <StatusFilter
+            label="Destino"
+            options={destinoOptions.map((d) => ({ label: destinoLabel(d), value: d }))}
+            value={destino}
+            onChange={(v) => setDestino(v as AvisoDestino)}
           />
-          <AppButton
-            title={isSubmitting ? "Publicando..." : "Publicar agora"}
-            variant="primary"
-            onPress={() => handleSubmit("publicado")}
-            disabled={isSubmitting}
+
+          <StatusFilter
+            label="Tipo"
+            options={[
+              { label: "Informativo", value: "informativo" },
+              { label: "Urgente", value: "urgente" },
+              { label: "Interno", value: "interno" },
+              { label: "Espiritual", value: "espiritual" },
+            ]}
+            value={tipo}
+            onChange={(v) => setTipo(v as AvisoTipo)}
           />
-          <AppButton
-            title="Cancelar"
-            variant="outline"
-            onPress={() => router.back()}
-            fullWidth={false}
-            disabled={isSubmitting}
-          />
-        </View>
-      </Card>
-    </ScrollView>
+
+          <RichTextEditor value={conteudo} onChange={setConteudo} placeholder="Conteudo do aviso..." minHeight={180} />
+
+          <View style={styles.actions}>
+            <AppButton
+              title={isSubmitting ? "Salvando..." : "Salvar como rascunho"}
+              variant="secondary"
+              onPress={() => handleSubmit("rascunho")}
+              disabled={isSubmitting}
+            />
+            <AppButton
+              title={isSubmitting ? "Publicando..." : "Publicar agora"}
+              variant="primary"
+              onPress={() => handleSubmit("publicado")}
+              disabled={isSubmitting}
+            />
+            <AppButton title="Cancelar" variant="outline" onPress={() => router.back()} fullWidth={false} disabled={isSubmitting} />
+          </View>
+        </Card>
+      </ScrollView>
+    </AppBackground>
   );
 }
 
@@ -176,10 +150,12 @@ function destinoLabel(destino: AvisoDestino) {
   }
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { paddingHorizontal: 16, paddingTop: 56, paddingBottom: 24, gap: 12 },
-  center: { flex: 1, backgroundColor: "#020617", alignItems: "center", justifyContent: "center" },
-  loadingText: { color: "#e5e7eb", marginTop: 12 },
-  actions: { gap: 8, marginTop: 12 },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    container: { flex: 1 },
+    content: { paddingHorizontal: 16, paddingTop: 56, paddingBottom: 24, gap: 12 },
+    center: { flex: 1, backgroundColor: theme.colors.background, alignItems: "center", justifyContent: "center" },
+    loadingText: { color: theme.colors.text, marginTop: 12 },
+    actions: { gap: 8, marginTop: 12 },
+  });
+}

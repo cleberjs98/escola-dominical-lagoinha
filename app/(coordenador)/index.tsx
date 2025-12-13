@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  ImageBackground,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,6 +19,7 @@ import { listRecentAvisosForUser } from "../../lib/avisos";
 import { getPendingInsights, getSimpleKpis } from "../../lib/adminStats";
 import type { Devotional } from "../../types/devotional";
 import type { Aviso } from "../../types/aviso";
+import type { AppTheme } from "../../theme/tokens";
 import { DashboardSection } from "../../components/dashboard/DashboardSection";
 import { KpiCard } from "../../components/dashboard/KpiCard";
 import { ManagementCard } from "../../components/dashboard/ManagementCard";
@@ -26,6 +28,8 @@ import { DevocionalCard } from "../../components/cards/DevocionalCard";
 import { Card } from "../../components/ui/Card";
 import { AppButton } from "../../components/ui/AppButton";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { AppBackground } from "../../components/layout/AppBackground";
+import { withAlpha } from "../../theme/utils";
 
 type LayoutConfig = {
   showDevotional: boolean;
@@ -42,7 +46,8 @@ const defaultLayoutConfig: LayoutConfig = {
 export default function CoordinatorDashboardScreen() {
   const router = useRouter();
   const { firebaseUser, user, isInitializing } = useAuth();
-  const { themeSettings } = useTheme();
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   const papel = user?.papel;
   const isAdmin = papel === "administrador";
@@ -97,7 +102,6 @@ export default function CoordinatorDashboardScreen() {
     }
   }
 
-  const bg = themeSettings?.cor_fundo || "#020617";
   const orderedSections = layoutConfig.homeOrder.filter((key) => {
     if (key === "devocional") return layoutConfig.showDevotional;
     if (key === "avisos") return layoutConfig.showAvisosRecentes;
@@ -106,29 +110,30 @@ export default function CoordinatorDashboardScreen() {
 
   if (isInitializing || isLoading) {
     return (
-      <View style={[styles.center, { backgroundColor: bg }]}>
-        <ActivityIndicator size="large" color="#facc15" />
-        <Text style={styles.loadingText}>Carregando dashboard...</Text>
-      </View>
+      <AppBackground>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={theme.colors.textPrimary} />
+          <Text style={styles.loadingText}>Carregando dashboard...</Text>
+        </View>
+      </AppBackground>
     );
   }
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: bg }]}
-      contentContainerStyle={styles.content}
-    >
-      {orderedSections.map((section) => {
-        if (section === "pendencias") return renderPendencias();
-        if (section === "conteudos") return renderConteudos();
-        if (section === "devocional") return layoutConfig.showDevotional ? renderDevocional() : null;
-        if (section === "avisos") return layoutConfig.showAvisosRecentes ? renderAvisos() : null;
-        if (section === "analytics") return renderAnalytics();
-        return null;
-      })}
+    <AppBackground>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        {orderedSections.map((section) => {
+          if (section === "pendencias") return renderPendencias();
+          if (section === "conteudos") return renderConteudos();
+          if (section === "devocional") return layoutConfig.showDevotional ? renderDevocional() : null;
+          if (section === "avisos") return layoutConfig.showAvisosRecentes ? renderAvisos() : null;
+          if (section === "analytics") return renderAnalytics();
+          return null;
+        })}
 
-      {isAdmin ? renderAdministracao() : null}
-    </ScrollView>
+        {isAdmin ? renderAdministracao() : null}
+      </ScrollView>
+    </AppBackground>
   );
 
   function renderPendencias() {
@@ -339,33 +344,44 @@ async function loadLayoutSettings(): Promise<LayoutConfig> {
   }
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  content: {
-    padding: 16,
-    paddingBottom: 32,
-    gap: 12,
-  },
-  center: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  loadingText: {
-    color: "#e5e7eb",
-    marginTop: 12,
-  },
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  rowActions: {
-    flexDirection: "row",
-    gap: 8,
-    flexWrap: "wrap",
-    marginTop: 8,
-  },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: "transparent",
+    },
+    content: {
+      padding: 16,
+      paddingBottom: 32,
+      gap: 12,
+    },
+    center: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    loadingText: {
+      color: theme.colors.textSecondary,
+      marginTop: 12,
+    },
+    grid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 10,
+    },
+    rowActions: {
+      flexDirection: "row",
+      gap: 8,
+      flexWrap: "wrap",
+      marginTop: 8,
+    },
+    // Transparências leves para deixar watermark aparecer nos blocos
+    section: {
+      backgroundColor: withAlpha(theme.colors.card, 0.82),
+      borderColor: withAlpha(theme.colors.border || theme.colors.card, 0.45),
+      borderWidth: 1,
+      borderRadius: 16,
+      padding: 0,
+    },
+  });
+}

@@ -1,22 +1,7 @@
-// app/admin/pending-users.tsx - pendentes (admin) usando componentes reutilizáveis
 import { useEffect, useMemo, useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  ActivityIndicator,
-  Alert,
-  FlatList,
-} from "react-native";
+import { View, Text, StyleSheet, ActivityIndicator, Alert, FlatList } from "react-native";
 import { useRouter } from "expo-router";
-import {
-  collection,
-  FirestoreError,
-  onSnapshot,
-  orderBy,
-  query,
-  where,
-} from "firebase/firestore";
+import { collection, FirestoreError, onSnapshot, orderBy, query, where } from "firebase/firestore";
 
 import { useAuth } from "../../hooks/useAuth";
 import { firebaseDb } from "../../lib/firebase";
@@ -27,230 +12,214 @@ import { ApprovalModal } from "../../components/modals/ApprovalModal";
 import { EditRoleModal } from "../../components/modals/EditRoleModal";
 import { AppButton } from "../../components/ui/AppButton";
 import { Header } from "../../components/ui/Header";
+import { AppBackground } from "../../components/layout/AppBackground";
+import { useTheme } from "../../hooks/useTheme";
+import type { AppTheme } from "../../types/theme";
 
 type PendingUser = User & { docId: string };
 
 export default function AdminPendingUsersScreen() {
   const router = useRouter();
   const { user: currentUser, role, isInitializing, isAuthenticated } = useAuth();
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   const [isLoading, setIsLoading] = useState(true);
   const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([]);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
-  const [rejectModalVisible, setRejectModalVisible] = useState(false);
   const [selectedUser, setSelectedUser] = useState<PendingUser | null>(null);
-  const [roleModalVisible, setRoleModalVisible] = useState(false);
+  const [editRoleUser, setEditRoleUser] = useState<PendingUser | null>(null);
+  const [updatingRole, setUpdatingRole] = useState(false);
 
-  const isAdmin = useMemo(() => role === "administrador", [role]);
-
-  // Guard de acesso
   useEffect(() => {
-    if (isInitializing) return;
-    if (!isAuthenticated || !isAdmin) {
-      router.replace("/");
+    if (!isAuthenticated && !isInitializing) {
+      router.replace("/auth/login");
     }
-  }, [isAuthenticated, isAdmin, isInitializing, router]);
+  }, [isAuthenticated, isInitializing, router]);
 
-  // Snapshot em tempo real de todos os pendentes (inclui coordenadores/admins)
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!role || (role !== "administrador" && role !== "coordenador")) {
+      setIsLoading(false);
+      return;
+    }
+    const q = query(
+      collection(firebaseDb, "users"),
+      where("status", "==", "pendente"),
+      orderBy("criado_em", "asc")
+    );
 
-    const usersRef = collection(firebaseDb, "users");
-    const q = query(usersRef, where("status", "==", "pendente"), orderBy("nome"));
-
-    const unsub = onSnapshot(
+    const unsubscribe = onSnapshot(
       q,
-      (snapshot) => {
-        const list: PendingUser[] = [];
-        snapshot.forEach((docSnap) => {
-          const data = docSnap.data() as User;
-          list.push({ ...(data as User), docId: docSnap.id });
-        });
+      (snap) => {
+        const list: PendingUser[] = snap.docs.map((docSnap) => ({
+          docId: docSnap.id,
+          ...(docSnap.data() as User),
+        }));
         setPendingUsers(list);
         setIsLoading(false);
       },
       (error: FirestoreError) => {
-        console.error("Erro ao carregar pendentes (admin):", error);
-        Alert.alert("Erro", "Nao foi possivel carregar usuarios pendentes.");
+        console.error("[Admin] Erro ao listar pendentes", error);
         setIsLoading(false);
       }
     );
 
-    return () => unsub();
-  }, [isAdmin]);
+    return () => unsubscribe();
+  }, [role]);
 
-  const handleApprove = async (user: PendingUser) => {
-    if (!currentUser) return;
+  async function handleApprove(userId: string) {
     try {
-      setActionLoadingId(user.docId);
-      await approveUser({
-        targetUserId: user.docId,
-        approverId: currentUser.id,
-        newRole: user.papel,
-      });
+      setActionLoadingId(userId);
+      await approveUser(userId);
       Alert.alert("Sucesso", "Usuario aprovado.");
-    } catch (error: any) {
-      console.error("Erro ao aprovar usuario (admin):", error);
-      Alert.alert("Erro", error?.message || "Falha ao aprovar usuario.");
+    } catch (error) {
+      console.error("[Admin] Erro ao aprovar usuario", error);
+      Alert.alert("Erro", "Nao foi possivel aprovar agora.");
     } finally {
       setActionLoadingId(null);
     }
-  };
+  }
 
-  const handleConfirmRoleChange = async (newRole: UserRole) => {
-    if (!currentUser || !selectedUser) return;
+  async function handleReject(userId: string) {
     try {
-      setActionLoadingId(selectedUser.docId);
-      await updateUserRole({
-        targetUserId: selectedUser.docId,
-        approverId: currentUser.id,
-        newRole,
-      });
-      Alert.alert("Sucesso", "Papel atualizado.");
-    } catch (error: any) {
-      console.error("Erro ao alterar papel (admin):", error);
-      Alert.alert("Erro", error?.message || "Falha ao alterar papel.");
-    } finally {
-      setRoleModalVisible(false);
-      setActionLoadingId(null);
-      setSelectedUser(null);
-    }
-  };
-
-  const handleReject = (user: PendingUser) => {
-    setSelectedUser(user);
-    setRejectModalVisible(true);
-  };
-
-  const handleConfirmReject = async (reason?: string) => {
-    if (!currentUser || !selectedUser) return;
-    try {
-      setActionLoadingId(selectedUser.docId);
-      await rejectUser({
-        targetUserId: selectedUser.docId,
-        approverId: currentUser.id,
-        reason: reason || "",
-      });
+      setActionLoadingId(userId);
+      await rejectUser(userId);
       Alert.alert("Sucesso", "Usuario rejeitado.");
-    } catch (error: any) {
-      console.error("Erro ao rejeitar usuario (admin):", error);
-      Alert.alert("Erro", error?.message || "Falha ao rejeitar usuario.");
+    } catch (error) {
+      console.error("[Admin] Erro ao rejeitar usuario", error);
+      Alert.alert("Erro", "Nao foi possivel rejeitar agora.");
     } finally {
-      setRejectModalVisible(false);
       setActionLoadingId(null);
-      setSelectedUser(null);
     }
-  };
+  }
 
-  const renderItem = ({ item }: { item: PendingUser }) => {
-    const isActing = actionLoadingId === item.docId;
-    return (
-      <View style={styles.cardWrapper}>
-        <UserCard
-          user={item}
-          showActions
-          onApprove={() => handleApprove(item)}
-          onReject={() => handleReject(item)}
-        />
-        <View style={styles.inlineActions}>
-          <AppButton
-            title="Alterar papel"
-            variant="outline"
-            fullWidth={false}
-            onPress={() => {
-              setSelectedUser(item);
-              setRoleModalVisible(true);
-            }}
-          />
-          {isActing ? (
-            <ActivityIndicator color="#fbbf24" />
-          ) : null}
-        </View>
-      </View>
-    );
-  };
+  async function handleUpdateRole(userId: string, role: UserRole) {
+    try {
+      setUpdatingRole(true);
+      await updateUserRole(userId, role);
+    } catch (error) {
+      console.error("[Admin] Erro ao atualizar papel", error);
+      Alert.alert("Erro", "Nao foi possivel atualizar o papel.");
+    } finally {
+      setUpdatingRole(false);
+      setEditRoleUser(null);
+    }
+  }
 
   if (isLoading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#fbbf24" />
-        <Text style={styles.loadingText}>Carregando pendentes...</Text>
-      </View>
+      <AppBackground>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={theme.colors.accent} />
+          <Text style={styles.loadingText}>Carregando pendentes...</Text>
+        </View>
+      </AppBackground>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <Header title="Aprovação de usuários (Admin)" subtitle="Revise e aprove/rejeite cadastros." />
-      <FlatList
-        data={pendingUsers}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.docId}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>Nenhum usuário pendente no momento.</Text>
-        }
-      />
+    <AppBackground>
+      <View style={styles.container}>
+        <Header title="Usuarios pendentes" />
 
-      <ApprovalModal
-        visible={rejectModalVisible}
-        onClose={() => {
-          setRejectModalVisible(false);
-          setSelectedUser(null);
-        }}
-        onApprove={() => handleApprove(selectedUser as PendingUser)}
-        onReject={(motivo) => handleConfirmReject(motivo)}
-        title="Rejeitar usuário"
-        description={`Informe o motivo para ${selectedUser?.nome || "o usuário"}.`}
-      />
+        {pendingUsers.length === 0 ? (
+          <View style={styles.center}>
+            <Text style={styles.emptyText}>Nenhum usuario pendente no momento.</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={pendingUsers}
+            keyExtractor={(item) => item.docId}
+            contentContainerStyle={styles.listContent}
+            renderItem={({ item }) => (
+              <View style={styles.cardWrapper}>
+                <UserCard
+                  user={item}
+                  onPress={() => setSelectedUser(item)}
+                  onEditRole={() => setEditRoleUser(item)}
+                  rightActions={
+                    <View style={styles.inlineActions}>
+                      <AppButton
+                        title={actionLoadingId === item.docId ? "Aprovando..." : "Aprovar"}
+                        onPress={() => handleApprove(item.docId)}
+                        loading={actionLoadingId === item.docId}
+                        fullWidth={false}
+                      />
+                      <AppButton
+                        title={actionLoadingId === item.docId ? "Rejeitando..." : "Rejeitar"}
+                        variant="outline"
+                        onPress={() => handleReject(item.docId)}
+                        loading={actionLoadingId === item.docId}
+                        fullWidth={false}
+                      />
+                    </View>
+                  }
+                />
+              </View>
+            )}
+          />
+        )}
 
-      {selectedUser ? (
-        <EditRoleModal
-          visible={roleModalVisible}
+        <ApprovalModal
+          visible={!!selectedUser}
           user={selectedUser}
-          onClose={() => {
-            setRoleModalVisible(false);
-            setSelectedUser(null);
+          onClose={() => setSelectedUser(null)}
+          onApprove={() => {
+            if (selectedUser) handleApprove(selectedUser.docId);
           }}
-          onSave={handleConfirmRoleChange}
+          onReject={() => {
+            if (selectedUser) handleReject(selectedUser.docId);
+          }}
         />
-      ) : null}
-    </View>
+
+        <EditRoleModal
+          visible={!!editRoleUser}
+          user={editRoleUser}
+          onClose={() => setEditRoleUser(null)}
+          onSave={(role) => {
+            if (editRoleUser) handleUpdateRole(editRoleUser.docId, role);
+          }}
+          loading={updatingRole}
+        />
+      </View>
+    </AppBackground>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#020617",
-    padding: 16,
-  },
-  listContent: {
-    paddingVertical: 8,
-  },
-  center: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    backgroundColor: "#020617",
-  },
-  loadingText: {
-    color: "#e5e7eb",
-  },
-  emptyText: {
-    color: "#94a3b8",
-    textAlign: "center",
-    marginTop: 20,
-  },
-  cardWrapper: {
-    marginBottom: 12,
-    gap: 8,
-  },
-  inlineActions: {
-    flexDirection: "row",
-    gap: 10,
-    alignItems: "center",
-  },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      padding: 16,
+    },
+    listContent: {
+      paddingVertical: 8,
+      gap: 8,
+    },
+    center: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 10,
+      backgroundColor: theme.colors.background,
+    },
+    loadingText: {
+      color: theme.colors.text,
+    },
+    emptyText: {
+      color: theme.colors.muted || theme.colors.text,
+      textAlign: "center",
+      marginTop: 20,
+    },
+    cardWrapper: {
+      marginBottom: 12,
+      gap: 8,
+    },
+    inlineActions: {
+      flexDirection: "row",
+      gap: 10,
+      alignItems: "center",
+    },
+  });
+}

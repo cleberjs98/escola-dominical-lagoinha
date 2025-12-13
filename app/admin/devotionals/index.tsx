@@ -1,4 +1,4 @@
-// app/admin/devotionals/index.tsx - lista de devocionais (admin/coordenador)
+﻿// app/admin/devotionals/index.tsx - lista de devocionais (admin/coordenador) com tema bordô
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View, Pressable, TouchableOpacity } from "react-native";
 import { useRouter } from "expo-router";
@@ -11,6 +11,9 @@ import { DevotionalStatus, type Devotional } from "../../../types/devotional";
 import { formatDate } from "../../../utils/publishAt";
 import { DevotionalListItem } from "../../../components/devotionals/DevotionalListItem";
 import { AppCardStatusVariant } from "../../../components/common/AppCard";
+import { AppBackground } from "../../../components/layout/AppBackground";
+import { withAlpha } from "../../../theme/utils";
+import type { AppTheme } from "../../../types/theme";
 
 type Sections = Awaited<ReturnType<typeof listDevotionalsForAdmin>>;
 type DevotionalFilter = "todos" | "disponiveis" | "publicados" | "pendentes";
@@ -25,7 +28,8 @@ const DEVOTIONAL_STATUS = {
 export default function AdminDevotionalsScreen() {
   const router = useRouter();
   const { firebaseUser, user, isInitializing } = useAuth();
-  const { themeSettings } = useTheme();
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   const [sections, setSections] = useState<Sections | null>(null);
   const [loading, setLoading] = useState(true);
@@ -62,30 +66,12 @@ export default function AdminDevotionalsScreen() {
 
   const allDevotionals = useMemo(() => {
     if (!sections) return [];
-    const combined = [
-      ...((sections as any).scheduledDrafts ?? []),
-      ...(sections.drafts ?? []),
-      ...(sections.available ?? []),
-      ...(sections.published ?? []),
-    ];
+    const drafts = (sections as any).scheduledDrafts ?? [];
+    const combined = [...drafts, ...(sections.drafts ?? []), ...(sections.available ?? []), ...(sections.published ?? [])];
     const map = new Map<string, Devotional>();
     combined.forEach((devo) => {
-      if (!map.has(devo.id)) {
-        map.set(devo.id, devo);
-      }
+      if (!map.has(devo.id)) map.set(devo.id, devo);
     });
-
-    // Logs de debug
-    console.log("[AdminDevotionals] total:", combined.length);
-    console.log(
-      "[AdminDevotionals] disponiveis (bruto):",
-      combined.filter((d) => normalizeStatusForFilter(d.status) === DEVOTIONAL_STATUS.DISPONIVEL).length
-    );
-    console.log(
-      "[AdminDevotionals] publicados (bruto):",
-      combined.filter((d) => normalizeStatusForFilter(d.status) === DEVOTIONAL_STATUS.PUBLICADO).length
-    );
-
     return Array.from(map.values());
   }, [sections]);
 
@@ -112,9 +98,6 @@ export default function AdminDevotionalsScreen() {
         if (da === null || db === null) return 0;
         return dateOrder === "asc" ? da - db : db - da;
       });
-
-    console.log("[AdminDevotionals] filtro:", filter, "ordenação:", dateOrder, "resultado:", base.length);
-
     return base;
   }, [allDevotionals, dateOrder, filter]);
 
@@ -137,54 +120,59 @@ export default function AdminDevotionalsScreen() {
 
   if (isInitializing || loading || !sections) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#facc15" />
-        <Text style={styles.loadingText}>Carregando devocionais...</Text>
-      </View>
+      <AppBackground>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={theme.colors.accent} />
+          <Text style={styles.loadingText}>Carregando devocionais...</Text>
+        </View>
+      </AppBackground>
     );
   }
 
-  const bg = themeSettings?.cor_fundo || "#020617";
-
   return (
-    <ScrollView style={[styles.container, { backgroundColor: bg }]} contentContainerStyle={styles.content}>
-      <Header title="Devocionais - Gestão" onCreate={() => router.push("/admin/devotionals/new" as any)} />
-
-      <View style={{ gap: 12 }}>
-        <View style={styles.filtersRow}>
-          {renderFilterChip("Todos", "todos")}
-          {renderFilterChip("Disponíveis", "disponiveis")}
-          {renderFilterChip("Publicados", "publicados")}
-          {renderFilterChip("Pendentes", "pendentes")}
+    <AppBackground>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Devocionais - Gestão</Text>
+          <AppButton title="Criar devocional" variant="primary" fullWidth={false} onPress={() => router.push("/admin/devotionals/new" as any)} />
         </View>
 
-        <View style={styles.orderToggleRow}>
-          <Text style={styles.sectionTitle}>Devocionais</Text>
-          <TouchableOpacity onPress={toggleDateOrder} style={styles.orderToggleButton}>
-            <Text style={styles.orderToggleText}>Ordenar por data: {dateOrder === "desc" ? "↓" : "↑"}</Text>
-          </TouchableOpacity>
-        </View>
+        <View style={{ gap: 12 }}>
+          <View style={styles.filtersRow}>
+            {renderFilterChip("Todos", "todos")}
+            {renderFilterChip("Disponíveis", "disponiveis")}
+            {renderFilterChip("Publicados", "publicados")}
+            {renderFilterChip("Pendentes", "pendentes")}
+          </View>
 
-        {filteredDevotionals.length === 0 ? (
-          <Text style={styles.empty}>Nenhum devocional encontrado.</Text>
-        ) : (
-          filteredDevotionals.map((devo) => {
-            const status = normalizeStatusForFilter(devo.status);
-            const subtitle = `${formatDevotionalDate(devo.data_devocional)} • ${devotionalStatusLabel(status)}`;
-            return (
-              <DevotionalListItem
-                key={devo.id}
-                title={devo.titulo}
-                subtitle={subtitle}
-                statusLabel={devotionalStatusLabel(status)}
-                statusVariant={devotionalStatusVariant(status)}
-                onPress={() => router.push(`/devotionals/${devo.id}` as any)}
-              />
-            );
-          })
-        )}
-      </View>
-    </ScrollView>
+          <View style={styles.orderToggleRow}>
+            <Text style={styles.sectionTitle}>Devocionais</Text>
+            <TouchableOpacity onPress={toggleDateOrder} style={styles.orderToggleButton}>
+              <Text style={styles.orderToggleText}>Ordenar por data: {dateOrder === "desc" ? "↓" : "↑"}</Text>
+            </TouchableOpacity>
+          </View>
+
+          {filteredDevotionals.length === 0 ? (
+            <Text style={styles.empty}>Nenhum devocional encontrado.</Text>
+          ) : (
+            filteredDevotionals.map((devo) => {
+              const status = normalizeStatusForFilter(devo.status);
+              const subtitle = `${formatDevotionalDate(devo.data_devocional)} • ${devotionalStatusLabel(status)}`;
+              return (
+                <DevotionalListItem
+                  key={devo.id}
+                  title={devo.titulo}
+                  subtitle={subtitle}
+                  statusLabel={devotionalStatusLabel(status)}
+                  statusVariant={devotionalStatusVariant(status)}
+                  onPress={() => router.push(`/devotionals/${devo.id}` as any)}
+                />
+              );
+            })
+          )}
+        </View>
+      </ScrollView>
+    </AppBackground>
   );
 }
 
@@ -194,7 +182,7 @@ function normalizeStatusForFilter(status: DevotionalStatus | string): Normalized
     .trim()
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
-    .replace(/s$/, ""); // remove plural simples
+    .replace(/s$/, "");
 
   if (s === DEVOTIONAL_STATUS.DISPONIVEL) return "disponivel";
   if (s === DEVOTIONAL_STATUS.PUBLICADO) return "publicado";
@@ -220,19 +208,6 @@ function devotionalStatusVariant(status: NormalizedDevotionalStatus): AppCardSta
   }
 }
 
-function devotionalToMillis(dev: any): number | null {
-  const raw = dev?.data_devocional || dev?.data || dev?.created_at;
-  if (!raw) return null;
-
-  if (raw?.toMillis && typeof raw.toMillis === "function") {
-    return raw.toMillis();
-  }
-  const d = new Date(raw);
-  const time = d.getTime();
-  if (Number.isNaN(time)) return null;
-  return time;
-}
-
 function formatDevotionalDate(value: string): string {
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(value)) return value;
   const [year, month, day] = value.split("-");
@@ -240,92 +215,91 @@ function formatDevotionalDate(value: string): string {
   return formatDate(new Date(Number(year), Number(month) - 1, Number(day)));
 }
 
-function Header({ title, onCreate }: { title: string; onCreate: () => void }) {
-  return (
-    <View style={styles.header}>
-      <Text style={styles.title}>{title}</Text>
-      <AppButton title="Criar devocional" variant="primary" fullWidth={false} onPress={onCreate} />
-    </View>
-  );
+function devotionalToMillis(dev: Devotional): number | null {
+  const raw = (dev as any).data_devocional || (dev as any).data || (dev as any).created_at;
+  if (!raw) return null;
+  if (raw?.toMillis) return raw.toMillis();
+  const d = new Date(raw);
+  const t = d.getTime();
+  return Number.isNaN(t) ? null : t;
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: 16,
-    paddingTop: 56,
-    paddingBottom: 32,
-    gap: 12,
-  },
-  center: {
-    flex: 1,
-    backgroundColor: "#020617",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  loadingText: { color: "#e5e7eb", marginTop: 12 },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  title: {
-    color: "#e5e7eb",
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  sectionTitle: {
-    color: "#e5e7eb",
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  empty: {
-    color: "#cbd5e1",
-  },
-  filtersRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 4,
-  },
-  filterChip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "#1f2937",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: "#0b1224",
-  },
-  filterChipActive: {
-    backgroundColor: "#facc15",
-    borderColor: "#facc15",
-  },
-  filterChipText: {
-    color: "#e5e7eb",
-    fontWeight: "600",
-  },
-  filterChipTextActive: {
-    color: "#0f172a",
-  },
-  orderToggleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 4,
-  },
-  orderToggleButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "#1f2937",
-    backgroundColor: "#0b1224",
-  },
-  orderToggleText: {
-    color: "#e5e7eb",
-    fontWeight: "600",
-  },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: "transparent" },
+    content: { paddingHorizontal: 16, paddingTop: 56, paddingBottom: 32, gap: 12, backgroundColor: "transparent" },
+    center: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "transparent",
+      gap: 10,
+    },
+    loadingText: {
+      color: theme.colors.text,
+      marginTop: 12,
+    },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+    },
+    title: {
+      color: theme.colors.text,
+      fontSize: 20,
+      fontWeight: "700",
+    },
+    sectionTitle: {
+      color: theme.colors.text,
+      fontSize: 18,
+      fontWeight: "700",
+    },
+    empty: {
+      color: theme.colors.muted || theme.colors.text,
+    },
+    filtersRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      marginBottom: 4,
+    },
+    filterChip: {
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: withAlpha(theme.colors.border || theme.colors.card, 0.45),
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      backgroundColor: withAlpha(theme.colors.card, 0.82),
+    },
+    filterChipActive: {
+      backgroundColor: theme.colors.primary,
+      borderColor: theme.colors.primary,
+    },
+    filterChipText: {
+      color: theme.colors.text,
+      fontWeight: "600",
+    },
+    filterChipTextActive: {
+      color: theme.colors.accent,
+    },
+    orderToggleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginTop: 4,
+    },
+    orderToggleButton: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: withAlpha(theme.colors.border || theme.colors.card, 0.45),
+      backgroundColor: withAlpha(theme.colors.card, 0.82),
+    },
+    orderToggleText: {
+      color: theme.colors.text,
+      fontWeight: "600",
+    },
+  });
+}

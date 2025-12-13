@@ -51,6 +51,7 @@ export interface AppTheme {
     primary: string;
     secondary: string;
     text: string;
+    textSecondary?: string;
     accent: string;
     border?: string;
     muted?: string;

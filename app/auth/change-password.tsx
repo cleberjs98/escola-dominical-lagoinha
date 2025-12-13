@@ -1,30 +1,21 @@
-import React, { useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-} from "react-native";
+// app/auth/change-password.tsx
+import React, { useMemo, useState } from "react";
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from "react-native";
 import { useRouter } from "expo-router";
-import {
-  EmailAuthProvider,
-  reauthenticateWithCredential,
-  updatePassword,
-} from "firebase/auth";
+import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from "firebase/auth";
 
 import { firebaseAuth } from "../../lib/firebase";
-import {
-  PasswordRequirements,
-  getPasswordValidation,
-} from "../../components/PasswordRequirements";
+import { PasswordRequirements, getPasswordValidation } from "../../components/PasswordRequirements";
 import { mapAuthErrorToMessage } from "../../lib/auth/errorMessages";
+import { useTheme } from "../../hooks/useTheme";
+import { AppBackground } from "../../components/layout/AppBackground";
+import type { AppTheme } from "../../types/theme";
+import { AppButton } from "../../components/ui/AppButton";
 
 export default function ChangePasswordScreen() {
   const router = useRouter();
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -39,11 +30,7 @@ export default function ChangePasswordScreen() {
     setSuccessMessage(null);
 
     const validation = getPasswordValidation(newPassword);
-    if (
-      !validation.lengthOk ||
-      !validation.hasUppercase ||
-      !validation.numberAndSpecialOk
-    ) {
+    if (!validation.lengthOk || !validation.hasUppercase || !validation.numberAndSpecialOk) {
       setErrorMessage("Sua nova senha nao atende aos requisitos minimos.");
       setSubmitting(false);
       return;
@@ -66,7 +53,6 @@ export default function ChangePasswordScreen() {
       const credential = EmailAuthProvider.credential(user.email, currentPassword);
       await reauthenticateWithCredential(user, credential);
     } catch (err: any) {
-      console.error("[ChangePassword] Erro na reautenticacao", err);
       const code = err?.code ?? "auth/unknown";
       if (code === "auth/wrong-password") {
         setErrorMessage("Senha atual incorreta.");
@@ -83,146 +69,127 @@ export default function ChangePasswordScreen() {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-
-      setTimeout(() => {
-        router.replace("/" as any);
-      }, 800);
+      setTimeout(() => router.back(), 800);
     } catch (err: any) {
-      console.error("[ChangePassword] Erro ao atualizar senha", err);
-      const msg = mapAuthErrorToMessage(err?.code ?? "auth/unknown", "reset");
-      setErrorMessage(msg);
+      setErrorMessage(mapAuthErrorToMessage(err?.code ?? "auth/unknown", "reset"));
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: "#020617" }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <View style={styles.container}>
-        <Text style={styles.title}>Alterar senha</Text>
-        <Text style={styles.subtitle}>
-          Para sua seguranca, informe sua senha atual e escolha uma nova senha forte.
-        </Text>
+    <AppBackground>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <ScrollContainer>
+          <View style={styles.container}>
+            <Text style={styles.title}>Alterar senha</Text>
+            <Text style={styles.subtitle}>Informe sua senha atual e defina uma nova senha.</Text>
 
-        <Text style={styles.label}>Senha atual</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Senha atual"
-          placeholderTextColor="#64748b"
-          secureTextEntry
-          value={currentPassword}
-          onChangeText={setCurrentPassword}
-        />
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Senha atual</Text>
+              <TextInput
+                placeholder="*******"
+                placeholderTextColor={theme.colors.inputPlaceholder || theme.colors.muted}
+                secureTextEntry
+                style={styles.input}
+                value={currentPassword}
+                onChangeText={setCurrentPassword}
+              />
+            </View>
 
-        <Text style={styles.label}>Nova senha</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Nova senha"
-          placeholderTextColor="#64748b"
-          secureTextEntry
-          value={newPassword}
-          onChangeText={setNewPassword}
-        />
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Nova senha</Text>
+              <TextInput
+                placeholder="*******"
+                placeholderTextColor={theme.colors.inputPlaceholder || theme.colors.muted}
+                secureTextEntry
+                style={styles.input}
+                value={newPassword}
+                onChangeText={setNewPassword}
+              />
+            </View>
 
-        <PasswordRequirements password={newPassword} />
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Confirmar nova senha</Text>
+              <TextInput
+                placeholder="*******"
+                placeholderTextColor={theme.colors.inputPlaceholder || theme.colors.muted}
+                secureTextEntry
+                style={styles.input}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+              />
+            </View>
 
-        <Text style={styles.label}>Confirmar nova senha</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Confirmar nova senha"
-          placeholderTextColor="#64748b"
-          secureTextEntry
-          value={confirmPassword}
-          onChangeText={setConfirmPassword}
-        />
+            <PasswordRequirements password={newPassword} />
 
-        {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
-        {successMessage && <Text style={styles.successText}>{successMessage}</Text>}
+            {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+            {successMessage ? <Text style={styles.successText}>{successMessage}</Text> : null}
 
-        <TouchableOpacity
-          style={[styles.button, submitting && styles.buttonDisabled]}
-          onPress={handleChangePassword}
-          disabled={submitting || !currentPassword || !newPassword}
-        >
-          {submitting ? (
-            <ActivityIndicator color="#0f172a" />
-          ) : (
-            <Text style={styles.buttonText}>Salvar nova senha</Text>
-          )}
-        </TouchableOpacity>
+            <AppButton title={submitting ? "Salvando..." : "Salvar nova senha"} onPress={handleChangePassword} loading={submitting} />
 
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backText}>Voltar</Text>
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
+            <TouchableOpacity style={styles.backButton} onPress={() => router.back()} disabled={submitting}>
+              <Text style={styles.backText}>Voltar</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollContainer>
+      </KeyboardAvoidingView>
+    </AppBackground>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 80,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#e5e7eb",
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "#9ca3af",
-    marginBottom: 24,
-  },
-  label: {
-    fontSize: 14,
-    color: "#e5e7eb",
-    marginBottom: 4,
-  },
-  input: {
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#1f2937",
-    backgroundColor: "#020617",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: "#e5e7eb",
-    marginBottom: 10,
-  },
-  button: {
-    backgroundColor: "#facc15",
-    borderRadius: 999,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 14,
-    marginTop: 8,
-  },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  buttonText: {
-    color: "#0f172a",
-    fontWeight: "600",
-    fontSize: 16,
-  },
-  errorText: {
-    color: "#f97316",
-    marginBottom: 4,
-  },
-  successText: {
-    color: "#22c55e",
-    marginBottom: 4,
-  },
-  backButton: {
-    marginTop: 16,
-  },
-  backText: {
-    color: "#60a5fa",
-    fontSize: 14,
-  },
-});
+function ScrollContainer({ children }: { children: React.ReactNode }) {
+  return <View style={{ flex: 1 }}>{children}</View>;
+}
+
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      paddingHorizontal: 20,
+      paddingTop: 80,
+      gap: 12,
+    },
+    title: {
+      fontSize: 24,
+      fontWeight: "700",
+      color: theme.colors.text,
+      marginBottom: 8,
+    },
+    subtitle: {
+      fontSize: 14,
+      color: theme.colors.muted || theme.colors.text,
+      marginBottom: 16,
+    },
+    formGroup: {
+      gap: 6,
+    },
+    label: {
+      fontSize: 14,
+      color: theme.colors.text,
+    },
+    input: {
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: theme.colors.inputBorder || theme.colors.border,
+      backgroundColor: theme.colors.inputBg || theme.colors.card,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      color: theme.colors.inputText || theme.colors.text,
+    },
+    errorText: {
+      color: theme.colors.status?.dangerBg || theme.colors.primary,
+    },
+    successText: {
+      color: theme.colors.text,
+    },
+    backButton: {
+      marginTop: 12,
+    },
+    backText: {
+      color: theme.colors.accent,
+      fontSize: 14,
+      fontWeight: "600",
+    },
+  });
+}

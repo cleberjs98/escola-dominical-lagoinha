@@ -1,13 +1,6 @@
 // app/(tabs)/index.tsx - Home principal
 import { useEffect, useMemo, useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-} from "react-native";
+import { View, Text, StyleSheet, ActivityIndicator, Pressable, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 
 import { useAuth } from "../../hooks/useAuth";
@@ -25,16 +18,19 @@ import { AulaCard } from "../../components/cards/AulaCard";
 import { DevocionalCard } from "../../components/cards/DevocionalCard";
 import { Header } from "../../components/ui/Header";
 import { useTheme } from "../../hooks/useTheme";
+import { AppBackground } from "../../components/layout/AppBackground";
 import { RecentAnnouncements } from "../../components/home/RecentAnnouncements";
 import { AppCard, AppCardStatusVariant } from "../../components/common/AppCard";
 import CoordinatorDashboardScreen from "../(coordenador)";
+import type { AppTheme } from "../../types/theme";
 
 /* Ajustes fase de testes - Home, notificacoes, gestao de papeis e permissoes */
 
 export default function HomeScreen() {
   const router = useRouter();
   const { firebaseUser, user, isInitializing } = useAuth();
-  const { themeSettings } = useTheme();
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   const [devotionalOfDay, setDevotionalOfDay] = useState<Devotional | null>(null);
   const [isLoadingDevotional, setIsLoadingDevotional] = useState(false);
@@ -64,7 +60,7 @@ export default function HomeScreen() {
   const primeiroNome = nome.split(" ")[0] || nome;
 
   useEffect(() => {
-    // Admin/Coord podem carregar mesmo sem checar status; demais só se aprovado
+    // Admin/Coord podem carregar mesmo sem checar status; demais sМ se aprovado
     if (!firebaseUser) return;
     if (!isApproved && !isCoordenador && !isAdmin) return;
 
@@ -79,7 +75,7 @@ export default function HomeScreen() {
           return;
         }
 
-        // fallback: primeiro publicado/disponível para admin/coord/professor
+        // fallback: primeiro publicado/disponivel para admin/coord/professor
         if (isCoordenador || isAdmin || isProfessor) {
           const list = await listAvailableAndPublishedForProfessor();
           setDevotionalOfDay(list.length ? list[0] : null);
@@ -98,7 +94,7 @@ export default function HomeScreen() {
         setIsLoadingLessons(true);
         let lessons: Lesson[] = [];
         if (isAdmin || isCoordenador) {
-          // coord/admin veem disponíveis + publicadas (próximas)
+          // coord/admin veem disponiveis + publicadas (proximas)
           lessons = await listAvailableAndPublished(3);
         } else if (isProfessor) {
           const sections = await listLessonsForProfessor(firebaseUser.uid);
@@ -130,9 +126,7 @@ export default function HomeScreen() {
     async function loadAvisos() {
       try {
         setIsLoadingAvisos(true);
-        const targetUser = user
-          ? ({ ...user, id: user.id || firebaseUser.uid } as any)
-          : null;
+        const targetUser = user ? ({ ...user, id: user.id || firebaseUser.uid } as any) : null;
         const list = await listRecentAvisosForUser(targetUser);
         setRecentAvisos(list);
       } catch (error) {
@@ -145,7 +139,7 @@ export default function HomeScreen() {
     loadDevotional();
     loadLessons();
     loadAvisos();
-  }, [firebaseUser, isApproved, papel, isCoordenador, isAdmin, isProfessor]);
+  }, [firebaseUser, isApproved, papel, isCoordenador, isAdmin, isProfessor, user]);
 
   useEffect(() => {
     if (isApproved) {
@@ -156,7 +150,7 @@ export default function HomeScreen() {
   if (isInitializing || (!firebaseUser && isInitializing)) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#facc15" />
+        <ActivityIndicator size="large" color={theme.colors.accent} />
         <Text style={styles.loadingText}>Carregando...</Text>
       </View>
     );
@@ -176,8 +170,7 @@ export default function HomeScreen() {
 
   function bannerSubtitle() {
     if (isProfessor) return "Veja suas aulas reservadas e devocionais.";
-    if (isCoordenador || isAdmin)
-      return "Gerencie usuarios, aulas, devocionais e avisos.";
+    if (isCoordenador || isAdmin) return "Gerencie usuarios, aulas, devocionais e avisos.";
     return "Fique por dentro das aulas e devocionais.";
   }
 
@@ -216,169 +209,163 @@ export default function HomeScreen() {
   }
 
   return (
-    <ScrollView
-      style={[
-        styles.container,
-        { backgroundColor: themeSettings?.cor_fundo || "#020617" },
-      ]}
-      contentContainerStyle={styles.contentContainer}
-    >
-      <Header
-        title={`Bem-vindo(a), ${primeiroNome}`}
-        subtitle={bannerSubtitle()}
-        rightContent={
-          <Pressable
-            style={styles.bellContainer}
-            onPress={() => router.push("/notifications" as any)}
-          >
-            <Text style={styles.bellIcon}>{"\uD83D\uDD14"}</Text>
-            {unreadCount ? (
-              <View style={styles.badgeBubble}>
-                <Text style={styles.badgeBubbleText}>{unreadCount}</Text>
-              </View>
-            ) : null}
-          </Pressable>
-        }
-      />
-
-      {isLoadingAvisos ? (
-        <Card title="Avisos recentes" subtitle="Comunicados para voce.">
-          <ActivityIndicator color={themeSettings?.cor_info || "#facc15"} />
-        </Card>
-      ) : (
-        <RecentAnnouncements
-          avisos={recentAvisos}
-          onPressAll={() => router.push("/avisos" as any)}
+    <AppBackground>
+      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+        <Header
+          title={`Bem-vindo(a), ${primeiroNome}`}
+          subtitle={bannerSubtitle()}
+          rightContent={
+            <Pressable style={styles.bellContainer} onPress={() => router.push("/notifications" as any)}>
+              <Text style={styles.bellIcon}>{"\uD83D\uDD14"}</Text>
+              {unreadCount ? (
+                <View style={styles.badgeBubble}>
+                  <Text style={styles.badgeBubbleText}>{unreadCount}</Text>
+                </View>
+              ) : null}
+            </Pressable>
+          }
         />
-      )}
 
-      <Card
-        title="Devocional do Dia"
-        subtitle="Aprofunde-se na Palavra diariamente."
-        footer={
-          <AppButton
-            title="Ver todos"
-            variant="outline"
-            fullWidth={false}
-            onPress={() => {
-              console.log("[Home] Ver todos devocionais clicado");
-              router.push("/(tabs)/devotionals" as any);
-            }}
-          />
-        }
-      >
-        {isLoadingDevotional ? (
-          <ActivityIndicator color={themeSettings?.cor_info || "#facc15"} />
-        ) : devotionalOfDay ? (
-          <DevocionalCard
-            devotional={devotionalOfDay}
-            onPress={() => router.push(`/devotionals/${devotionalOfDay.id}` as any)}
-          />
+        {isLoadingAvisos ? (
+          <Card title="Avisos recentes" subtitle="Comunicados para voce.">
+            <ActivityIndicator color={theme.colors.accent} />
+          </Card>
         ) : (
-          <EmptyState title="Nenhum devocional para hoje." />
+          <RecentAnnouncements avisos={recentAvisos} onPressAll={() => router.push("/avisos" as any)} />
         )}
-      </Card>
 
-      <Card
-        title={isProfessor ? "Minhas aulas" : isStudent ? "Minhas aulas" : "Proximas aulas"}
-        subtitle={
-          isProfessor ? "Acompanhe suas aulas reservadas ou publicadas." : isStudent ? "Revise suas aulas." : "Confira o que vem pela frente."
-        }
-        footer={
-          <AppButton
-            title="Ver todas"
-            variant="outline"
-            fullWidth={false}
-            onPress={() => router.push("/(tabs)/lessons" as any)}
-          />
-        }
-      >
-        {isLoadingLessons ? (
-          <ActivityIndicator color={themeSettings?.cor_info || "#facc15"} />
-        ) : nextLessons.length === 0 ? (
-          <EmptyState title={isProfessor ? "Voce ainda nao tem aulas reservadas ou publicadas." : "Nenhuma aula publicada no momento."} />
-        ) : isProfessor ? (
-          nextLessons.map((lesson) => (
-            <AppCard
-              key={lesson.id}
-              title={lesson.titulo}
-              subtitle={formatLessonDateHome(lesson)}
-              statusLabel={mapStatusLabelHome(lesson.status)}
-              statusVariant={mapStatusVariantHome(lesson.status)}
-              onPress={() => router.push(`/lessons/${lesson.id}` as any)}
+        <Card
+          title="Devocional do Dia"
+          subtitle="Aprofunde-se na Palavra diariamente."
+          footer={
+            <AppButton
+              title="Ver todos"
+              variant="outline"
+              fullWidth={false}
+              onPress={() => {
+                router.push("/(tabs)/devotionals" as any);
+              }}
             />
-          ))
-        ) : (
-          nextLessons.map((lesson) => (
-            <AulaCard
-              key={lesson.id}
-              lesson={lesson}
-              onPress={() => router.push(`/lessons/${lesson.id}` as any)}
-            />
-          ))
-        )}
-      </Card>
+          }
+        >
+          {isLoadingDevotional ? (
+            <ActivityIndicator color={theme.colors.accent} />
+          ) : devotionalOfDay ? (
+            <DevocionalCard devotional={devotionalOfDay} onPress={() => router.push(`/devotionals/${devotionalOfDay.id}` as any)} />
+          ) : (
+            <EmptyState title="Nenhum devocional para hoje." />
+          )}
+        </Card>
 
-    </ScrollView>
+        <Card
+          title={isProfessor ? "Minhas aulas" : isStudent ? "Minhas aulas" : "Proximas aulas"}
+          subtitle={
+            isProfessor
+              ? "Acompanhe suas aulas reservadas ou publicadas."
+              : isStudent
+                ? "Revise suas aulas."
+                : "Confira o que vem pela frente."
+          }
+          footer={
+            <AppButton title="Ver todas" variant="outline" fullWidth={false} onPress={() => router.push("/(tabs)/lessons" as any)} />
+          }
+        >
+          {isLoadingLessons ? (
+            <ActivityIndicator color={theme.colors.accent} />
+          ) : nextLessons.length === 0 ? (
+            <EmptyState title={isProfessor ? "Voce ainda nao tem aulas reservadas ou publicadas." : "Nenhuma aula publicada no momento."} />
+          ) : isProfessor ? (
+            nextLessons.map((lesson) => (
+              <AppCard
+                key={lesson.id}
+                title={lesson.titulo}
+                subtitle={formatLessonDateHome(lesson)}
+                statusLabel={mapStatusLabelHome(lesson.status)}
+                statusVariant={mapStatusVariantHome(lesson.status)}
+                onPress={() => router.push(`/lessons/${lesson.id}` as any)}
+              />
+            ))
+          ) : (
+            nextLessons.map((lesson) => (
+              <AulaCard key={lesson.id} lesson={lesson} onPress={() => router.push(`/lessons/${lesson.id}` as any)} />
+            ))
+          )}
+        </Card>
+      </ScrollView>
+    </AppBackground>
   );
 }
 
-const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    backgroundColor: "#020617",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  loadingText: {
-    color: "#e5e7eb",
-    marginTop: 12,
-  },
-  container: {
-    flex: 1,
-  },
-  contentContainer: {
-    padding: 16,
-    paddingBottom: 32,
-    gap: 12,
-  },
-  bellContainer: {
-    position: "relative",
-    padding: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#1f2937",
-    backgroundColor: "#0b1224",
-  },
-  bellIcon: {
-    fontSize: 20,
-    color: "#e5e7eb",
-  },
-  badgeBubble: {
-    position: "absolute",
-    top: 4,
-    right: 4,
-    backgroundColor: "#ef4444",
-    borderRadius: 999,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  badgeBubbleText: {
-    color: "#f8fafc",
-    fontSize: 10,
-    fontWeight: "700",
-  },
-  footer: {
-    marginTop: 12,
-    alignItems: "flex-start",
-  },
-  logoutButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  logoutText: {
-    color: "#f97316",
-    fontSize: 13,
-    fontWeight: "500",
-  },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    center: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    loadingText: {
+      color: theme.colors.text,
+      marginTop: 12,
+    },
+    container: {
+      flex: 1,
+      backgroundColor: "transparent",
+    },
+    contentContainer: {
+      padding: 16,
+      paddingBottom: 32,
+      gap: 12,
+      backgroundColor: "transparent",
+    },
+    bellContainer: {
+      position: "relative",
+      padding: 10,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: theme.colors.border || theme.colors.card,
+      backgroundColor: withAlpha(theme.colors.card, 0.82),
+    },
+    bellIcon: {
+      fontSize: 20,
+      color: theme.colors.text,
+    },
+    badgeBubble: {
+      position: "absolute",
+      top: 4,
+      right: 4,
+      backgroundColor: theme.colors.status?.dangerBg || theme.colors.primary,
+      borderRadius: 999,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+    },
+    badgeBubbleText: {
+      color: theme.colors.status?.dangerText || theme.colors.accent,
+      fontSize: 10,
+      fontWeight: "700",
+    },
+    footer: {
+      marginTop: 12,
+      alignItems: "flex-start",
+    },
+    logoutButton: {
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+    },
+    logoutText: {
+      color: theme.colors.text,
+      fontSize: 13,
+      fontWeight: "500",
+    },
+  });
+}
+
+function withAlpha(color: string, alpha: number): string {
+  if (color.startsWith("#") && (color.length === 7 || color.length === 9)) {
+    const r = parseInt(color.slice(1, 3), 16);
+    const g = parseInt(color.slice(3, 5), 16);
+    const b = parseInt(color.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  return color;
+}

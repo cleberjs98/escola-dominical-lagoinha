@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Timestamp } from "firebase/firestore";
@@ -24,8 +24,10 @@ import {
   updateLessonFields,
 } from "../../../lib/lessons";
 import type { Lesson, LessonStatus } from "../../../types/lesson";
+import { AppBackground } from "../../../components/layout/AppBackground";
+import type { AppTheme } from "../../../theme/tokens";
 
-type FormErrors = {
+ type FormErrors = {
   data?: string;
   publish?: string;
 };
@@ -34,7 +36,8 @@ export default function EditLessonScreen() {
   const router = useRouter();
   const { lessonId } = useLocalSearchParams<{ lessonId: string }>();
   const { firebaseUser, user, isInitializing } = useAuth();
-  const { themeSettings } = useTheme();
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const papel = user?.papel;
   const canDelete = papel === "administrador" || papel === "coordenador";
 
@@ -55,8 +58,8 @@ export default function EditLessonScreen() {
       router.replace("/auth/login" as any);
       return;
     }
-    const papel = user?.papel;
-    if (papel !== "coordenador" && papel !== "administrador") {
+    const papelAtual = user?.papel;
+    if (papelAtual !== "coordenador" && papelAtual !== "administrador" && papelAtual !== "admin") {
       Alert.alert("Sem permissão", "Apenas coordenador/admin podem editar aulas.");
       router.replace("/lessons" as any);
       return;
@@ -78,77 +81,64 @@ export default function EditLessonScreen() {
       setReferencia(data.referencia_biblica || "");
       setDescricao(data.descricao_base);
       setDataAula(formatTimestampToDateInput(data.data_aula as Timestamp));
-      setPublishAt(formatTimestampToDateTimeInput(data.publish_at as Timestamp | null) || "");
+      setPublishAt(formatTimestampToDateTimeInput((data as any).publish_at as Timestamp | null));
     } catch (err) {
-      console.error("Erro ao carregar aula:", err);
+      console.error("[EditLesson] erro ao carregar aula:", err);
       Alert.alert("Erro", "Não foi possível carregar a aula.");
-      router.replace("/lessons" as any);
     } finally {
       setLoading(false);
     }
   }
 
-  function validateBase(): boolean {
+  function validate() {
     const newErrors: FormErrors = {};
-    if (!titulo.trim()) {
-      Alert.alert("Erro", "Informe o título.");
-      return false;
-    }
-    if (!dataAula.trim()) {
-      newErrors.data = "Informe a data da aula (dd/mm/aaaa).";
-      setErrors(newErrors);
-      return false;
-    }
+    if (!dataAula || !toISODate(dataAula)) newErrors.data = "Informe a data da aula (dd/mm/aaaa).";
+    if (publishAt && !parseDateTimeToTimestamp(publishAt)) newErrors.publish = "Data/hora inválidas (dd/mm/aaaa hh:mm).";
     setErrors(newErrors);
-    return true;
+    return Object.keys(newErrors).length === 0;
   }
 
-  function validatePublishAt(): boolean {
-    if (!publishAt.trim()) return true;
-    const parsed = parseDateTimeToTimestamp(publishAt.trim());
-    if (!parsed) {
-      setErrors((prev) => ({ ...prev, publish: "Data/hora inválida (dd/mm/aaaa hh:mm)." }));
-      return false;
-    }
-    setErrors((prev) => ({ ...prev, publish: undefined }));
-    return true;
-  }
+  async function handleSave(status?: LessonStatus) {
+    if (!lesson) return;
+    if (!validate()) return;
+    const isoDate = toISODate(dataAula);
+    if (!isoDate) return;
 
-  function redirect() {
-    router.replace("/lessons" as any);
-  }
-
-  async function handleSave(statusChange?: LessonStatus) {
-    if (!lesson || !firebaseUser) return;
-    if (!validateBase() || !validatePublishAt()) return;
     try {
       setSubmitting(true);
-      await updateLessonFields(lesson.id, {
+      const publishParsed = parseDateTimeToTimestamp(publishAt);
+      await updateLessonFields({
+        lessonId: lesson.id,
         titulo: titulo.trim(),
         referencia_biblica: referencia.trim(),
         descricao_base: descricao.trim(),
-        data_aula_text: dataAula.trim(),
+        data_aula: isoDate,
         publish_at_text: publishAt.trim() || null,
-        status: statusChange,
+        publish_at: publishParsed?.timestamp ?? null,
+        data_publicacao_auto: publishParsed?.display ?? null,
       });
-      Alert.alert("Sucesso", "Aula salva.");
-      redirect();
+      if (status) {
+        await setLessonStatus(lesson.id, status);
+      }
+      Alert.alert("Sucesso", "Aula atualizada.");
+      router.replace("/(tabs)/lessons" as any);
     } catch (err) {
-      console.error("Erro ao salvar aula:", err);
-      Alert.alert("Erro", (err as Error)?.message || "Não foi possível salvar.");
+      console.error("[EditLesson] Erro ao salvar aula:", err);
+      Alert.alert("Erro", (err as any)?.message || "Não foi possível salvar.");
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function handlePublish() {
-    if (!lesson || !firebaseUser) return;
+  async function handlePublishNow() {
+    if (!lesson) return;
     try {
       setSubmitting(true);
-      await publishLessonNow(lesson.id, firebaseUser.uid);
-      Alert.alert("Publicado", "Aula publicada.");
-      redirect();
+      await publishLessonNow(lesson.id, firebaseUser?.uid || "system");
+      Alert.alert("Sucesso", "Aula publicada.");
+      router.replace("/(tabs)/lessons" as any);
     } catch (err) {
+      console.error("[EditLesson] Erro ao publicar agora:", err);
       Alert.alert("Erro", "Não foi possível publicar.");
     } finally {
       setSubmitting(false);
@@ -157,152 +147,112 @@ export default function EditLessonScreen() {
 
   async function handleDelete() {
     if (!lesson) return;
-    Alert.alert("Excluir aula", "Deseja excluir esta aula?", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Excluir",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            console.log("[Lessons] handleDeleteLesson chamado para", lesson.id);
-            setDeleting(true);
-            await deleteLesson(lesson.id);
-            Alert.alert("Excluída", "Aula excluída com sucesso.");
-            redirect();
-          } catch (err) {
-            console.error("[Lessons] Erro ao excluir aula:", err);
-            Alert.alert("Erro", "Não foi possível excluir a aula. Tente novamente.");
-          } finally {
-            setDeleting(false);
-          }
-        },
-      },
-    ]);
+    try {
+      setDeleting(true);
+      await deleteLesson(lesson.id);
+      Alert.alert("Sucesso", "Aula excluída.");
+      router.replace("/(tabs)/lessons" as any);
+    } catch (err) {
+      console.error("[EditLesson] Erro ao excluir aula:", err);
+      Alert.alert("Erro", "Não foi possível excluir.");
+    } finally {
+      setDeleting(false);
+    }
   }
 
   if (isInitializing || loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#facc15" />
-        <Text style={styles.loadingText}>Carregando...</Text>
-      </View>
+      <AppBackground>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={theme.colors.accent} />
+          <Text style={styles.loadingText}>Carregando aula...</Text>
+        </View>
+      </AppBackground>
+    );
+  }
+
+  if (!lesson) {
+    return (
+      <AppBackground>
+        <View style={styles.center}>
+          <Text style={styles.loadingText}>Aula não encontrada.</Text>
+          <AppButton title="Voltar" variant="outline" onPress={() => router.replace("/(tabs)/lessons" as any)} />
+        </View>
+      </AppBackground>
     );
   }
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: themeSettings?.cor_fundo || "#020617" }]}
-      contentContainerStyle={styles.content}
-    >
-      <Text style={styles.title}>Editar aula</Text>
-      <Text style={styles.helper}>Status atual: {lesson?.status}</Text>
+    <AppBackground>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <View style={styles.row}>
+          <View style={styles.col}>
+            <Text style={styles.label}>Título</Text>
+            <AppInput value={titulo} placeholder="Ex.: Aula sobre Romanos 8" onChangeText={setTitulo} />
+          </View>
+          <View style={styles.col}>
+            <Text style={styles.label}>Referência bíblica</Text>
+            <AppInput value={referencia} placeholder="Ex.: Romanos 8" onChangeText={setReferencia} />
+          </View>
+        </View>
 
-      <AppInput label="Título" value={titulo} onChangeText={setTitulo} />
-      <AppInput
-        label="Referência bíblica"
-        value={referencia}
-        onChangeText={setReferencia}
-        placeholder="Ex.: Romanos 8"
-      />
-      <AppInput
-        label="Data da aula"
-        placeholder="dd/mm/aaaa"
-        value={dataAula}
-        keyboardType="number-pad"
-        onChangeText={(v) => {
-          setDataAula(maskDate(v));
-          setErrors((prev) => ({ ...prev, data: undefined }));
-        }}
-        error={errors.data}
-      />
-      <AppInput
-        label="Publicar automaticamente em"
-        placeholder="dd/mm/aaaa hh:mm"
-        value={publishAt}
-        keyboardType="number-pad"
-        onChangeText={(v) => {
-          setPublishAt(maskDateTime(v));
-          setErrors((prev) => ({ ...prev, publish: undefined }));
-        }}
-        error={errors.publish}
-        helperText="Digite ddmmaaaa hh:mm ou deixe vazio."
-      />
-      <RichTextEditor
-        value={descricao}
-        onChange={setDescricao}
-        placeholder="Descrição base da aula..."
-        minHeight={180}
-      />
+        <View style={styles.row}>
+          <View style={styles.col}>
+            <Text style={styles.label}>Data da aula</Text>
+            <AppInput value={dataAula} placeholder="dd/mm/aaaa" onChangeText={(t) => setDataAula(maskDate(t))} />
+            {errors.data ? <Text style={styles.error}>{errors.data}</Text> : null}
+          </View>
+          <View style={styles.col}>
+            <Text style={styles.label}>Agendar publicação</Text>
+            <AppInput
+              value={publishAt}
+              placeholder="dd/mm/aaaa hh:mm"
+              onChangeText={(t) => setPublishAt(maskDateTime(t))}
+            />
+            {errors.publish ? <Text style={styles.error}>{errors.publish}</Text> : null}
+          </View>
+        </View>
 
-      <View style={styles.actions}>
-        <AppButton
-          title={submitting ? "Salvando..." : "Salvar alterações"}
-          variant="secondary"
-          onPress={() => handleSave()}
-          disabled={submitting}
-        />
-        <AppButton
-          title={submitting ? "Salvando..." : "Salvar como rascunho"}
-          variant="secondary"
-          onPress={() => handleSave("rascunho")}
-          disabled={submitting}
-        />
-        <AppButton
-          title={submitting ? "Salvando..." : "Disponibilizar para professores"}
-          variant="secondary"
-          onPress={() => handleSave("disponivel")}
-          disabled={submitting}
-        />
-        <AppButton
-          title={submitting ? "Publicando..." : "Publicar agora"}
-          variant="primary"
-          onPress={handlePublish}
-          disabled={submitting}
-        />
-        {canDelete ? (
-          <AppButton
-            title={deleting ? "Excluindo..." : "Excluir aula"}
-            variant="outline"
-            onPress={() => {
-              console.log("[Lessons] Botão excluir clicado");
-              void handleDelete();
-            }}
-            disabled={submitting || deleting}
-          />
-        ) : null}
-      </View>
-    </ScrollView>
+        <View style={styles.col}>
+          <Text style={styles.label}>Descrição base</Text>
+          <RichTextEditor value={descricao} onChange={setDescricao} placeholder="Digite a descrição da aula..." />
+        </View>
+
+        <View style={[styles.row, styles.actions]}>
+          <AppButton title={submitting ? "Salvando..." : "Salvar edições"} variant="primary" onPress={() => handleSave()} disabled={submitting} />
+          <AppButton title={submitting ? "Salvar rascunho..." : "Salvar como rascunho"} variant="secondary" onPress={() => handleSave("rascunho" as LessonStatus)} disabled={submitting} />
+          <AppButton title={submitting ? "Disponibilizando..." : "Disponibilizar"} variant="secondary" onPress={() => handleSave("disponivel" as LessonStatus)} disabled={submitting} />
+          <AppButton title={submitting ? "Publicando..." : "Publicar agora"} variant="secondary" onPress={handlePublishNow} disabled={submitting} />
+          {canDelete ? (
+            <AppButton title={deleting ? "Excluindo..." : "Excluir aula"} variant="danger" onPress={handleDelete} disabled={deleting} />
+          ) : null}
+        </View>
+      </ScrollView>
+    </AppBackground>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  content: {
-    padding: 16,
-    gap: 12,
-  },
-  center: {
-    flex: 1,
-    backgroundColor: "#020617",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  loadingText: {
-    color: "#e5e7eb",
-    marginTop: 12,
-  },
-  title: {
-    color: "#e5e7eb",
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  helper: {
-    color: "#cbd5e1",
-  },
-  actions: {
-    gap: 8,
-    marginTop: 12,
-  },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: "transparent" },
+    content: { paddingHorizontal: 16, paddingTop: 56, paddingBottom: 24, gap: 12, backgroundColor: "transparent" },
+    center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 16, gap: 12, backgroundColor: "transparent" },
+    loadingText: { color: theme.colors.text, marginTop: 12 },
+    row: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
+    col: { flex: 1, gap: 8, minWidth: 260 },
+    label: { color: theme.colors.text, fontWeight: "600" },
+    actions: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
+    error: { color: theme.colors.status?.dangerText || theme.colors.text, fontSize: 12 },
+  });
+}
+
+function toISODate(input: string): string | null {
+  const digits = input.replace(/\D/g, "");
+  if (digits.length !== 8) return null;
+  const day = Number(digits.slice(0, 2));
+  const month = Number(digits.slice(2, 4));
+  const year = Number(digits.slice(4, 8));
+  const date = new Date(year, month - 1, day);
+  if (Number.isNaN(date.getTime())) return null;
+  return `${year}-${`${month}`.padStart(2, "0")}-${`${day}`.padStart(2, "0")}`;
+}

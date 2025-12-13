@@ -1,16 +1,6 @@
-// [DESATIVADA] Fluxo antigo de completar perfil. Mantido apenas para referencia.
-// app/auth/complete-profile.tsx - completar perfil com validacoes
-import { useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  Alert,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-} from "react-native";
+// app/auth/complete-profile.tsx - fluxo legado de completar perfil (visual atualizado)
+import { useEffect, useMemo, useState } from "react";
+import { View, Text, StyleSheet, Alert, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 
@@ -21,16 +11,15 @@ import { Card } from "../../components/ui/Card";
 import { AppInput } from "../../components/ui/AppInput";
 import { AppButton } from "../../components/ui/AppButton";
 import { useTheme } from "../../hooks/useTheme";
-import {
-  isNonEmpty,
-  isValidDateLike,
-  isValidPhone,
-} from "../../utils/validation";
+import { AppBackground } from "../../components/layout/AppBackground";
+import { isNonEmpty, isValidDateLike, isValidPhone } from "../../utils/validation";
+import type { AppTheme } from "../../types/theme";
 
 export default function CompleteProfileScreen() {
   const router = useRouter();
   const { firebaseUser, user, isInitializing } = useAuth();
-  const { themeSettings } = useTheme();
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
@@ -58,78 +47,48 @@ export default function CompleteProfileScreen() {
           setNome(user?.nome ?? "");
         }
       } catch (error) {
-        console.error("Erro ao carregar doc do usuario:", error);
+        console.error("[CompleteProfile] Erro ao carregar usuario", error);
       } finally {
         setIsLoadingUserDoc(false);
       }
     }
 
-    loadUserDoc();
+    void loadUserDoc();
   }, [firebaseUser, user]);
 
-  useEffect(() => {
-    if (!isInitializing && !firebaseUser) {
-      router.replace("/auth/login" as any);
-    }
-  }, [firebaseUser, isInitializing, router]);
-
-  function handlePhoneChange(input: string) {
-    const digits = input.replace(/\D/g, "");
-    setTelefone(digits);
-  }
-
-  function validate() {
-    if (!isNonEmpty(nome, 3)) {
-      Alert.alert("Erro", "Informe o nome.");
-      return false;
-    }
-    if (!isValidPhone(telefone)) {
-      Alert.alert("Erro", "Informe um telefone com ao menos 9 digitos.");
-      return false;
-    }
-    if (dataNascimento.trim() && !isValidDateLike(dataNascimento)) {
-      Alert.alert(
-        "Erro",
-        "Data de nascimento deve estar no formato YYYY-MM-DD ou DD/MM/YYYY."
-      );
-      return false;
-    }
-    return true;
-  }
-
-  async function handleSubmit() {
-    if (!firebaseUser) {
-      Alert.alert("Erro", "Usuario nao autenticado.");
+  async function handleSave() {
+    if (!firebaseUser) return;
+    if (!isNonEmpty(nome) || !isNonEmpty(telefone) || !isNonEmpty(dataNascimento)) {
+      Alert.alert("Campos obrigatorios", "Preencha nome, telefone e data de nascimento.");
       return;
     }
-    if (!validate()) return;
+    if (!isValidPhone(telefone)) {
+      Alert.alert("Telefone invalido", "Informe um telefone valido (com DDD ou codigo de pais).");
+      return;
+    }
+    if (!isValidDateLike(dataNascimento)) {
+      Alert.alert("Data invalida", "Use o formato DD/MM/AAAA.");
+      return;
+    }
 
     try {
       setIsSubmitting(true);
-
       const ref = doc(firebaseDb, "users", firebaseUser.uid);
       await setDoc(
         ref,
         {
-          id: firebaseUser.uid,
-          email: firebaseUser.email ?? "",
-          nome: nome.trim(),
-          telefone: telefone.trim(),
-          data_nascimento: dataNascimento.trim() || null,
-          papel: user?.papel || "aluno",
-          status: "pendente",
-          created_at: serverTimestamp(),
+          nome,
+          telefone,
+          data_nascimento: dataNascimento,
           updated_at: serverTimestamp(),
         },
         { merge: true }
       );
-
-      Alert.alert("Sucesso", "Perfil atualizado. Aguarde aprovacao.", [
-        { text: "OK", onPress: () => router.replace("/auth/pending" as any) },
-      ]);
-    } catch (error: any) {
-      console.error("Erro ao salvar perfil:", error);
-      Alert.alert("Erro", error?.message || "Falha ao salvar perfil.");
+      Alert.alert("Sucesso", "Dados atualizados.");
+      router.replace("/");
+    } catch (error) {
+      console.error("[CompleteProfile] Erro ao salvar", error);
+      Alert.alert("Erro", "Nao foi possivel salvar seus dados agora.");
     } finally {
       setIsSubmitting(false);
     }
@@ -137,69 +96,47 @@ export default function CompleteProfileScreen() {
 
   if (isInitializing || isLoadingUserDoc) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#facc15" />
-        <Text style={styles.loadingText}>Carregando...</Text>
-      </View>
+      <AppBackground>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={theme.colors.accent} />
+          <Text style={styles.loadingText}>Carregando perfil...</Text>
+        </View>
+      </AppBackground>
     );
   }
 
   return (
-    <KeyboardAvoidingView
-      style={[
-        styles.container,
-        { backgroundColor: themeSettings?.cor_fundo || "#020617" },
-      ]}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <ScrollView contentContainerStyle={styles.content}>
-        <Card
-          title="Completar perfil"
-          subtitle="Preencha seus dados basicos para enviarmos para aprovacao."
-        >
-          <AppInput label="Nome completo" value={nome} onChangeText={setNome} />
-          <AppInput
-            label="Telefone"
-            value={telefone}
-            onChangeText={handlePhoneChange}
-            keyboardType="phone-pad"
-            placeholder="Apenas numeros"
-          />
-          <AppInput
-            label="Data de nascimento (opcional)"
-            value={dataNascimento}
-            onChangeText={setDataNascimento}
-            placeholder="YYYY-MM-DD"
-          />
-          <AppButton
-            title={isSubmitting ? "Enviando..." : "Salvar e enviar para aprovacao"}
-            onPress={handleSubmit}
-            loading={isSubmitting}
-          />
-        </Card>
-      </ScrollView>
-    </KeyboardAvoidingView>
+    <AppBackground>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <ScrollView contentContainerStyle={styles.content}>
+          <Card title="Completar perfil" subtitle="Informe os dados que faltam para concluir seu cadastro.">
+            <AppInput label="Nome" value={nome} onChangeText={setNome} placeholder="Seu nome completo" />
+            <AppInput label="Telefone" value={telefone} onChangeText={setTelefone} placeholder="+353..." keyboardType="phone-pad" />
+            <AppInput label="Data de nascimento" value={dataNascimento} onChangeText={setDataNascimento} placeholder="DD/MM/AAAA" />
+
+            <AppButton title={isSubmitting ? "Salvando..." : "Salvar dados"} onPress={handleSave} loading={isSubmitting} />
+          </Card>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </AppBackground>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: 16,
-    paddingTop: 64,
-    paddingBottom: 32,
-    gap: 12,
-  },
-  center: {
-    flex: 1,
-    backgroundColor: "#020617",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  loadingText: {
-    color: "#e5e7eb",
-    marginTop: 12,
-  },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    center: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.colors.background,
+    },
+    loadingText: {
+      color: theme.colors.text,
+      marginTop: 12,
+    },
+    content: {
+      padding: 20,
+      gap: 12,
+    },
+  });
+}

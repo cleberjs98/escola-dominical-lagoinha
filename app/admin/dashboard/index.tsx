@@ -1,187 +1,162 @@
-// app/admin/dashboard/index.tsx - dashboard admin com UI compartilhada
-import { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
-import { useAuth } from "../../../hooks/useAuth";
-import { getSystemStats, type SystemStats, getPendingCounts } from "../../../lib/adminStats";
-import { Card } from "../../../components/ui/Card";
-import { AppButton } from "../../../components/ui/AppButton";
-import { EmptyState } from "../../../components/ui/EmptyState";
-import { useTheme } from "../../../hooks/useTheme";
 
-type PendingCounts = {
-  pendingUsers: number;
-  pendingReservations: number;
-};
+import { useAuth } from "../../../hooks/useAuth";
+import { useTheme } from "../../../hooks/useTheme";
+import { AppBackground } from "../../../components/layout/AppBackground";
+import { AppButton } from "../../../components/ui/AppButton";
+import { Card } from "../../../components/ui/Card";
+import { getPendingCounts } from "../../../lib/adminStats";
+import { listDevotionalsForAdmin } from "../../../lib/devotionals";
+import { listRecentAvisosForUser } from "../../../lib/avisos";
+import type { Aviso } from "../../../types/aviso";
+import type { AppTheme } from "../../../types/theme";
 
 export default function AdminDashboardScreen() {
   const router = useRouter();
-  const { user, isInitializing, isAuthenticated } = useAuth();
-  const { themeSettings } = useTheme();
+  const { firebaseUser, isInitializing, user } = useAuth();
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
-  const [stats, setStats] = useState<SystemStats | null>(null);
-  const [pendingCounts, setPendingCounts] = useState<PendingCounts | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [pendingUsers, setPendingUsers] = useState<number | null>(null);
+  const [pendingReservations, setPendingReservations] = useState<number | null>(null);
+  const [devotionalCount, setDevotionalCount] = useState<number | null>(null);
+  const [avisosRecentes, setAvisosRecentes] = useState<Aviso[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (isInitializing) return;
-    if (!isAuthenticated || user?.papel !== "administrador") {
-      Alert.alert("Sem permissão", "Apenas administradores podem acessar este dashboard.");
-      router.replace("/");
+    if (!firebaseUser && !isInitializing) {
+      router.replace("/auth/login");
       return;
     }
+    void loadData();
+  }, [firebaseUser, isInitializing]);
 
-    async function load() {
-      try {
-        setIsLoading(true);
-        const [st, pending] = await Promise.all([getSystemStats(), getPendingCounts()]);
-        setStats(st);
-        setPendingCounts(pending);
-      } catch (error) {
-        console.error("Erro ao carregar dashboard admin:", error);
-        Alert.alert("Erro", "Não foi possível carregar os dados do dashboard.");
-      } finally {
-        setIsLoading(false);
-      }
+  async function loadData() {
+    try {
+      setLoading(true);
+      const [pending, devos, avisos] = await Promise.all([
+        getPendingCounts(),
+        listDevotionalsForAdmin(),
+        listRecentAvisosForUser(user?.papel ?? "administrador"),
+      ]);
+
+      setPendingUsers(pending.pendingUsers);
+      setPendingReservations(pending.pendingReservations);
+      setDevotionalCount(devos?.published?.length ?? 0);
+      setAvisosRecentes(avisos.slice(0, 3));
+    } catch (error) {
+      console.error("[AdminDashboard] Erro ao carregar", error);
+      Alert.alert("Erro", "Nao foi possivel carregar os dados do dashboard.");
+    } finally {
+      setLoading(false);
     }
+  }
 
-    load();
-  }, [isAuthenticated, isInitializing, router, user?.papel]);
-
-  if (isLoading) {
+  if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#facc15" />
-        <Text style={styles.loadingText}>Carregando dashboard...</Text>
-      </View>
+      <AppBackground>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={theme.colors.accent} />
+          <Text style={styles.loadingText}>Carregando dashboard...</Text>
+        </View>
+      </AppBackground>
     );
   }
 
   return (
-    <ScrollView
-      style={[
-        styles.container,
-        { backgroundColor: themeSettings?.cor_fundo || "#020617" },
-      ]}
-      contentContainerStyle={styles.content}
-    >
-      <Card title="Resumo do sistema" subtitle="Totais por módulo e por papel.">
-        {stats ? (
-          <View style={styles.grid}>
-            <StatTile label="Usuários" value={stats.totalUsers} />
-            <StatTile label="Alunos" value={stats.totalUsersByRole.aluno} />
-            <StatTile label="Professores" value={stats.totalUsersByRole.professor} />
-            <StatTile label="Coordenadores" value={stats.totalUsersByRole.coordenador} />
-            <StatTile label="Admins" value={stats.totalUsersByRole.administrador} />
-            <StatTile label="Aulas" value={stats.totalLessons} />
-            <StatTile label="Devocionais" value={stats.totalDevotionals} />
-            <StatTile label="Avisos" value={stats.totalAvisos} />
-          </View>
-        ) : (
-          <EmptyState title="Sem dados disponíveis." />
-        )}
-      </Card>
+    <AppBackground>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <Text style={styles.title}>Dashboard Admin</Text>
 
-      <Card title="Aprovações pendentes" subtitle="Usuários e reservas aguardando decisão.">
-        {pendingCounts ? (
-          <View style={styles.row}>
-            <StatTile label="Usuários pendentes" value={pendingCounts.pendingUsers} />
-            <StatTile label="Reservas pendentes" value={pendingCounts.pendingReservations} />
-          </View>
-        ) : (
-          <EmptyState title="Sem pendências agora." />
-        )}
-        <View style={styles.actions}>
-          <AppButton
-            title="Aprovar usuários"
-            variant="primary"
-            fullWidth={false}
-            onPress={() => router.push("/manager/pending-users" as any)}
-          />
-          <AppButton
-            title="Aprovar reservas"
-            variant="secondary"
-            fullWidth={false}
-            onPress={() => router.push("/manager/pending-reservations" as any)}
-          />
-        </View>
-      </Card>
+        <View style={styles.grid}>
+          <Card title="Usuarios pendentes" subtitle="Aguardando aprovacao">
+            <Text style={styles.kpiValue}>{pendingUsers ?? 0}</Text>
+            <AppButton title="Revisar" onPress={() => router.push("/manager/pending-users" as any)} />
+          </Card>
 
-      <Card title="Atalhos rápidos" subtitle="Acesse as principais telas de gestão.">
-        <View style={styles.actions}>
-          <AppButton
-            title="Gerenciar aulas"
-            variant="outline"
-            fullWidth={false}
-            onPress={() => router.push("/admin/lessons/new" as any)}
-          />
-          <AppButton
-            title="Gerenciar devocionais"
-            variant="outline"
-            fullWidth={false}
-            onPress={() => router.push("/(tabs)/devotionals" as any)}
-          />
-          <AppButton
-            title="Gerenciar avisos"
-            variant="outline"
-            fullWidth={false}
-            onPress={() => router.push("/avisos" as any)}
-          />
+          <Card title="Reservas pendentes" subtitle="Aulas aguardando decisao">
+            <Text style={styles.kpiValue}>{pendingReservations ?? 0}</Text>
+            <AppButton title="Revisar" onPress={() => router.push("/manager/pending-reservations" as any)} />
+          </Card>
+
+          <Card title="Devocionais publicados" subtitle="Total atual">
+            <Text style={styles.kpiValue}>{devotionalCount ?? 0}</Text>
+          </Card>
         </View>
-      </Card>
-    </ScrollView>
+
+        <Card title="Avisos recentes" subtitle="Resumo dos comunicados">
+          {avisosRecentes.length === 0 ? (
+            <Text style={styles.empty}>Nenhum aviso recente.</Text>
+          ) : (
+            avisosRecentes.map((aviso) => (
+              <View key={aviso.id} style={styles.avisoRow}>
+                <Text style={[styles.avisoTitle, { color: theme.colors.text }]} numberOfLines={1}>
+                  {aviso.titulo}
+                </Text>
+                <Text style={[styles.avisoMeta, { color: theme.colors.muted }]} numberOfLines={1}>
+                  {aviso.destino} • {aviso.status}
+                </Text>
+              </View>
+            ))
+          )}
+        </Card>
+      </ScrollView>
+    </AppBackground>
   );
 }
 
-function StatTile({ label, value }: { label: string; value: number }) {
-  return (
-    <View style={tileStyles.tile}>
-      <Text style={tileStyles.label}>{label}</Text>
-      <Text style={tileStyles.value}>{value}</Text>
-    </View>
-  );
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+    },
+    content: {
+      paddingHorizontal: 16,
+      paddingVertical: 24,
+      gap: 12,
+    },
+    center: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.colors.background,
+    },
+    loadingText: {
+      color: theme.colors.text,
+      marginTop: 12,
+    },
+    title: {
+      fontSize: 20,
+      fontWeight: "700",
+      color: theme.colors.text,
+    },
+    grid: {
+      gap: 12,
+      marginTop: 8,
+    },
+    kpiValue: {
+      fontSize: 32,
+      fontWeight: "800",
+      color: theme.colors.text,
+      marginVertical: 8,
+    },
+    empty: {
+      color: theme.colors.muted || theme.colors.text,
+      fontSize: 13,
+    },
+    avisoRow: {
+      paddingVertical: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border || theme.colors.card,
+    },
+    avisoTitle: {
+      fontSize: 14,
+      fontWeight: "700",
+    },
+    avisoMeta: {
+      fontSize: 12,
+    },
+  });
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { padding: 16, paddingBottom: 32, gap: 12 },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#020617" },
-  loadingText: { color: "#e5e7eb", marginTop: 8 },
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  row: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  actions: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginTop: 12,
-  },
-});
-
-const tileStyles = StyleSheet.create({
-  tile: {
-    borderWidth: 1,
-    borderColor: "#1f2937",
-    borderRadius: 12,
-    padding: 12,
-    backgroundColor: "#0b1224",
-    minWidth: 120,
-    flexGrow: 1,
-  },
-  label: {
-    color: "#94a3b8",
-    fontSize: 12,
-  },
-  value: {
-    color: "#e5e7eb",
-    fontSize: 18,
-    fontWeight: "700",
-  },
-});

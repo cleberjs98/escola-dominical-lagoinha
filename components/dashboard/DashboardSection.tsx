@@ -19,13 +19,22 @@ export function DashboardSection({
   children,
   style,
 }: Props) {
-  const { themeSettings } = useTheme();
-  const border = themeSettings?.cor_secundaria || "#1f2937";
-  const text = themeSettings?.cor_texto || "#e5e7eb";
-  const muted = themeSettings?.cor_texto_secundario || "#9ca3af";
+  const { theme } = useTheme();
+  const border = theme.colors.border || theme.colors.card;
+  const text = theme.colors.text;
+  const muted = theme.colors.muted || theme.colors.textSecondary || theme.colors.text;
 
   return (
-    <View style={[styles.container, { borderColor: border }, style]}>
+    <View
+      style={[
+        styles.container,
+        {
+          borderColor: withAlpha(border, 0.35),
+          backgroundColor: withAlpha(theme.colors.card, 0.7),
+        },
+        style,
+      ]}
+    >
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <Text style={[styles.title, { color: text }]}>{title}</Text>
@@ -48,7 +57,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 12,
     gap: 8,
-    backgroundColor: "#0b1224",
   },
   header: {
     flexDirection: "row",
@@ -69,7 +77,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "#1f2937",
   },
   actionText: {
     fontSize: 12,
@@ -79,3 +86,13 @@ const styles = StyleSheet.create({
     gap: 10,
   },
 });
+
+function withAlpha(color: string, alpha: number): string {
+  if (color.startsWith("#") && (color.length === 7 || color.length === 9)) {
+    const r = parseInt(color.slice(1, 3), 16);
+    const g = parseInt(color.slice(3, 5), 16);
+    const b = parseInt(color.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  return color;
+}

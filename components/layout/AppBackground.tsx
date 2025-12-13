@@ -1,4 +1,4 @@
-import React, { ReactNode } from "react";
+﻿import React, { ReactNode } from "react";
 import { Image, StyleSheet, View } from "react-native";
 import { useTheme } from "../../hooks/useTheme";
 
@@ -8,11 +8,12 @@ type Props = {
 
 export function AppBackground({ children }: Props) {
   const { theme } = useTheme();
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Image
         source={require("../../assets/brand/lagoinha-badge-watermark.png")}
-        style={styles.watermark}
+        style={styles.image}
         resizeMode="contain"
         pointerEvents="none"
       />
@@ -22,14 +23,21 @@ export function AppBackground({ children }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  watermark: {
-    position: "absolute",
-    opacity: 0.05,
-    width: "90%",
-    height: "90%",
-    alignSelf: "center",
-    top: "5%",
+  container: {
+    flex: 1,
+    position: "relative",
   },
-  content: { flex: 1 },
+  image: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.12,
+    alignSelf: "center",
+    width: "100%",
+    height: "100%",
+  },
+  content: {
+    flex: 1,
+    backgroundColor: "transparent",
+  },
 });
+
+

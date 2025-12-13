@@ -12,10 +12,10 @@ type Props = {
 };
 
 export function StatusFilter({ value, onChange, options, label }: Props) {
-  const { themeSettings } = useTheme();
-  const text = themeSettings?.cor_texto || "#e5e7eb";
-  const muted = themeSettings?.cor_texto_secundario || "#94a3b8";
-  const primary = themeSettings?.cor_primaria || "#22c55e";
+  const { theme } = useTheme();
+  const text = theme.colors.text;
+  const muted = theme.colors.muted || theme.colors.textSecondary || theme.colors.text;
+  const primary = theme.colors.primary;
 
   return (
     <View style={styles.container}>
@@ -24,17 +24,17 @@ export function StatusFilter({ value, onChange, options, label }: Props) {
         {options.map((opt) => {
           const active = opt.value === value;
           return (
-            <Pressable
-              key={opt.value}
-              style={[
-                styles.chip,
-                {
-                  borderColor: active ? primary : "#1f2937",
-                  backgroundColor: active ? `${primary}22` : "transparent",
-                },
-              ]}
-              onPress={() => onChange(opt.value)}
-            >
+          <Pressable
+            key={opt.value}
+            style={[
+              styles.chip,
+              {
+                borderColor: active ? primary : theme.colors.border || primary,
+                backgroundColor: active ? `${primary}22` : theme.colors.card,
+              },
+            ]}
+            onPress={() => onChange(opt.value)}
+          >
               <Text style={{ color: active ? text : muted, fontWeight: active ? "700" : "500" }}>
                 {opt.label}
               </Text>

@@ -1,4 +1,4 @@
-// app/professor/lesson-complement/[lessonId].tsx
+﻿// app/professor/lesson-complement/[lessonId].tsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
@@ -8,12 +8,16 @@ import {
   Alert,
   ScrollView,
   TextInput,
+  ImageBackground,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { useAuth } from "../../../hooks/useAuth";
 import { getLessonById, updateLessonComplement } from "../../../lib/lessons";
 import type { Lesson } from "../../../types/lesson";
+import { AppBackground } from "../../../components/layout/AppBackground";
+import { useTheme } from "../../../hooks/useTheme";
+import type { AppTheme } from "../../../theme/tokens";
 
 const AUTOSAVE_DELAY = 3000; // ms
 
@@ -21,6 +25,8 @@ export default function LessonComplementScreen() {
   const router = useRouter();
   const { lessonId } = useLocalSearchParams<{ lessonId: string }>();
   const { firebaseUser, user, isInitializing } = useAuth();
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -34,7 +40,6 @@ export default function LessonComplementScreen() {
     [user?.papel, user?.status]
   );
 
-  // Guard de acesso e carregamento da aula
   useEffect(() => {
     if (isInitializing) return;
 
@@ -45,7 +50,7 @@ export default function LessonComplementScreen() {
 
     if (!isProfessorApproved) {
       Alert.alert(
-        "Sem permissão",
+        "Sem permissao",
         "Apenas professor aprovado pode editar complemento de aula."
       );
       router.replace("/" as any);
@@ -56,16 +61,15 @@ export default function LessonComplementScreen() {
       try {
         const data = await getLessonById(lessonId);
         if (!data) {
-          Alert.alert("Erro", "Aula não encontrada.");
+          Alert.alert("Erro", "Aula nao encontrada.");
           router.replace("/" as any);
           return;
         }
 
-        // Verificar se o professor reservado é o usuário logado
         if (data.professor_reservado_id !== firebaseUser.uid) {
           Alert.alert(
-            "Sem permissão",
-            "Você não é o professor reservado desta aula."
+            "Sem permissao",
+            "Voce nao eh o professor reservado desta aula."
           );
           router.replace("/" as any);
           return;
@@ -75,7 +79,7 @@ export default function LessonComplementScreen() {
         setComplemento(data.complemento_professor ?? "");
       } catch (error) {
         console.error("Erro ao carregar aula:", error);
-        Alert.alert("Erro", "Não foi possível carregar a aula.");
+        Alert.alert("Erro", "Nao foi possivel carregar a aula.");
       } finally {
         setIsLoading(false);
       }
@@ -84,11 +88,9 @@ export default function LessonComplementScreen() {
     loadLesson();
   }, [firebaseUser, isInitializing, isProfessorApproved, lessonId, router]);
 
-  // Auto-save com debounce
   useEffect(() => {
     if (!lesson) return;
 
-    // limpar timer anterior
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
@@ -100,7 +102,7 @@ export default function LessonComplementScreen() {
         setLastSavedAt(new Date());
       } catch (error) {
         console.error("Erro ao salvar complemento:", error);
-        Alert.alert("Erro", "Não foi possível salvar o complemento.");
+        Alert.alert("Erro", "Nao foi possivel salvar o complemento.");
       } finally {
         setIsSaving(false);
       }
@@ -115,128 +117,148 @@ export default function LessonComplementScreen() {
 
   if (isInitializing || isLoading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#facc15" />
-        <Text style={styles.loadingText}>Carregando aula...</Text>
-      </View>
+      <AppBackground>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={theme.colors.textPrimary} />
+          <Text style={styles.loadingText}>Carregando aula...</Text>
+        </View>
+      </AppBackground>
     );
   }
 
   if (!lesson) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.loadingText}>Aula não encontrada.</Text>
-      </View>
+      <AppBackground>
+        <View style={styles.center}>
+          <Text style={styles.loadingText}>Aula nao encontrada.</Text>
+        </View>
+      </AppBackground>
     );
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Complemento do Professor</Text>
-      <Text style={styles.subtitle}>
-        Edite o complemento desta aula. A descrição base é apenas leitura.
-      </Text>
+    <AppBackground>
+      <ImageBackground
+        source={require("../../../assets/brand/lagoinha-badge-watermark.png")}
+        style={styles.bgImage}
+        imageStyle={styles.bgImageStyle}
+      >
+        <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+          <Text style={styles.title}>Complemento do Professor</Text>
+          <Text style={styles.subtitle}>
+            Edite o complemento desta aula. A descricao base eh apenas leitura.
+          </Text>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>{lesson.titulo}</Text>
-        <Text style={styles.cardLine}>Data da aula: {String(lesson.data_aula)}</Text>
-        <Text style={styles.cardLine}>Status: {lesson.status}</Text>
-      </View>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>{lesson.titulo}</Text>
+            <Text style={styles.cardLine}>Data da aula: {String(lesson.data_aula)}</Text>
+            <Text style={styles.cardLine}>Status: {lesson.status}</Text>
+          </View>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Descrição base (leitura)</Text>
-        <Text style={styles.baseText}>{lesson.descricao_base}</Text>
-      </View>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Descricao base (leitura)</Text>
+            <Text style={styles.baseText}>{lesson.descricao_base}</Text>
+          </View>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Complemento do professor</Text>
-        <TextInput
-          style={styles.textarea}
-          value={complemento}
-          onChangeText={setComplemento}
-          placeholder="Escreva aqui suas observações, anotações ou complementos para esta aula..."
-          placeholderTextColor="#6b7280"
-          multiline
-          textAlignVertical="top"
-        />
-        <Text style={styles.saveInfo}>
-          {isSaving
-            ? "Salvando..."
-            : lastSavedAt
-            ? `Salvo às ${lastSavedAt.toLocaleTimeString()}`
-            : "Salvo"}
-        </Text>
-      </View>
-    </ScrollView>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Complemento do professor</Text>
+            <TextInput
+              style={styles.textarea}
+              value={complemento}
+              onChangeText={setComplemento}
+              placeholder="Escreva aqui suas observacoes, anotacoes ou complementos para esta aula..."
+              placeholderTextColor={theme.colors.textMuted}
+              multiline
+              textAlignVertical="top"
+            />
+            <Text style={styles.saveInfo}>
+              {isSaving
+                ? "Salvando..."
+                : lastSavedAt
+                ? `Salvo às ${lastSavedAt.toLocaleTimeString()}`
+                : "Salvo"}
+            </Text>
+          </View>
+        </ScrollView>
+      </ImageBackground>
+    </AppBackground>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#020617",
-  },
-  content: {
-    paddingHorizontal: 16,
-    paddingTop: 56,
-    paddingBottom: 24,
-    gap: 12,
-  },
-  center: {
-    flex: 1,
-    backgroundColor: "#020617",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  loadingText: {
-    color: "#e5e7eb",
-    marginTop: 12,
-  },
-  title: {
-    color: "#e5e7eb",
-    fontSize: 22,
-    fontWeight: "700",
-  },
-  subtitle: {
-    color: "#9ca3af",
-    fontSize: 13,
-    marginBottom: 4,
-  },
-  card: {
-    borderWidth: 1,
-    borderColor: "#1f2937",
-    borderRadius: 12,
-    padding: 12,
-    backgroundColor: "#0b1224",
-    gap: 6,
-  },
-  cardTitle: {
-    color: "#e5e7eb",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  cardLine: {
-    color: "#cbd5e1",
-    fontSize: 13,
-  },
-  baseText: {
-    color: "#cbd5e1",
-    fontSize: 13,
-    marginTop: 4,
-  },
-  textarea: {
-    minHeight: 200,
-    borderWidth: 1,
-    borderColor: "#334155",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: "#e5e7eb",
-    backgroundColor: "#020617",
-  },
-  saveInfo: {
-    color: "#9ca3af",
-    fontSize: 12,
-    marginTop: 6,
-  },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: "transparent",
+    },
+    content: {
+      paddingHorizontal: 16,
+      paddingTop: 56,
+      paddingBottom: 24,
+      gap: 12,
+    },
+    center: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    loadingText: {
+      color: theme.colors.textSecondary,
+      marginTop: 12,
+    },
+    title: {
+      color: theme.colors.textPrimary,
+      fontSize: 22,
+      fontWeight: "700",
+    },
+    subtitle: {
+      color: theme.colors.textSecondary,
+      fontSize: 13,
+      marginBottom: 4,
+    },
+    card: {
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: 12,
+      padding: 12,
+      backgroundColor: theme.colors.card,
+      gap: 6,
+    },
+    cardTitle: {
+      color: theme.colors.textPrimary,
+      fontSize: 16,
+      fontWeight: "700",
+    },
+    cardLine: {
+      color: theme.colors.textSecondary,
+      fontSize: 13,
+    },
+    baseText: {
+      color: theme.colors.textSecondary,
+      fontSize: 13,
+      marginTop: 4,
+    },
+    textarea: {
+      minHeight: 200,
+      borderWidth: 1,
+      borderColor: theme.colors.inputBorder,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      color: theme.colors.textPrimary,
+      backgroundColor: theme.colors.inputBg,
+    },
+    saveInfo: {
+      color: theme.colors.textMuted,
+      fontSize: 12,
+      marginTop: 6,
+    },
+    bgImage: {
+      flex: 1,
+    },
+    bgImageStyle: {
+      opacity: 0.05,
+      resizeMode: "cover",
+    },
+  });
+}

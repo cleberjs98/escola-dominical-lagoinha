@@ -22,10 +22,10 @@ export function RichTextEditor({
   minHeight = 140,
   style,
 }: Props) {
-  const { themeSettings } = useTheme();
-  const textColor = themeSettings?.cor_texto || "#e5e7eb";
-  const border = themeSettings?.cor_secundaria || "#1f2937";
-  const bg = themeSettings?.cor_fundo || "#0b1224";
+  const { theme } = useTheme();
+  const textColor = theme.colors.text;
+  const border = theme.colors.border || theme.colors.card;
+  const bg = theme.colors.card;
 
   function append(tag: string) {
     onChange(`${value}${value ? "\n" : ""}${tag}`);
@@ -58,7 +58,7 @@ export function RichTextEditor({
         value={value}
         onChangeText={onChange}
         placeholder={placeholder}
-        placeholderTextColor="#64748b"
+        placeholderTextColor={theme.colors.inputPlaceholder || theme.colors.muted}
         style={[
           styles.input,
           {

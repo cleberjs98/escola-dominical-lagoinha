@@ -1,4 +1,4 @@
-// app/professor/available-lessons.tsx - reservas usando componentes reutilizÃ¡veis
+// app/professor/available-lessons.tsx - reservas usando componentes reutilizáveis
 import { useEffect, useMemo, useState } from "react";
 import {
   View,
@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
+  ImageBackground,
 } from "react-native";
 import { useRouter } from "expo-router";
 import {
@@ -27,13 +28,16 @@ import { AppButton } from "../../components/ui/AppButton";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { AulaCard } from "../../components/cards/AulaCard";
 import { useTheme } from "../../hooks/useTheme";
+import { AppBackground } from "../../components/layout/AppBackground";
+import type { AppTheme } from "../../theme/tokens";
 
 type LessonWithId = Lesson;
 
 export default function AvailableLessonsScreen() {
   const router = useRouter();
   const { firebaseUser, user, isInitializing } = useAuth();
-  const { themeSettings } = useTheme();
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   const [lessons, setLessons] = useState<LessonWithId[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -52,12 +56,11 @@ export default function AvailableLessonsScreen() {
       return;
     }
     if (!isProfessorApproved) {
-      Alert.alert("Sem permissÃ£o", "Apenas professor aprovado pode reservar aulas.");
+      Alert.alert("Sem permissão", "Apenas professor aprovado pode reservar aulas.");
       router.replace("/" as any);
     }
   }, [firebaseUser, isInitializing, isProfessorApproved, router]);
 
-  // Carregar aulas disponÃ­veis
   useEffect(() => {
     if (!firebaseUser || !isProfessorApproved) return;
 
@@ -76,8 +79,8 @@ export default function AvailableLessonsScreen() {
         setLessons(list);
       } catch (error) {
         const err = error as FirestoreError;
-        console.error("Erro ao carregar aulas disponÃ­veis:", err);
-        Alert.alert("Erro", "NÃ£o foi possÃ­vel carregar as aulas disponÃ­veis.");
+        console.error("Erro ao carregar aulas disponíveis:", err);
+        Alert.alert("Erro", "Não foi possível carregar as aulas disponíveis.");
       } finally {
         setIsLoading(false);
       }
@@ -86,7 +89,6 @@ export default function AvailableLessonsScreen() {
     load();
   }, [firebaseUser, isProfessorApproved]);
 
-  // Carregar reservas existentes do professor (pendente ou aprovada) para evitar duplicidade
   useEffect(() => {
     if (!firebaseUser || !isProfessorApproved) return;
 
@@ -127,14 +129,14 @@ export default function AvailableLessonsScreen() {
 
   async function handleRequest(lessonId: string) {
     if (!firebaseUser) {
-      Alert.alert("Erro", "UsuÃ¡rio nÃ£o autenticado.");
+      Alert.alert("Erro", "Usuário não autenticado.");
       return;
     }
 
     if (lockedLessons.has(lessonId)) {
       Alert.alert(
-        "AtenÃ§Ã£o",
-        "VocÃª jÃ¡ tem uma reserva pendente ou aprovada para esta aula."
+        "Atenção",
+        "Você já tem uma reserva pendente ou aprovada para esta aula."
       );
       return;
     }
@@ -145,7 +147,7 @@ export default function AvailableLessonsScreen() {
         lessonId,
         professorId: firebaseUser.uid,
       });
-      Alert.alert("Sucesso", "Reserva solicitada com sucesso. Aguarde aprovaÃ§Ã£o.");
+      Alert.alert("Sucesso", "Reserva solicitada com sucesso. Aguarde aprovação.");
       setLockedLessons((prev) => new Set(prev).add(lessonId));
     } catch (error: any) {
       console.error("Erro ao solicitar reserva:", error);
@@ -161,84 +163,101 @@ export default function AvailableLessonsScreen() {
 
   if (isInitializing || !isProfessorApproved) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#facc15" />
-        <Text style={styles.loadingText}>Carregando...</Text>
-      </View>
+      <AppBackground>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={theme.colors.textPrimary} />
+          <Text style={styles.loadingText}>Carregando...</Text>
+        </View>
+      </AppBackground>
     );
   }
 
   return (
-    <ScrollView
-      style={[
-        styles.container,
-        { backgroundColor: themeSettings?.cor_fundo || "#020617" },
-      ]}
-      contentContainerStyle={styles.content}
-    >
-      <Card
-        title="Aulas disponÃ­veis para reserva"
-        subtitle="Escolha uma aula e solicite a reserva. Aguarde aprovaÃ§Ã£o do coordenador/admin."
-      />
+    <AppBackground>
+      <ImageBackground
+        source={require("../../assets/brand/lagoinha-badge-watermark.png")}
+        style={styles.bgImage}
+        imageStyle={styles.bgImageStyle}
+      >
+        <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+          <Card
+            title="Aulas disponíveis para reserva"
+            subtitle="Escolha uma aula e solicite a reserva. Aguarde aprovação do coordenador/admin."
+          />
 
-      {isLoading ? (
-        <View style={styles.centerInner}>
-          <ActivityIndicator size="large" color="#facc15" />
-          <Text style={styles.loadingText}>Buscando aulas disponÃ­veis...</Text>
-        </View>
-      ) : lessons.length === 0 ? (
-        <EmptyState title="Nenhuma aula disponÃ­vel para reserva no momento." />
-      ) : (
-        lessons.map((lesson) => {
-          const locked = lockedLessons.has(lesson.id);
-          const requesting = requestingIds.has(lesson.id);
-          return (
-            <Card
-              key={lesson.id}
-              footer={
-                <AppButton
-                  title={
-                    locked ? "SolicitaÃ§Ã£o enviada" : requesting ? "Enviando..." : "Solicitar reserva"
+          {isLoading ? (
+            <View style={styles.centerInner}>
+              <ActivityIndicator size="large" color={theme.colors.textPrimary} />
+              <Text style={styles.loadingText}>Buscando aulas disponíveis...</Text>
+            </View>
+          ) : lessons.length === 0 ? (
+            <EmptyState title="Nenhuma aula disponível para reserva no momento." />
+          ) : (
+            lessons.map((lesson) => {
+              const locked = lockedLessons.has(lesson.id);
+              const requesting = requestingIds.has(lesson.id);
+              return (
+                <Card
+                  key={lesson.id}
+                  footer={
+                    <AppButton
+                      title={
+                        locked
+                          ? "Solicitação enviada"
+                          : requesting
+                          ? "Enviando..."
+                          : "Solicitar reserva"
+                      }
+                      variant="primary"
+                      fullWidth
+                      disabled={locked || requesting}
+                      loading={requesting}
+                      onPress={() => handleRequest(lesson.id)}
+                    />
                   }
-                  variant="primary"
-                  fullWidth
-                  disabled={locked || requesting}
-                  loading={requesting}
-                  onPress={() => handleRequest(lesson.id)}
-                />
-              }
-            >
-              <AulaCard lesson={lesson} showStatus />
-            </Card>
-          );
-        })
-      )}
-    </ScrollView>
+                >
+                  <AulaCard lesson={lesson} showStatus />
+                </Card>
+              );
+            })
+          )}
+        </ScrollView>
+      </ImageBackground>
+    </AppBackground>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: 16,
-    paddingTop: 56,
-    paddingBottom: 24,
-    gap: 12,
-  },
-  center: {
-    flex: 1,
-    backgroundColor: "#020617",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  centerInner: {
-    alignItems: "center",
-    marginTop: 12,
-  },
-  loadingText: {
-    color: "#e5e7eb",
-    marginTop: 12,
-  },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: "transparent",
+    },
+    content: {
+      paddingHorizontal: 16,
+      paddingTop: 56,
+      paddingBottom: 24,
+      gap: 12,
+    },
+    center: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    centerInner: {
+      alignItems: "center",
+      marginTop: 12,
+    },
+    loadingText: {
+      color: theme.colors.textSecondary,
+      marginTop: 12,
+    },
+    bgImage: {
+      flex: 1,
+    },
+    bgImageStyle: {
+      opacity: 0.05,
+      resizeMode: "cover",
+    },
+  });
+}

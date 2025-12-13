@@ -21,13 +21,16 @@ import { doc, updateDoc } from "firebase/firestore";
 
 import { useAuth } from "../../hooks/useAuth";
 import { useTheme } from "../../hooks/useTheme";
+import type { AppTheme } from "../../types/theme";
 import { updateUserProfile } from "../../lib/users";
 import { firebaseAuth, firebaseDb, firebaseStorage } from "../../lib/firebase";
+import { AppBackground } from "../../components/layout/AppBackground";
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { firebaseUser, user, isInitializing } = useAuth();
-  const { themeSettings } = useTheme();
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
@@ -67,7 +70,7 @@ export default function ProfileScreen() {
   if (isInitializing) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#facc15" />
+        <ActivityIndicator size="large" color={theme.colors.accent} />
         <Text style={styles.loadingText}>Carregando perfil...</Text>
       </View>
     );
@@ -145,10 +148,7 @@ export default function ProfileScreen() {
       const uri = asset.uri;
       const response = await fetch(uri);
       const blob = await response.blob();
-      const extension =
-        (asset.fileName?.split(".").pop() ||
-          asset.uri.split(".").pop() ||
-          "jpg").toLowerCase();
+      const extension = (asset.fileName?.split(".").pop() || asset.uri.split(".").pop() || "jpg").toLowerCase();
 
       const fileRef = ref(firebaseStorage, `avatars/${userAuth.uid}/profile.${extension}`);
       await uploadBytes(fileRef, blob);
@@ -205,151 +205,137 @@ export default function ProfileScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: themeSettings?.cor_fundo || "#020617" }]}
-      behavior={Platform.select({ ios: "padding", android: undefined })}
-    >
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>Meu perfil</Text>
-        <Text style={styles.subtitle}>
-          {isStudent
-            ? "Atualize seus dados básicos. Papel e status são definidos pela coordenação."
-            : "Atualize seus dados básicos."}
-        </Text>
-
-        <View style={styles.photoRow}>
-          <Pressable onPress={openPhotoModal}>
-            {photoUrl ? (
-              <Image source={{ uri: photoUrl }} style={styles.avatar} />
-            ) : (
-              <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                <Text style={styles.avatarText}>{avatarLetter}</Text>
-              </View>
-            )}
-          </Pressable>
-        </View>
-
-        <Text style={styles.label}>Nome</Text>
-        <Text style={styles.readonly}>{nome || "Sem nome"}</Text>
-
-        <Text style={styles.label}>E-mail (somente leitura)</Text>
-        <Text style={styles.readonly}>{firebaseUser.email || "Sem e-mail"}</Text>
-
-        <Text style={styles.label}>Telefone</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Telefone"
-          placeholderTextColor="#6b7280"
-          keyboardType="phone-pad"
-          value={telefone}
-          onChangeText={setTelefone}
-        />
-
-        <Text style={styles.label}>Data de nascimento</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="aaaa-mm-dd"
-          placeholderTextColor="#6b7280"
-          value={dataNascimento}
-          onChangeText={setDataNascimento}
-          editable={false}
-        />
-
-        <Text style={styles.label}>Papel</Text>
-        <Text style={styles.readonly}>{user.papel}</Text>
-        <Text style={styles.label}>Status</Text>
-        <Text style={styles.readonly}>{user.status}</Text>
-
-        <View style={styles.actions}>
-          <View />
-          <PressableButton title={isSaving ? "Salvando..." : "Salvar"} disabled={isSaving} onPress={handleSave} />
-        </View>
-
-        <View style={styles.actions}>
-          <PressableButton
-            title="Alterar senha"
-            disabled={uploadingPhoto}
-            onPress={() => router.push("/auth/change-password" as any)}
-          />
-        </View>
-
-        {message ? <Text style={styles.successText}>{message}</Text> : null}
-        {photoError ? <Text style={styles.photoError}>{photoError}</Text> : null}
-      </ScrollView>
-
-      <Modal
-        visible={photoModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={closePhotoModal}
+    <AppBackground>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.select({ ios: "padding", android: undefined })}
       >
-        <TouchableWithoutFeedback onPress={closePhotoModal}>
-          <View style={styles.modalBackdrop}>
-            <TouchableWithoutFeedback>
-              <View style={styles.modalContent}>
-                {photoUrl ? (
-                  <>
-                    <Image source={{ uri: photoUrl }} style={styles.modalImage} />
-                    <Pressable
-                      style={[
-                        styles.modalButton,
-                        styles.modalButtonPrimary,
-                        photoActionLoading && styles.saveButtonDisabled,
-                      ]}
-                      onPress={pickAndUploadPhoto}
-                      disabled={photoActionLoading}
-                    >
-                      {photoActionLoading ? (
-                        <ActivityIndicator color="#0f172a" />
-                      ) : (
-                        <Text style={styles.modalButtonTextDark}>Trocar foto</Text>
-                      )}
-                    </Pressable>
-                    <Pressable
-                      style={[
-                        styles.modalButton,
-                        styles.modalButtonDanger,
-                        photoActionLoading && styles.saveButtonDisabled,
-                      ]}
-                      onPress={handleRemovePhoto}
-                      disabled={photoActionLoading}
-                    >
-                      {photoActionLoading ? (
-                        <ActivityIndicator color="#f9fafb" />
-                      ) : (
-                        <Text style={styles.modalButtonTextLight}>Remover foto</Text>
-                      )}
-                    </Pressable>
-                  </>
-                ) : (
-                  <>
-                    <View style={styles.modalPlaceholderCircle}>
-                      <Text style={styles.modalPlaceholderInitial}>{avatarLetter}</Text>
-                    </View>
-                    <Pressable
-                      style={[
-                        styles.modalButton,
-                        styles.modalButtonPrimary,
-                        photoActionLoading && styles.saveButtonDisabled,
-                      ]}
-                      onPress={pickAndUploadPhoto}
-                      disabled={photoActionLoading}
-                    >
-                      {photoActionLoading ? (
-                        <ActivityIndicator color="#0f172a" />
-                      ) : (
-                        <Text style={styles.modalButtonTextDark}>Enviar foto</Text>
-                      )}
-                    </Pressable>
-                  </>
-                )}
-                {photoError ? <Text style={styles.photoErrorText}>{photoError}</Text> : null}
-              </View>
-            </TouchableWithoutFeedback>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <Text style={styles.title}>Meu perfil</Text>
+          <Text style={styles.subtitle}>
+            {isStudent
+              ? "Atualize seus dados básicos. Papel e status são definidos pela coordenação."
+              : "Atualize seus dados básicos."}
+          </Text>
+
+          <View style={styles.photoRow}>
+            <Pressable onPress={openPhotoModal}>
+              {photoUrl ? (
+                <Image source={{ uri: photoUrl }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                  <Text style={styles.avatarText}>{avatarLetter}</Text>
+                </View>
+              )}
+            </Pressable>
           </View>
-        </TouchableWithoutFeedback>
-      </Modal>
-    </KeyboardAvoidingView>
+
+          <Text style={styles.label}>Nome</Text>
+          <Text style={styles.readonly}>{nome || "Sem nome"}</Text>
+
+          <Text style={styles.label}>E-mail (somente leitura)</Text>
+          <Text style={styles.readonly}>{firebaseUser.email || "Sem e-mail"}</Text>
+
+          <Text style={styles.label}>Telefone</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Telefone"
+            placeholderTextColor={theme.colors.muted}
+            keyboardType="phone-pad"
+            value={telefone}
+            onChangeText={setTelefone}
+          />
+
+          <Text style={styles.label}>Data de nascimento</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="aaaa-mm-dd"
+            placeholderTextColor={theme.colors.muted}
+            value={dataNascimento}
+            onChangeText={setDataNascimento}
+            editable={false}
+          />
+
+          <Text style={styles.label}>Papel</Text>
+          <Text style={styles.readonly}>{user.papel}</Text>
+          <Text style={styles.label}>Status</Text>
+          <Text style={styles.readonly}>{user.status}</Text>
+
+          <View style={styles.actions}>
+            <View />
+            <PressableButton title={isSaving ? "Salvando..." : "Salvar"} disabled={isSaving} onPress={handleSave} styles={styles} />
+          </View>
+
+          <View style={styles.actions}>
+            <PressableButton
+              title="Alterar senha"
+              disabled={uploadingPhoto}
+              onPress={() => router.push("/auth/change-password" as any)}
+              styles={styles}
+            />
+          </View>
+
+          {message ? <Text style={styles.successText}>{message}</Text> : null}
+          {photoError ? <Text style={styles.photoError}>{photoError}</Text> : null}
+        </ScrollView>
+
+        <Modal visible={photoModalVisible} transparent animationType="fade" onRequestClose={closePhotoModal}>
+          <TouchableWithoutFeedback onPress={closePhotoModal}>
+            <View style={styles.modalBackdrop}>
+              <TouchableWithoutFeedback>
+                <View style={styles.modalContent}>
+                  {photoUrl ? (
+                    <>
+                      <Image source={{ uri: photoUrl }} style={styles.modalImage} />
+                      <Pressable
+                        style={[styles.modalButton, styles.modalButtonPrimary, photoActionLoading && styles.saveButtonDisabled]}
+                        onPress={pickAndUploadPhoto}
+                        disabled={photoActionLoading}
+                      >
+                        {photoActionLoading ? (
+                          <ActivityIndicator color={theme.colors.background} />
+                        ) : (
+                          <Text style={styles.modalButtonTextDark}>Trocar foto</Text>
+                        )}
+                      </Pressable>
+                      <Pressable
+                        style={[styles.modalButton, styles.modalButtonDanger, photoActionLoading && styles.saveButtonDisabled]}
+                        onPress={handleRemovePhoto}
+                        disabled={photoActionLoading}
+                      >
+                        {photoActionLoading ? (
+                          <ActivityIndicator color={theme.colors.accent} />
+                        ) : (
+                          <Text style={styles.modalButtonTextLight}>Remover foto</Text>
+                        )}
+                      </Pressable>
+                    </>
+                  ) : (
+                    <>
+                      <View style={styles.modalPlaceholderCircle}>
+                        <Text style={styles.modalPlaceholderInitial}>{avatarLetter}</Text>
+                      </View>
+                      <Pressable
+                        style={[styles.modalButton, styles.modalButtonPrimary, photoActionLoading && styles.saveButtonDisabled]}
+                        onPress={pickAndUploadPhoto}
+                        disabled={photoActionLoading}
+                      >
+                        {photoActionLoading ? (
+                          <ActivityIndicator color={theme.colors.background} />
+                        ) : (
+                          <Text style={styles.modalButtonTextDark}>Enviar foto</Text>
+                        )}
+                      </Pressable>
+                    </>
+                  )}
+                  {photoError ? <Text style={styles.photoErrorText}>{photoError}</Text> : null}
+                </View>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
+      </KeyboardAvoidingView>
+    </AppBackground>
   );
 }
 
@@ -357,152 +343,159 @@ function PressableButton({
   title,
   onPress,
   disabled,
+  styles,
 }: {
   title: string;
   onPress: () => void;
   disabled?: boolean;
+  styles: ReturnType<typeof createStyles>;
 }) {
   return (
-    <Pressable
-      style={[styles.saveButton, disabled && styles.saveButtonDisabled]}
-      onPress={disabled ? undefined : onPress}
-      disabled={disabled}
-    >
+    <Pressable style={[styles.saveButton, disabled && styles.saveButtonDisabled]} onPress={disabled ? undefined : onPress} disabled={disabled}>
       <Text style={styles.saveButtonText}>{title}</Text>
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { paddingHorizontal: 16, paddingTop: 56, paddingBottom: 24, gap: 12 },
-  center: {
-    flex: 1,
-    backgroundColor: "#020617",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 16,
-  },
-  loadingText: { color: "#e5e7eb", marginTop: 12 },
-  title: { color: "#e5e7eb", fontSize: 22, fontWeight: "700" },
-  subtitle: { color: "#94a3b8", fontSize: 14, marginBottom: 8 },
-  label: { color: "#cbd5e1", fontSize: 13, marginTop: 8 },
-  input: {
-    borderWidth: 1,
-    borderColor: "#1f2937",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: "#e5e7eb",
-    backgroundColor: "#0b1224",
-  },
-  readonly: { color: "#94a3b8", paddingVertical: 6 },
-  actions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    marginTop: 16,
-  },
-  saveButton: {
-    backgroundColor: "#facc15",
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-  },
-  saveButtonDisabled: {
-    opacity: 0.6,
-  },
-  saveButtonText: {
-    color: "#0f172a",
-    fontWeight: "700",
-    textAlign: "center",
-  },
-  photoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 12,
-  },
-  avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: "#111827",
-  },
-  avatarPlaceholder: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarText: {
-    color: "#e5e7eb",
-    fontSize: 22,
-    fontWeight: "700",
-  },
-  successText: {
-    color: "#22c55e",
-    marginTop: 8,
-  },
-  photoError: {
-    color: "#f97316",
-    marginTop: 4,
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 24,
-  },
-  modalContent: {
-    width: "100%",
-    maxWidth: 400,
-    alignItems: "center",
-  },
-  modalImage: {
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    marginBottom: 24,
-  },
-  modalPlaceholderCircle: {
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 2,
-    borderColor: "#e5e7eb",
-    marginBottom: 24,
-  },
-  modalPlaceholderInitial: {
-    fontSize: 64,
-    color: "#e5e7eb",
-    fontWeight: "700",
-  },
-  modalButton: {
-    width: "100%",
-    borderRadius: 999,
-    paddingVertical: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 8,
-  },
-  modalButtonPrimary: {
-    backgroundColor: "#facc15",
-  },
-  modalButtonDanger: {
-    backgroundColor: "#ef4444",
-  },
-  modalButtonTextDark: {
-    color: "#0f172a",
-    fontWeight: "600",
-  },
-  modalButtonTextLight: {
-    color: "#f9fafb",
-    fontWeight: "600",
-  },
-  photoErrorText: {
-    color: "#f97316",
-    marginTop: 8,
-    textAlign: "center",
-  },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    container: { flex: 1 },
+    content: { paddingHorizontal: 16, paddingTop: 56, paddingBottom: 24, gap: 12 },
+    center: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 16,
+    },
+    loadingText: { color: theme.colors.text, marginTop: 12 },
+    title: { color: theme.colors.text, fontSize: 22, fontWeight: "700" },
+    subtitle: { color: theme.colors.muted, fontSize: 14, marginBottom: 8 },
+    label: { color: theme.colors.textSecondary || theme.colors.text, fontSize: 13, marginTop: 8 },
+    input: {
+      borderWidth: 1,
+      borderColor: theme.colors.border || theme.colors.card,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      color: theme.colors.text,
+      backgroundColor: theme.colors.inputBg || theme.colors.card,
+    },
+    readonly: { color: theme.colors.muted, paddingVertical: 6 },
+    actions: {
+      flexDirection: "row",
+      justifyContent: "flex-end",
+      marginTop: 16,
+    },
+    saveButton: {
+      backgroundColor: theme.colors.primary,
+      borderRadius: 12,
+      paddingVertical: 12,
+      paddingHorizontal: 18,
+    },
+    saveButtonDisabled: {
+      opacity: 0.6,
+    },
+    saveButtonText: {
+      color: theme.colors.accent,
+      fontWeight: "700",
+      textAlign: "center",
+    },
+    photoRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      marginBottom: 12,
+    },
+    avatar: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      backgroundColor: theme.colors.card,
+    },
+    avatarPlaceholder: {
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    avatarText: {
+      color: theme.colors.text,
+      fontSize: 22,
+      fontWeight: "700",
+    },
+    successText: {
+      color: theme.colors.text,
+      marginTop: 8,
+    },
+    photoError: {
+      color: theme.colors.status?.warningText || theme.colors.text,
+      marginTop: 4,
+    },
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.7)",
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: 24,
+    },
+    modalContent: {
+      width: "100%",
+      maxWidth: 400,
+      alignItems: "center",
+      backgroundColor: theme.colors.card,
+      padding: 16,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: theme.colors.border || theme.colors.card,
+    },
+    modalImage: {
+      width: 220,
+      height: 220,
+      borderRadius: 110,
+      marginBottom: 24,
+    },
+    modalPlaceholderCircle: {
+      width: 220,
+      height: 220,
+      borderRadius: 110,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 2,
+      borderColor: theme.colors.text,
+      marginBottom: 24,
+    },
+    modalPlaceholderInitial: {
+      fontSize: 64,
+      color: theme.colors.text,
+      fontWeight: "700",
+    },
+    modalButton: {
+      width: "100%",
+      borderRadius: 999,
+      paddingVertical: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 8,
+    },
+    modalButtonPrimary: {
+      backgroundColor: theme.colors.accent,
+      borderWidth: 1,
+      borderColor: theme.colors.border || theme.colors.card,
+    },
+    modalButtonDanger: {
+      backgroundColor: theme.colors.status?.dangerBg || theme.colors.primary,
+    },
+    modalButtonTextDark: {
+      color: theme.colors.background,
+      fontWeight: "600",
+    },
+    modalButtonTextLight: {
+      color: theme.colors.accent,
+      fontWeight: "600",
+    },
+    photoErrorText: {
+      color: theme.colors.status?.warningText || theme.colors.text,
+      marginTop: 8,
+      textAlign: "center",
+    },
+  });
+}

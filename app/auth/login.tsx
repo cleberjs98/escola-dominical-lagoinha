@@ -1,5 +1,5 @@
 // app/auth/login.tsx - tela de login com UI compartilhada
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { View, Text, StyleSheet, Alert } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { signInWithEmailAndPassword } from "firebase/auth";
@@ -10,12 +10,15 @@ import { Card } from "../../components/ui/Card";
 import { AppInput } from "../../components/ui/AppInput";
 import { AppButton } from "../../components/ui/AppButton";
 import { useTheme } from "../../hooks/useTheme";
+import { AppBackground } from "../../components/layout/AppBackground";
 import { isNonEmpty, isValidEmail } from "../../utils/validation";
 import { mapAuthErrorToMessage } from "../../lib/auth/errorMessages";
+import type { AppTheme } from "../../types/theme";
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { themeSettings } = useTheme();
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -97,70 +100,69 @@ export default function LoginScreen() {
   }
 
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: themeSettings?.cor_fundo || "#020617" },
-      ]}
-    >
-      <Card title="Entrar" subtitle="Use seu email e senha para acessar o app.">
-        <AppInput
-          label="Email"
-          value={email}
-          onChangeText={setEmail}
-          placeholder="email@exemplo.com"
-          keyboardType="email-address"
-        />
-        <AppInput
-          label="Senha"
-          value={password}
-          onChangeText={setPassword}
-          placeholder="******"
-          secureTextEntry
-        />
-        <AppButton
-          title={isSubmitting ? "Entrando..." : "Entrar"}
-          onPress={handleLogin}
-          loading={isSubmitting}
-        />
-        {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
-        <View style={styles.linksRow}>
-          <Link href="/auth/forgot-password" style={styles.linkText}>
-            Esqueci minha senha
-          </Link>
-        </View>
-        <View style={styles.linksRow}>
-          <Text style={styles.smallText}>Ainda nao tem conta? </Text>
-          <Link href="/auth/register" style={styles.linkText}>
-            Criar conta
-          </Link>
-        </View>
-      </Card>
-    </View>
+    <AppBackground>
+      <View style={styles.container}>
+        <Card title="Entrar" subtitle="Use seu email e senha para acessar o app.">
+          <AppInput
+            label="Email"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="email@exemplo.com"
+            keyboardType="email-address"
+          />
+          <AppInput
+            label="Senha"
+            value={password}
+            onChangeText={setPassword}
+            placeholder="******"
+            secureTextEntry
+          />
+          <AppButton
+            title={isSubmitting ? "Entrando..." : "Entrar"}
+            onPress={handleLogin}
+            loading={isSubmitting}
+          />
+          {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+          <View style={styles.linksRow}>
+            <Link href="/auth/forgot-password" style={styles.linkText}>
+              Esqueci minha senha
+            </Link>
+          </View>
+          <View style={styles.linksRow}>
+            <Text style={styles.smallText}>Ainda nao tem conta? </Text>
+            <Link href="/auth/register" style={styles.linkText}>
+              Criar conta
+            </Link>
+          </View>
+        </Card>
+      </View>
+    </AppBackground>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 96,
-  },
-  linksRow: {
-    flexDirection: "row",
-    marginTop: 12,
-    alignItems: "center",
-  },
-  linkText: {
-    color: "#38bdf8",
-    fontWeight: "500",
-  },
-  smallText: {
-    color: "#9ca3af",
-    fontSize: 13,
-  },
-  errorText: {
-    color: "#f97316",
-    marginTop: 8,
-  },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      paddingHorizontal: 24,
+      paddingTop: 96,
+    },
+    linksRow: {
+      flexDirection: "row",
+      marginTop: 12,
+      alignItems: "center",
+    },
+    linkText: {
+      color: theme.colors.accent,
+      fontWeight: "600",
+    },
+    smallText: {
+      color: theme.colors.muted || theme.colors.textSecondary || theme.colors.text,
+      fontSize: 13,
+    },
+    errorText: {
+      color: theme.colors.status?.dangerBg || theme.colors.primary,
+      marginTop: 8,
+    },
+  });
+}
