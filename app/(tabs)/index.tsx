@@ -1,4 +1,6 @@
-// app/(tabs)/index.tsx - Home principal
+export const options = {
+  title: "Home",
+};// app/(tabs)/index.tsx - Home principal
 import { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, ActivityIndicator, Pressable, ScrollView } from "react-native";
 import { useRouter } from "expo-router";

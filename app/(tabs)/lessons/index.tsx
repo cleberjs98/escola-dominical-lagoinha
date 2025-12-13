@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, Pressable, TouchableOpacity } from "react-native";
 import { useRouter } from "expo-router";
 import { Timestamp } from "firebase/firestore";
@@ -243,7 +243,7 @@ function AdminLessonsScreen({ uid }: { uid: string }) {
           ) : (
             filteredAdminLessons.map((lesson) => {
               const status = normalizeLessonStatus(lesson.status);
-              const subtitle = `${formatLessonDate(lesson)} • ${lessonStatusLabel(status)}`;
+              const subtitle = `${formatLessonDate(lesson)} - ${lessonStatusLabel(status)}`;
               return (
                 <LessonListItem
                   key={lesson.id}
@@ -267,7 +267,7 @@ function AdminLessonsScreen({ uid }: { uid: string }) {
 }
 
 // =========================
-// Tela aluno / público
+// Tela aluno / pÃºblico
 // =========================
 function StudentLessonsScreen() {
   const router = useRouter();

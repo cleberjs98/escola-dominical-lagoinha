@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+export const options = {
+  title: "Usuários",
+};import { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, ActivityIndicator, Alert, FlatList } from "react-native";
 import { useRouter } from "expo-router";
 import { collection, FirestoreError, onSnapshot, orderBy, query, where } from "firebase/firestore";

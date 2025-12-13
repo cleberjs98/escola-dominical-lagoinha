@@ -1,4 +1,6 @@
-// app/admin/users.tsx
+export const options = {
+  title: "Usuários",
+};// app/admin/users.tsx
 import { useEffect, useMemo, useState } from "react";
 import {
   View,

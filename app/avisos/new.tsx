@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+export const options = {
+  title: "Criar aviso",
+};import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 

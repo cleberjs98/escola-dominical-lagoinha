@@ -1,4 +1,6 @@
-// app/admin/theme/index.tsx
+export const options = {
+  title: "Tema",
+};// app/admin/theme/index.tsx
 import { useEffect, useMemo, useState } from "react";
 import {
   View,

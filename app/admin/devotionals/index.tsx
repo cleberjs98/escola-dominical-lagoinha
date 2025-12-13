@@ -1,4 +1,6 @@
-ï»¿// app/admin/devotionals/index.tsx - lista de devocionais (admin/coordenador) com tema bordÃ´
+export const options = {
+  title: "Admin",
+};// app/admin/devotionals/index.tsx - lista de devocionais (admin/coordenador) com tema bordô
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View, Pressable, TouchableOpacity } from "react-native";
 import { useRouter } from "expo-router";
@@ -44,7 +46,7 @@ export default function AdminDevotionalsScreen() {
     }
     const papel = user?.papel;
     if (papel !== "coordenador" && papel !== "administrador" && papel !== "admin") {
-      Alert.alert("Sem permissÃ£o", "Apenas coordenador/admin podem acessar os devocionais.");
+      Alert.alert("Sem permissão", "Apenas coordenador/admin podem acessar os devocionais.");
       router.replace("/(tabs)" as any);
       return;
     }
@@ -58,7 +60,7 @@ export default function AdminDevotionalsScreen() {
       setSections(data);
     } catch (error) {
       console.error("[Devocionais][Lista] Erro ao carregar devocionais:", error);
-      Alert.alert("Erro", "NÃ£o foi possÃ­vel carregar os devocionais.");
+      Alert.alert("Erro", "Não foi possível carregar os devocionais.");
     } finally {
       setLoading(false);
     }
@@ -133,14 +135,14 @@ export default function AdminDevotionalsScreen() {
     <AppBackground>
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         <View style={styles.header}>
-          <Text style={styles.title}>Devocionais - GestÃ£o</Text>
+          <Text style={styles.title}>Devocionais - Gestão</Text>
           <AppButton title="Criar devocional" variant="primary" fullWidth={false} onPress={() => router.push("/admin/devotionals/new" as any)} />
         </View>
 
         <View style={{ gap: 12 }}>
           <View style={styles.filtersRow}>
             {renderFilterChip("Todos", "todos")}
-            {renderFilterChip("DisponÃ­veis", "disponiveis")}
+            {renderFilterChip("Disponíveis", "disponiveis")}
             {renderFilterChip("Publicados", "publicados")}
             {renderFilterChip("Pendentes", "pendentes")}
           </View>
@@ -148,7 +150,7 @@ export default function AdminDevotionalsScreen() {
           <View style={styles.orderToggleRow}>
             <Text style={styles.sectionTitle}>Devocionais</Text>
             <TouchableOpacity onPress={toggleDateOrder} style={styles.orderToggleButton}>
-              <Text style={styles.orderToggleText}>Ordenar por data: {dateOrder === "desc" ? "â†“" : "â†‘"}</Text>
+              <Text style={styles.orderToggleText}>Ordenar por data: {dateOrder === "desc" ? "?" : "?"}</Text>
             </TouchableOpacity>
           </View>
 
@@ -157,7 +159,7 @@ export default function AdminDevotionalsScreen() {
           ) : (
             filteredDevotionals.map((devo) => {
               const status = normalizeStatusForFilter(devo.status);
-              const subtitle = `${formatDevotionalDate(devo.data_devocional)} â€¢ ${devotionalStatusLabel(status)}`;
+              const subtitle = `${formatDevotionalDate(devo.data_devocional)} • ${devotionalStatusLabel(status)}`;
               return (
                 <DevotionalListItem
                   key={devo.id}
@@ -190,7 +192,7 @@ function normalizeStatusForFilter(status: DevotionalStatus | string): Normalized
 }
 
 function devotionalStatusLabel(status: NormalizedDevotionalStatus) {
-  if (status === "disponivel") return "DisponÃ­vel";
+  if (status === "disponivel") return "Disponível";
   if (status === "publicado") return "Publicado";
   if (status === "rascunho") return "Pendente";
   return status;

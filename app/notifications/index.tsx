@@ -1,4 +1,6 @@
-// app/notifications/index.tsx - centro de notificações com UI compartilhada
+export const options = {
+  title: "Notifica��es",
+};// app/notifications/index.tsx - centro de notificações com UI compartilhada
 import { useEffect, useMemo, useState } from "react";
 import {
   View,

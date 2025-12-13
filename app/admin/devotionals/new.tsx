@@ -1,4 +1,6 @@
-// app/admin/devotionals/new.tsx - criação de devocional (layout alinhado à criação de aula)
+export const options = {
+  title: "Admin",
+};// app/admin/devotionals/new.tsx - criação de devocional (layout alinhado à criação de aula)
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, ImageBackground } from "react-native";
 import { useRouter } from "expo-router";

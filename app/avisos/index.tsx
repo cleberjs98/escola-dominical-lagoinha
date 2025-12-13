@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+export const options = {
+  title: "Avisos",
+};import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";

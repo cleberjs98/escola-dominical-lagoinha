@@ -1,4 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+export const options = {
+  title: "Aprovação de reservas",
+};import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../hooks/useAuth";

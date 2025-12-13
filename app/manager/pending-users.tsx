@@ -1,5 +1,8 @@
-﻿// app/manager/pending-users.tsx
-/* Ajustes fase de testes – Home, notificações, gestão de papéis e permissões */
+// app/manager/pending-users.tsx
+export const options = {
+  title: "Aprovação de usuários",
+};
+
 import { useEffect, useMemo, useState } from "react";
 import {
   View,
@@ -20,6 +23,7 @@ import { firebaseDb } from "../../lib/firebase";
 import { approveUser, rejectUser } from "../../lib/users";
 import type { User } from "../../types/user";
 import { AppButton } from "../../components/ui/AppButton";
+import { AppCard } from "../../components/ui/AppCard";
 import { AppBackground } from "../../components/layout/AppBackground";
 import { useTheme } from "../../hooks/useTheme";
 import type { AppTheme } from "../../theme/tokens";
@@ -87,7 +91,7 @@ export default function PendingUsersScreen() {
       await approveUser({ targetUserId, approverId: currentUser.id });
       Alert.alert("Sucesso", "Usuário aprovado.");
     } catch (error: any) {
-      console.error("Erro ao aprovar usuario:", error);
+      console.error("Erro ao aprovar usuário:", error);
       Alert.alert("Erro", error?.message || "Falha ao aprovar usuário.");
     } finally {
       setActionLoadingId(null);
@@ -119,7 +123,7 @@ export default function PendingUsersScreen() {
       setSelectedUserId(null);
       setRejectReason("");
     } catch (error: any) {
-      console.error("Erro ao rejeitar usuario:", error);
+      console.error("Erro ao rejeitar usuário:", error);
       Alert.alert("Erro", error?.message || "Falha ao rejeitar usuário.");
     } finally {
       setActionLoadingId(null);

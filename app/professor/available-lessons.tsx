@@ -1,4 +1,6 @@
-// app/professor/available-lessons.tsx - reservas usando componentes reutilizáveis
+export const options = {
+  title: "Aulas disponíveis",
+};// app/professor/available-lessons.tsx - reservas usando componentes reutilizáveis
 import { useEffect, useMemo, useState } from "react";
 import {
   View,

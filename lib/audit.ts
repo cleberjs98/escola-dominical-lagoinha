@@ -1,5 +1,5 @@
-// lib/audit.ts
-// Auditoria mínima (console). Futuro: persistir em coleção "auditoria".
+﻿// lib/audit.ts
+// Auditoria mÃ­nima (console). Futuro: persistir em coleÃ§Ã£o "auditoria".
 export type AuditAction =
   | "approve_user"
   | "reject_user"
@@ -10,7 +10,7 @@ export type AuditAction =
   | "delete_sensitive";
 
 export function logAudit(action: AuditAction, payload: Record<string, any>) {
-  // TODO: enviar para coleção "auditoria" com serverTimestamp
+  // TODO: enviar para coleÃ§Ã£o "auditoria" com serverTimestamp
   // eslint-disable-next-line no-console
-  console.log(`[AUDIT] ${action}`, payload);
+  if (__DEV__) console.log(`[AUDIT] ${action}`);
 }

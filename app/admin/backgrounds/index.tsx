@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+export const options = {
+  title: "Fundos",
+};import { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,

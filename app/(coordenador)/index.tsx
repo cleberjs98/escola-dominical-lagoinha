@@ -1,3 +1,6 @@
+﻿export const options = {
+  title: "Dashboard",
+};
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -70,7 +73,7 @@ export default function CoordinatorDashboardScreen() {
       return;
     }
     if (!isAllowed) {
-      Alert.alert("Sem permissão", "Apenas coordenadores ou administradores.");
+      Alert.alert("Sem permissÃ£o", "Apenas coordenadores ou administradores.");
       router.replace("/" as any);
       return;
     }
@@ -96,7 +99,7 @@ export default function CoordinatorDashboardScreen() {
       setRecentAvisos(avisos);
     } catch (error) {
       console.error("Erro ao carregar dashboard coordenador/admin:", error);
-      Alert.alert("Erro", "Não foi possível carregar o dashboard.");
+      Alert.alert("Erro", "NÃ£o foi possÃ­vel carregar o dashboard.");
     } finally {
       setIsLoading(false);
     }
@@ -140,8 +143,8 @@ export default function CoordinatorDashboardScreen() {
     return (
       <DashboardSection
         key="pendencias"
-        title="Pendências"
-        description="Acompanhe aprovações e agendamentos."
+        title="PendÃªncias"
+        description="Acompanhe aprovaÃ§Ãµes e agendamentos."
       >
         <View style={styles.grid}>
           <KpiCard
@@ -153,19 +156,19 @@ export default function CoordinatorDashboardScreen() {
           <KpiCard
             label="Reservas pendentes"
             value={pending?.pendingReservations ?? 0}
-            icon="📚"
+            icon="⏳"
             onPress={() => router.push("/manager/pending-reservations" as any)}
           />
           <KpiCard
             label="Aulas agendadas"
             value={pending?.scheduledLessons ?? 0}
-            icon="⏰"
+            icon="📚"
             onPress={() => router.push("/(tabs)/lessons" as any)}
           />
           <KpiCard
             label="Devocionais agendados"
             value={pending?.scheduledDevotionals ?? 0}
-            icon="🗓️"
+            icon="📖"
             onPress={() => router.push("/(tabs)/devotionals" as any)}
           />
         </View>
@@ -177,7 +180,7 @@ export default function CoordinatorDashboardScreen() {
     return (
       <DashboardSection
         key="conteudos"
-        title="Gerenciar conteúdos"
+        title="Gerenciar conteÃºdos"
         description="Aulas, devocionais e avisos."
       >
         <View style={styles.grid}>
@@ -190,7 +193,7 @@ export default function CoordinatorDashboardScreen() {
           <ManagementCard
             title="Gerenciar devocionais"
             subtitle="Criar ou publicar"
-            icon="🙏"
+            icon="📖"
             onPress={() => router.push("/(tabs)/devotionals" as any)}
           />
           <ManagementCard
@@ -228,7 +231,7 @@ export default function CoordinatorDashboardScreen() {
               onPress={() => router.push(`/devotionals/${devotional.id}` as any)}
             />
           ) : (
-            <EmptyState title="Nenhum devocional disponível." />
+            <EmptyState title="Nenhum devocional disponÃ­vel." />
           )}
         </Card>
       </DashboardSection>
@@ -280,20 +283,20 @@ export default function CoordinatorDashboardScreen() {
 
   function renderAnalytics() {
     return (
-      <DashboardSection key="analytics" title="Analytics simples" description="KPIs rápidos.">
+      <DashboardSection key="analytics" title="Analytics simples" description="KPIs rÃ¡pidos.">
         <View style={styles.grid}>
           <KpiCard
             label="Aulas publicadas (30d)"
             value={kpis?.lessonsLast30Days ?? 0}
-            icon="✅"
+            icon="📅"
           />
           <KpiCard
             label="Devocionais publicados (30d)"
             value={kpis?.devotionalsLast30Days ?? 0}
-            icon="📖"
+            icon="🗓️"
           />
-          <KpiCard label="Professores ativos" value={kpis?.activeProfessores ?? 0} icon="👩‍🏫" />
-          <KpiCard label="Alunos ativos" value={kpis?.activeAlunos ?? 0} icon="🧑‍🎓" />
+          <KpiCard label="Professores ativos" value={kpis?.activeProfessores ?? 0} icon="👨‍🏫" />
+          <KpiCard label="Alunos ativos" value={kpis?.activeAlunos ?? 0} icon="🎓" />
         </View>
       </DashboardSection>
     );
@@ -303,19 +306,19 @@ export default function CoordinatorDashboardScreen() {
     return (
       <DashboardSection
         key="administracao"
-        title="Administração"
-        description="Configurações avançadas."
+        title="AdministraÃ§Ã£o"
+        description="ConfiguraÃ§Ãµes avanÃ§adas."
       >
         <View style={styles.grid}>
           <ManagementCard
-            title="Configurações de Layout/Tema"
+            title="ConfiguraÃ§Ãµes de Layout/Tema"
             subtitle="Tema base e ordem da home"
             icon="🎨"
             onPress={() => router.push("/admin/layout" as any)}
           />
           <ManagementCard
             title="Dashboard admin"
-            subtitle="Visão detalhada"
+            subtitle="VisÃ£o detalhada"
             icon="📊"
             onPress={() => router.push("/admin/dashboard" as any)}
           />
@@ -339,7 +342,7 @@ async function loadLayoutSettings(): Promise<LayoutConfig> {
         : defaultLayoutConfig.homeOrder,
     };
   } catch (error) {
-    console.warn("Não foi possível carregar layout_settings/global, usando padrão:", error);
+    console.warn("NÃ£o foi possÃ­vel carregar layout_settings/global, usando padrÃ£o:", error);
     return defaultLayoutConfig;
   }
 }
@@ -375,7 +378,7 @@ function createStyles(theme: AppTheme) {
       flexWrap: "wrap",
       marginTop: 8,
     },
-    // Transparências leves para deixar watermark aparecer nos blocos
+    // TransparÃªncias leves para deixar watermark aparecer nos blocos
     section: {
       backgroundColor: withAlpha(theme.colors.card, 0.82),
       borderColor: withAlpha(theme.colors.border || theme.colors.card, 0.45),

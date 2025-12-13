@@ -1,4 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+﻿export const options = {
+  title: "Gerenciar",
+};
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -13,7 +16,7 @@ import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { useAuth } from "../../../hooks/useAuth";
 import { firebaseDb } from "../../../lib/firebase";
 
-/* Ajustes fase de testes — Home, notificações, gestão de papéis e permissões */
+/* Ajustes fase de testes  Home, notificações, gestão de papéis e permissões */
 
 export default function ManageHubScreen() {
   const router = useRouter();

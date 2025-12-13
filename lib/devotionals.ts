@@ -1,4 +1,4 @@
-// lib/devotionals.ts - funções de devocionais espelhadas em lib/lessons.ts
+﻿// lib/devotionals.ts - funÃ§Ãµes de devocionais espelhadas em lib/lessons.ts
 import {
   addDoc,
   collection,
@@ -38,7 +38,7 @@ type CreateParams = {
 type UpdateParams = Partial<CreateParams> & { devotionalId: string };
 
 export async function createDevotional(params: CreateParams) {
-  console.log("[DevotionalsLib] createDevotional called");
+  if (__DEV__) console.log("[DevotionalsLib] createDevotional called");
   const { publishNow = false, publish_at_text = null, publish_at = null, ...rest } = params;
   validateCreate(rest);
 
@@ -65,7 +65,7 @@ export async function createDevotional(params: CreateParams) {
 }
 
 export async function updateDevotional(params: UpdateParams) {
-  console.log("[DevotionalsLib] updateDevotional called", params.devotionalId);
+  if (__DEV__) console.log("[DevotionalsLib] updateDevotional called", { devotionalId: params.devotionalId });
   const { devotionalId, publishNow = false, publish_at_text, publish_at, ...updates } = params;
   const ref = doc(firebaseDb, COLLECTION, devotionalId);
   const payload: Partial<Devotional> = { updated_at: serverTimestamp() as any, rascunho_salvo_em: serverTimestamp() as any };
@@ -94,7 +94,7 @@ export async function updateDevotional(params: UpdateParams) {
 }
 
 export async function setDevotionalStatus(devotionalId: string, status: DevotionalStatus) {
-  console.log("[DevotionalsLib] setDevotionalStatus", devotionalId, status);
+  if (__DEV__) console.log("[DevotionalsLib] setDevotionalStatus", { devotionalId, status });
   const ref = doc(firebaseDb, COLLECTION, devotionalId);
   await updateDoc(ref, {
     status,
@@ -104,7 +104,7 @@ export async function setDevotionalStatus(devotionalId: string, status: Devotion
 }
 
 export async function publishDevotionalNow(devotionalId: string, userId: string) {
-  console.log("[DevotionalsLib] publishDevotionalNow called", devotionalId, userId);
+  if (__DEV__) console.log("[DevotionalsLib] publishDevotionalNow called", { devotionalId, userId });
   const ref = doc(firebaseDb, COLLECTION, devotionalId);
   await updateDoc(ref, {
     status: DevotionalStatus.PUBLICADO,
@@ -116,7 +116,7 @@ export async function publishDevotionalNow(devotionalId: string, userId: string)
 }
 
 export async function deleteDevotional(devotionalId: string) {
-  console.log("[DevotionalsLib] deleteDevotional", devotionalId);
+  if (__DEV__) console.log("[DevotionalsLib] deleteDevotional", { devotionalId });
   await deleteDoc(doc(firebaseDb, COLLECTION, devotionalId));
 }
 
@@ -128,7 +128,7 @@ export async function getDevotionalById(devotionalId: string): Promise<Devotiona
 }
 
 export async function listPublishedDevotionals(): Promise<Devotional[]> {
-  console.log("[DevotionalsLib] listPublishedDevotionals called");
+  if (__DEV__) console.log("[DevotionalsLib] listPublishedDevotionals called");
   const colRef = collection(firebaseDb, COLLECTION);
   const snap = await getDocs(
     query(colRef, where("status", "in", [DevotionalStatus.PUBLICADO, "publicado", "publicados"]))
@@ -140,7 +140,7 @@ export async function listPublishedDevotionals(): Promise<Devotional[]> {
 }
 
 export async function listAvailableAndPublishedForProfessor(limitCount = 50): Promise<Devotional[]> {
-  console.log("[DevotionalsLib] listAvailableAndPublishedForProfessor called");
+  if (__DEV__) console.log("[DevotionalsLib] listAvailableAndPublishedForProfessor called");
   const colRef = collection(firebaseDb, COLLECTION);
   const snap = await getDocs(
     query(
@@ -150,7 +150,7 @@ export async function listAvailableAndPublishedForProfessor(limitCount = 50): Pr
         DevotionalStatus.DISPONIVEL,
         "disponivel",
         "disponiveis",
-        "disponível",
+        "disponÃ­vel",
         "Disponivel",
         "publicado",
         "publicados",
@@ -179,7 +179,7 @@ export async function listDevotionalsForAdmin(): Promise<{
   available: Devotional[];
   published: Devotional[];
 }> {
-  console.log("[DevotionalsLib] listDevotionalsForAdmin called");
+  if (__DEV__) console.log("[DevotionalsLib] listDevotionalsForAdmin called");
   const colRef = collection(firebaseDb, COLLECTION);
   const q = query(colRef, orderBy("data_devocional", "desc"));
   const snap = await getDocs(q);
@@ -229,13 +229,13 @@ function convertDoc(id: string, data: Record<string, any>): Devotional {
 }
 
 function normalizeDate(input: string): string {
-  if (!input) throw new Error("Data do devocional obrigatória.");
+  if (!input) throw new Error("Data do devocional obrigatÃ³ria.");
   const trimmed = input.trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
     return trimmed;
   }
   const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(trimmed);
-  if (!match) throw new Error("Data do devocional inválida.");
+  if (!match) throw new Error("Data do devocional invÃ¡lida.");
   const [, dd, mm, yyyy] = match;
   return `${yyyy}-${mm}-${dd}`;
 }
@@ -268,8 +268,8 @@ function resolvePublishAt(value?: Timestamp | null, text?: string | null): Times
 }
 
 function validateCreate(data: Omit<CreateParams, "publish_at" | "publish_at_text" | "publishNow">) {
-  if (!data.titulo?.trim()) throw new Error("Informe o título.");
-  if (!data.referencia_biblica?.trim()) throw new Error("Informe a referência bíblica.");
+  if (!data.titulo?.trim()) throw new Error("Informe o tÃ­tulo.");
+  if (!data.referencia_biblica?.trim()) throw new Error("Informe a referÃªncia bÃ­blica.");
   if (!data.data_devocional?.trim()) throw new Error("Informe a data do devocional.");
   if (!data.conteudo_base?.trim()) throw new Error("Informe o devocional.");
 }

@@ -1,4 +1,4 @@
-// Serviço central de aulas: criação, reserva, publicação, listagens e helpers de data.
+﻿// ServiÃ§o central de aulas: criaÃ§Ã£o, reserva, publicaÃ§Ã£o, listagens e helpers de data.
 import {
   addDoc,
   collection,
@@ -58,7 +58,7 @@ const collectionName = "aulas";
 
 function parseDataAula(text: string): Timestamp {
   const parsed = parseDateToTimestamp(text);
-  if (!parsed) throw new Error("Data da aula inválida. Use dd/mm/aaaa.");
+  if (!parsed) throw new Error("Data da aula invÃ¡lida. Use dd/mm/aaaa.");
   return parsed;
 }
 
@@ -68,7 +68,7 @@ function parsePublishAt(text?: string | null): {
 } {
   if (!text) return { publish_at: null, data_publicacao_auto: null };
   const parsed = parseDateTimeToTimestamp(text);
-  if (!parsed) throw new Error("Data/hora de publicação automática inválida (dd/mm/aaaa hh:mm).");
+  if (!parsed) throw new Error("Data/hora de publicaÃ§Ã£o automÃ¡tica invÃ¡lida (dd/mm/aaaa hh:mm).");
   return { publish_at: parsed.timestamp, data_publicacao_auto: parsed.display };
 }
 
@@ -86,12 +86,12 @@ function basePayload(input: LessonInput) {
 }
 
 export async function createLessonDraft(input: LessonInput, criadoPorId: string) {
-  console.log("[lessons] createLessonDraft");
+  if (__DEV__) console.log("[lessons] createLessonDraft");
   return createLessonWithStatus(input, "rascunho", criadoPorId);
 }
 
 export async function createLessonAvailable(input: LessonInput, criadoPorId: string) {
-  console.log("[lessons] createLessonAvailable");
+  if (__DEV__) console.log("[lessons] createLessonAvailable");
   return createLessonWithStatus(input, "disponivel", criadoPorId);
 }
 
@@ -122,7 +122,7 @@ async function createLessonWithStatus(
 }
 
 export async function updateLessonFields(lessonId: string, input: LessonUpdateInput) {
-  console.log("[lessons] updateLessonFields", lessonId);
+  if (__DEV__) console.log("[lessons] updateLessonFields", { lessonId });
   const ref = doc(firebaseDb, collectionName, lessonId);
   const updates: Partial<Lesson> = {};
 
@@ -154,7 +154,7 @@ export async function updateLessonFields(lessonId: string, input: LessonUpdateIn
 }
 
 export async function setLessonStatus(lessonId: string, status: LessonStatus) {
-  console.log("[lessons] setLessonStatus", lessonId, status);
+  if (__DEV__) console.log("[lessons] setLessonStatus", { lessonId, status });
   const ref = doc(firebaseDb, collectionName, lessonId);
   await updateDoc(ref, {
     status,
@@ -163,13 +163,13 @@ export async function setLessonStatus(lessonId: string, status: LessonStatus) {
 }
 
 export async function reserveLesson(lessonId: string, professorId: string) {
-  console.log("[lessons] reserveLesson", lessonId);
+  if (__DEV__) console.log("[lessons] reserveLesson", { lessonId, professorId });
   const ref = doc(firebaseDb, collectionName, lessonId);
   const snap = await getDoc(ref);
-  if (!snap.exists()) throw new Error("Aula não encontrada.");
+  if (!snap.exists()) throw new Error("Aula nÃ£o encontrada.");
   const data = snap.data() as Lesson;
-  if (data.status !== "disponivel") throw new Error("Aula não está disponível para reserva.");
-  if (data.professor_reservado_id) throw new Error("Aula já possui professor reservado.");
+  if (data.status !== "disponivel") throw new Error("Aula nÃ£o estÃ¡ disponÃ­vel para reserva.");
+  if (data.professor_reservado_id) throw new Error("Aula jÃ¡ possui professor reservado.");
 
   await updateDoc(ref, {
     status: "pendente_reserva",
@@ -183,12 +183,12 @@ export async function reserveLesson(lessonId: string, professorId: string) {
 }
 
 export async function approveReservation(lessonId: string, approverId: string) {
-  console.log("[lessons] approveReservation", lessonId);
+  if (__DEV__) console.log("[lessons] approveReservation", { lessonId, approverId });
   const ref = doc(firebaseDb, collectionName, lessonId);
   const snap = await getDoc(ref);
-  if (!snap.exists()) throw new Error("Aula não encontrada.");
+  if (!snap.exists()) throw new Error("Aula nÃ£o encontrada.");
   const data = snap.data() as Lesson;
-  if (data.status !== "pendente_reserva") throw new Error("Reserva não está pendente.");
+  if (data.status !== "pendente_reserva") throw new Error("Reserva nÃ£o estÃ¡ pendente.");
   await updateDoc(ref, {
     status: "reservada",
     reserva_aprovada_por_id: approverId,
@@ -198,12 +198,12 @@ export async function approveReservation(lessonId: string, approverId: string) {
 }
 
 export async function rejectReservation(lessonId: string, approverId: string, motivo?: string) {
-  console.log("[lessons] rejectReservation", lessonId);
+  if (__DEV__) console.log("[lessons] rejectReservation", { lessonId, approverId });
   const ref = doc(firebaseDb, collectionName, lessonId);
   const snap = await getDoc(ref);
-  if (!snap.exists()) throw new Error("Aula não encontrada.");
+  if (!snap.exists()) throw new Error("Aula nÃ£o encontrada.");
   const data = snap.data() as Lesson;
-  if (data.status !== "pendente_reserva") throw new Error("Reserva não está pendente.");
+  if (data.status !== "pendente_reserva") throw new Error("Reserva nÃ£o estÃ¡ pendente.");
   await updateDoc(ref, {
     status: "disponivel",
     professor_reservado_id: null,
@@ -216,7 +216,7 @@ export async function rejectReservation(lessonId: string, approverId: string, mo
 }
 
 export async function publishLessonNow(lessonId: string, userId: string) {
-  console.log("[lessons] publishLessonNow", lessonId);
+  if (__DEV__) console.log("[lessons] publishLessonNow", { lessonId, userId });
   const ref = doc(firebaseDb, collectionName, lessonId);
   await updateDoc(ref, {
     status: "publicada",
@@ -228,13 +228,13 @@ export async function publishLessonNow(lessonId: string, userId: string) {
   });
 }
 
-// Exclusão única de aula (coleção "aulas")
+// ExclusÃ£o Ãºnica de aula (coleÃ§Ã£o "aulas")
 export async function deleteLesson(lessonId: string): Promise<void> {
-  console.log("[LessonsService] deleteLesson called for", lessonId);
+  if (__DEV__) console.log("[LessonsService] deleteLesson called for", { lessonId });
   const ref = doc(firebaseDb, collectionName, lessonId);
   try {
     await deleteDoc(ref);
-    console.log("[LessonsService] deleteLesson success", lessonId);
+    if (__DEV__) console.log("[LessonsService] deleteLesson success", { lessonId });
   } catch (error) {
     console.error("[LessonsService] deleteLesson error", error);
     throw error;
@@ -246,13 +246,13 @@ export async function updateProfessorComplement(
   professorId: string,
   texto: string
 ) {
-  console.log("[lessons] updateProfessorComplement", lessonId);
+  if (__DEV__) console.log("[lessons] updateProfessorComplement", { lessonId, userId });
   const ref = doc(firebaseDb, collectionName, lessonId);
   const snap = await getDoc(ref);
-  if (!snap.exists()) throw new Error("Aula não encontrada.");
+  if (!snap.exists()) throw new Error("Aula nÃ£o encontrada.");
   const data = snap.data() as Lesson;
   if (data.professor_reservado_id !== professorId || data.status !== "reservada") {
-    throw new Error("Você não pode editar esta aula.");
+    throw new Error("VocÃª nÃ£o pode editar esta aula.");
   }
   await updateDoc(ref, {
     complemento_professor: sanitizeText(texto),
@@ -323,7 +323,7 @@ export async function listPublishedLessons(): Promise<Lesson[]> {
   return mapList(snap);
 }
 
-// Lista aulas disponíveis ou publicadas (ordenadas asc) com limite
+// Lista aulas disponÃ­veis ou publicadas (ordenadas asc) com limite
 export async function listAvailableAndPublished(limitCount = 3): Promise<Lesson[]> {
   const colRef = collection(firebaseDb, collectionName);
   const snap = await getDocs(query(colRef, where("status", "in", ["disponivel", "publicada"]), limit(limitCount * 2)));
@@ -337,7 +337,7 @@ export async function listAvailableAndPublished(limitCount = 3): Promise<Lesson[
     .slice(0, limitCount);
 }
 
-// Lista próximas aulas publicadas (ordenadas por data asc) com limite
+// Lista prÃ³ximas aulas publicadas (ordenadas por data asc) com limite
 export async function listNextPublishedLessons(limitCount = 3): Promise<Lesson[]> {
   const colRef = collection(firebaseDb, collectionName);
   const snap = await getDocs(
@@ -346,7 +346,7 @@ export async function listNextPublishedLessons(limitCount = 3): Promise<Lesson[]
   return mapList(snap);
 }
 
-// Utilitários para preencher formulário com dados existentes
+// UtilitÃ¡rios para preencher formulÃ¡rio com dados existentes
 export function lessonToFormData(lesson: Lesson): LessonInput {
   return {
     titulo: lesson.titulo,

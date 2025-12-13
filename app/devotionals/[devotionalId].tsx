@@ -27,6 +27,10 @@ import { formatDate } from "../../utils/publishAt";
 import { AppBackground } from "../../components/layout/AppBackground";
 import type { AppTheme } from "../../theme/tokens";
 
+export const options = {
+  title: "Devocional",
+};
+
 export default function DevotionalDetailsScreen() {
   const router = useRouter();
   const { devotionalId } = useLocalSearchParams<{ devotionalId: string }>();
@@ -86,7 +90,7 @@ export default function DevotionalDetailsScreen() {
     }
 
     load();
-  }, [devotionalId, firebaseUser, isInitializing, router, user?.status]);
+  }, [devotionalId, firebaseUser, isInitializing, router, user?.status, isAdminOrCoordinator]);
 
   if (isInitializing || isLoading) {
     return (
@@ -138,7 +142,7 @@ export default function DevotionalDetailsScreen() {
           subtitle={
             isBasicView
               ? devotional.referencia_biblica
-              : `Data: ${formatDateString(devotional.data_devocional)} • ${devotional.referencia_biblica}`
+              : `Data: ${formatDateString(devotional.data_devocional)} - ${devotional.referencia_biblica}`
           }
           footer={isBasicView ? null : <StatusBadge status={devotional.status} variant="devotional" />}
         />

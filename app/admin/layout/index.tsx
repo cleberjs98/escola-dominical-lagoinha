@@ -1,4 +1,6 @@
-import { useEffect } from "react";
+export const options = {
+  title: "Configurações de layout",
+};import { useEffect } from "react";
 import { ScrollView, StyleSheet, Text, View, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../../hooks/useAuth";

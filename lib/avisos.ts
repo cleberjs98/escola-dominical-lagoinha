@@ -1,4 +1,4 @@
-import {
+﻿import {
   addDoc,
   collection,
   deleteDoc,
@@ -41,7 +41,7 @@ export async function createAviso(
   data: CreateAvisoInput,
   author: { id: string; nome: string; papel: User["papel"] }
 ) {
-  console.log("[AvisosLib] createAviso", data);
+  if (__DEV__) console.log("[AvisosLib] createAviso");
   const colRef = collection(firebaseDb, collectionName);
   const now = serverTimestamp();
 
@@ -84,7 +84,7 @@ export async function updateAviso(id: string, data: UpdateAvisoInput) {
 }
 
 export async function deleteAviso(id: string) {
-  console.log("[AvisosLib] deleteAviso", id);
+  if (__DEV__) console.log("[AvisosLib] deleteAviso", { id });
   const ref = doc(firebaseDb, collectionName, id);
   await deleteDoc(ref);
 }
@@ -137,7 +137,7 @@ export async function listAvisosForUser(user: User | null): Promise<Aviso[]> {
 }
 
 export async function listRecentAvisosForUser(user: User | null, limitCount = 3): Promise<Aviso[]> {
-  console.log("[AvisosLib] listRecentAvisosForUser", user?.papel);
+  if (__DEV__) console.log("[AvisosLib] listRecentAvisosForUser", { role: user?.papel });
   if (!user) return [];
   const role = user.papel;
   const userId = (user as any)?.id || (user as any)?.uid || "";

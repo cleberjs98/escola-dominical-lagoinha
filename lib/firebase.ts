@@ -1,47 +1,59 @@
-// lib/firebase.ts
+﻿// lib/firebase.ts
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import { getAuth, Auth } from "firebase/auth";
-import {
-  getFirestore,
-  initializeFirestore,
-  Firestore,
-} from "firebase/firestore";
+import { getFirestore, initializeFirestore, Firestore } from "firebase/firestore";
 import { getStorage, FirebaseStorage } from "firebase/storage";
 
-// ⚠️ Substitua pelos valores do seu projeto Firebase
+type EnvOptions = { required?: boolean };
+
+const missingRequired: string[] = [];
+
+function getEnvVar(key: string, options: EnvOptions = {}): string | undefined {
+  const value = process.env[key];
+  if (value && value.trim().length > 0) return value;
+  if (options.required) missingRequired.push(key);
+  return undefined;
+}
+
 const firebaseConfig = {
-    apiKey: "AIzaSyBRcBI5WVDH4AUOTEVgJmu2wc4-ULTQ-H4",
-  authDomain: "app-ebd-25695.firebaseapp.com",
-  projectId: "app-ebd-25695",
-  storageBucket: "app-ebd-25695.firebasestorage.app",
-  messagingSenderId: "1033714210310",
-  appId: "1:1033714210310:web:6f01b9f881573f0bb49587",
+  apiKey: getEnvVar("EXPO_PUBLIC_FIREBASE_API_KEY", { required: true }) ?? "",
+  authDomain: getEnvVar("EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN", { required: true }) ?? "",
+  projectId: getEnvVar("EXPO_PUBLIC_FIREBASE_PROJECT_ID", { required: true }) ?? "",
+  storageBucket: getEnvVar("EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET", { required: true }) ?? "",
+  messagingSenderId: getEnvVar("EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID", { required: true }) ?? "",
+  appId: getEnvVar("EXPO_PUBLIC_FIREBASE_APP_ID", { required: true }) ?? "",
+  measurementId: getEnvVar("EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID"),
 };
+
+const firebaseReady = missingRequired.length === 0;
+const firebaseMissingMessage = firebaseReady
+  ? ""
+  : `[firebase] Missing environment variables: ${missingRequired.join(", ")}`;
+
+function requireFirebase<T>(factory: () => T): T {
+  if (!firebaseReady) {
+    console.error(firebaseMissingMessage);
+    throw new Error(firebaseMissingMessage);
+  }
+  return factory();
+}
+
+if (!firebaseReady && __DEV__) {
+  throw new Error(firebaseMissingMessage);
+}
 
 // ---------------------------------------------------------------------------
 // Inicialização base do app
 // ---------------------------------------------------------------------------
 
 let app: FirebaseApp;
-
-if (!getApps().length) {
-  app = initializeApp(firebaseConfig);
-} else {
-  app = getApp();
-}
+app = requireFirebase(() => (!getApps().length ? initializeApp(firebaseConfig) : getApp()));
 
 // ---------------------------------------------------------------------------
 // Auth
 // ---------------------------------------------------------------------------
 
-const firebaseAuth: Auth = getAuth(app);
-
-// EXPOR AUTH PARA DEBUG APENAS NO NAVEGADOR
-// NÃO AFETA MOBILE, NÃO AFETA PRODUÇÃO
-if (typeof window !== "undefined") {
-  // @ts-ignore
-  window._auth = firebaseAuth;
-}
+const firebaseAuth: Auth = requireFirebase(() => getAuth(app));
 
 // ---------------------------------------------------------------------------
 // Firestore - forçando long polling para evitar problemas de rede/WebSocket
@@ -49,24 +61,22 @@ if (typeof window !== "undefined") {
 
 let firebaseDb: Firestore;
 
-if (typeof window !== "undefined") {
-  // Ambiente web: usamos initializeFirestore com long polling
-  firebaseDb = initializeFirestore(app, {
-    experimentalForceLongPolling: true,
-  });
-} else {
-  // Ambiente nativo: getFirestore normal
-  firebaseDb = getFirestore(app);
-}
+firebaseDb = requireFirebase(() =>
+  typeof window !== "undefined"
+    ? initializeFirestore(app, {
+        experimentalForceLongPolling: true,
+      })
+    : getFirestore(app)
+);
 
 // ---------------------------------------------------------------------------
 // Storage
 // ---------------------------------------------------------------------------
 
-const firebaseStorage: FirebaseStorage = getStorage(app);
+const firebaseStorage: FirebaseStorage = requireFirebase(() => getStorage(app));
 
 // ---------------------------------------------------------------------------
 // Exports
 // ---------------------------------------------------------------------------
 
-export { app, firebaseAuth, firebaseDb, firebaseStorage };
+export { app, firebaseAuth, firebaseDb, firebaseStorage, firebaseReady, firebaseMissingMessage };
