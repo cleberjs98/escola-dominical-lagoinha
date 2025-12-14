@@ -16,13 +16,7 @@ import {
   maskDateTime,
   parseDateTimeToTimestamp,
 } from "../../../utils/publishAt";
-import {
-  deleteLesson,
-  getLessonById,
-  publishLessonNow,
-  setLessonStatus,
-  updateLessonFields,
-} from "../../../lib/lessons";
+import { getLessonById, publishLessonNow, setLessonStatus, updateLessonFields } from "../../../lib/lessons";
 import type { Lesson, LessonStatus } from "../../../types/lesson";
 import { AppBackground } from "../../../components/layout/AppBackground";
 import type { AppTheme } from "../../../theme/tokens";
@@ -39,7 +33,6 @@ export default function EditLessonScreen() {
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const papel = user?.papel;
-  const canDelete = papel === "administrador" || papel === "coordenador";
 
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [titulo, setTitulo] = useState("");
@@ -50,7 +43,6 @@ export default function EditLessonScreen() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (isInitializing) return;
@@ -107,15 +99,12 @@ export default function EditLessonScreen() {
     try {
       setSubmitting(true);
       const publishParsed = parseDateTimeToTimestamp(publishAt);
-      await updateLessonFields({
-        lessonId: lesson.id,
+      await updateLessonFields(lesson.id, {
         titulo: titulo.trim(),
         referencia_biblica: referencia.trim(),
         descricao_base: descricao.trim(),
-        data_aula: isoDate,
+        data_aula_text: dataAula.trim(),
         publish_at_text: publishAt.trim() || null,
-        publish_at: publishParsed?.timestamp ?? null,
-        data_publicacao_auto: publishParsed?.display ?? null,
       });
       if (status) {
         await setLessonStatus(lesson.id, status);
@@ -142,21 +131,6 @@ export default function EditLessonScreen() {
       Alert.alert("Erro", "Não foi possível publicar.");
     } finally {
       setSubmitting(false);
-    }
-  }
-
-  async function handleDelete() {
-    if (!lesson) return;
-    try {
-      setDeleting(true);
-      await deleteLesson(lesson.id);
-      Alert.alert("Sucesso", "Aula excluída.");
-      router.replace("/(tabs)/lessons" as any);
-    } catch (err) {
-      console.error("[EditLesson] Erro ao excluir aula:", err);
-      Alert.alert("Erro", "Não foi possível excluir.");
-    } finally {
-      setDeleting(false);
     }
   }
 
@@ -216,16 +190,10 @@ export default function EditLessonScreen() {
         <View style={styles.col}>
           <Text style={styles.label}>Descrição base</Text>
           <RichTextEditor value={descricao} onChange={setDescricao} placeholder="Digite a descrição da aula..." />
-        </View>
-
-        <View style={[styles.row, styles.actions]}>
           <AppButton title={submitting ? "Salvando..." : "Salvar edições"} variant="primary" onPress={() => handleSave()} disabled={submitting} />
           <AppButton title={submitting ? "Salvar rascunho..." : "Salvar como rascunho"} variant="secondary" onPress={() => handleSave("rascunho" as LessonStatus)} disabled={submitting} />
           <AppButton title={submitting ? "Disponibilizando..." : "Disponibilizar"} variant="secondary" onPress={() => handleSave("disponivel" as LessonStatus)} disabled={submitting} />
           <AppButton title={submitting ? "Publicando..." : "Publicar agora"} variant="secondary" onPress={handlePublishNow} disabled={submitting} />
-          {canDelete ? (
-            <AppButton title={deleting ? "Excluindo..." : "Excluir aula"} variant="danger" onPress={handleDelete} disabled={deleting} />
-          ) : null}
         </View>
       </ScrollView>
     </AppBackground>

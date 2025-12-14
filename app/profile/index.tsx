@@ -8,9 +8,6 @@ import {
   ActivityIndicator,
   TextInput,
   Alert,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   Image,
   Modal,
@@ -27,6 +24,7 @@ import type { AppTheme } from "../../types/theme";
 import { updateUserProfile } from "../../lib/users";
 import { firebaseAuth, firebaseDb, firebaseStorage } from "../../lib/firebase";
 import { AppBackground } from "../../components/layout/AppBackground";
+import { KeyboardScreen } from "../../components/layout/KeyboardScreen";
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -208,135 +206,130 @@ export default function ProfileScreen() {
 
   return (
     <AppBackground>
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.select({ ios: "padding", android: undefined })}
-      >
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <Text style={styles.title}>Meu perfil</Text>
-          <Text style={styles.subtitle}>
-            {isStudent
-              ? "Atualize seus dados básicos. Papel e status são definidos pela coordenação."
-              : "Atualize seus dados básicos."}
-          </Text>
+      <KeyboardScreen style={styles.container} contentContainerStyle={styles.content}>
+        <Text style={styles.title}>Meu perfil</Text>
+        <Text style={styles.subtitle}>
+          {isStudent
+            ? "Atualize seus dados básicos. Papel e status são definidos pela coordenação."
+            : "Atualize seus dados básicos."}
+        </Text>
 
-          <View style={styles.photoRow}>
-            <Pressable onPress={openPhotoModal}>
-              {photoUrl ? (
-                <Image source={{ uri: photoUrl }} style={styles.avatar} />
-              ) : (
-                <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                  <Text style={styles.avatarText}>{avatarLetter}</Text>
-                </View>
-              )}
-            </Pressable>
-          </View>
+        <View style={styles.photoRow}>
+          <Pressable onPress={openPhotoModal}>
+            {photoUrl ? (
+              <Image source={{ uri: photoUrl }} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                <Text style={styles.avatarText}>{avatarLetter}</Text>
+              </View>
+            )}
+          </Pressable>
+        </View>
 
-          <Text style={styles.label}>Nome</Text>
-          <Text style={styles.readonly}>{nome || "Sem nome"}</Text>
+        <Text style={styles.label}>Nome</Text>
+        <Text style={styles.readonly}>{nome || "Sem nome"}</Text>
 
-          <Text style={styles.label}>E-mail (somente leitura)</Text>
-          <Text style={styles.readonly}>{firebaseUser.email || "Sem e-mail"}</Text>
+        <Text style={styles.label}>E-mail (somente leitura)</Text>
+        <Text style={styles.readonly}>{firebaseUser.email || "Sem e-mail"}</Text>
 
-          <Text style={styles.label}>Telefone</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Telefone"
-            placeholderTextColor={theme.colors.muted}
-            keyboardType="phone-pad"
-            value={telefone}
-            onChangeText={setTelefone}
+        <Text style={styles.label}>Telefone</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Telefone"
+          placeholderTextColor={theme.colors.muted}
+          keyboardType="phone-pad"
+          value={telefone}
+          onChangeText={setTelefone}
+        />
+
+        <Text style={styles.label}>Data de nascimento</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="aaaa-mm-dd"
+          placeholderTextColor={theme.colors.muted}
+          value={dataNascimento}
+          onChangeText={setDataNascimento}
+          editable={false}
+        />
+
+        <Text style={styles.label}>Papel</Text>
+        <Text style={styles.readonly}>{user.papel}</Text>
+        <Text style={styles.label}>Status</Text>
+        <Text style={styles.readonly}>{user.status}</Text>
+
+        <View style={styles.actions}>
+          <View />
+          <PressableButton title={isSaving ? "Salvando..." : "Salvar"} disabled={isSaving} onPress={handleSave} styles={styles} />
+        </View>
+
+        <View style={styles.actions}>
+          <PressableButton
+            title="Alterar senha"
+            disabled={uploadingPhoto}
+            onPress={() => router.push("/auth/change-password" as any)}
+            styles={styles}
           />
+        </View>
 
-          <Text style={styles.label}>Data de nascimento</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="aaaa-mm-dd"
-            placeholderTextColor={theme.colors.muted}
-            value={dataNascimento}
-            onChangeText={setDataNascimento}
-            editable={false}
-          />
+        {message ? <Text style={styles.successText}>{message}</Text> : null}
+        {photoError ? <Text style={styles.photoError}>{photoError}</Text> : null}
+      </KeyboardScreen>
 
-          <Text style={styles.label}>Papel</Text>
-          <Text style={styles.readonly}>{user.papel}</Text>
-          <Text style={styles.label}>Status</Text>
-          <Text style={styles.readonly}>{user.status}</Text>
-
-          <View style={styles.actions}>
-            <View />
-            <PressableButton title={isSaving ? "Salvando..." : "Salvar"} disabled={isSaving} onPress={handleSave} styles={styles} />
+      <Modal visible={photoModalVisible} transparent animationType="fade" onRequestClose={closePhotoModal}>
+        <TouchableWithoutFeedback onPress={closePhotoModal}>
+          <View style={styles.modalBackdrop}>
+            <TouchableWithoutFeedback>
+              <View style={styles.modalContent}>
+                {photoUrl ? (
+                  <>
+                    <Image source={{ uri: photoUrl }} style={styles.modalImage} />
+                    <Pressable
+                      style={[styles.modalButton, styles.modalButtonPrimary, photoActionLoading && styles.saveButtonDisabled]}
+                      onPress={pickAndUploadPhoto}
+                      disabled={photoActionLoading}
+                    >
+                      {photoActionLoading ? (
+                        <ActivityIndicator color={theme.colors.background} />
+                      ) : (
+                        <Text style={styles.modalButtonTextDark}>Trocar foto</Text>
+                      )}
+                    </Pressable>
+                    <Pressable
+                      style={[styles.modalButton, styles.modalButtonDanger, photoActionLoading && styles.saveButtonDisabled]}
+                      onPress={handleRemovePhoto}
+                      disabled={photoActionLoading}
+                    >
+                      {photoActionLoading ? (
+                        <ActivityIndicator color={theme.colors.accent} />
+                      ) : (
+                        <Text style={styles.modalButtonTextLight}>Remover foto</Text>
+                      )}
+                    </Pressable>
+                  </>
+                ) : (
+                  <>
+                    <View style={styles.modalPlaceholderCircle}>
+                      <Text style={styles.modalPlaceholderInitial}>{avatarLetter}</Text>
+                    </View>
+                    <Pressable
+                      style={[styles.modalButton, styles.modalButtonPrimary, photoActionLoading && styles.saveButtonDisabled]}
+                      onPress={pickAndUploadPhoto}
+                      disabled={photoActionLoading}
+                    >
+                      {photoActionLoading ? (
+                        <ActivityIndicator color={theme.colors.background} />
+                      ) : (
+                        <Text style={styles.modalButtonTextDark}>Enviar foto</Text>
+                      )}
+                    </Pressable>
+                  </>
+                )}
+                {photoError ? <Text style={styles.photoErrorText}>{photoError}</Text> : null}
+              </View>
+            </TouchableWithoutFeedback>
           </View>
-
-          <View style={styles.actions}>
-            <PressableButton
-              title="Alterar senha"
-              disabled={uploadingPhoto}
-              onPress={() => router.push("/auth/change-password" as any)}
-              styles={styles}
-            />
-          </View>
-
-          {message ? <Text style={styles.successText}>{message}</Text> : null}
-          {photoError ? <Text style={styles.photoError}>{photoError}</Text> : null}
-        </ScrollView>
-
-        <Modal visible={photoModalVisible} transparent animationType="fade" onRequestClose={closePhotoModal}>
-          <TouchableWithoutFeedback onPress={closePhotoModal}>
-            <View style={styles.modalBackdrop}>
-              <TouchableWithoutFeedback>
-                <View style={styles.modalContent}>
-                  {photoUrl ? (
-                    <>
-                      <Image source={{ uri: photoUrl }} style={styles.modalImage} />
-                      <Pressable
-                        style={[styles.modalButton, styles.modalButtonPrimary, photoActionLoading && styles.saveButtonDisabled]}
-                        onPress={pickAndUploadPhoto}
-                        disabled={photoActionLoading}
-                      >
-                        {photoActionLoading ? (
-                          <ActivityIndicator color={theme.colors.background} />
-                        ) : (
-                          <Text style={styles.modalButtonTextDark}>Trocar foto</Text>
-                        )}
-                      </Pressable>
-                      <Pressable
-                        style={[styles.modalButton, styles.modalButtonDanger, photoActionLoading && styles.saveButtonDisabled]}
-                        onPress={handleRemovePhoto}
-                        disabled={photoActionLoading}
-                      >
-                        {photoActionLoading ? (
-                          <ActivityIndicator color={theme.colors.accent} />
-                        ) : (
-                          <Text style={styles.modalButtonTextLight}>Remover foto</Text>
-                        )}
-                      </Pressable>
-                    </>
-                  ) : (
-                    <>
-                      <View style={styles.modalPlaceholderCircle}>
-                        <Text style={styles.modalPlaceholderInitial}>{avatarLetter}</Text>
-                      </View>
-                      <Pressable
-                        style={[styles.modalButton, styles.modalButtonPrimary, photoActionLoading && styles.saveButtonDisabled]}
-                        onPress={pickAndUploadPhoto}
-                        disabled={photoActionLoading}
-                      >
-                        {photoActionLoading ? (
-                          <ActivityIndicator color={theme.colors.background} />
-                        ) : (
-                          <Text style={styles.modalButtonTextDark}>Enviar foto</Text>
-                        )}
-                      </Pressable>
-                    </>
-                  )}
-                  {photoError ? <Text style={styles.photoErrorText}>{photoError}</Text> : null}
-                </View>
-              </TouchableWithoutFeedback>
-            </View>
-          </TouchableWithoutFeedback>
-        </Modal>
-      </KeyboardAvoidingView>
+        </TouchableWithoutFeedback>
+      </Modal>
     </AppBackground>
   );
 }

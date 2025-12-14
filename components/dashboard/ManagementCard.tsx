@@ -1,5 +1,6 @@
 import React from "react";
 import { Pressable, StyleSheet, Text, View, ViewStyle } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
 
 type Props = {
@@ -19,7 +20,9 @@ export function ManagementCard({ title, subtitle, icon, onPress, style }: Props)
 
   return (
     <Pressable style={[styles.container, { backgroundColor: bg, borderColor: border }, style]} onPress={onPress}>
-      <View style={styles.iconSlot}>{icon ? <Text style={styles.icon}>{icon}</Text> : null}</View>
+      <View style={styles.iconSlot}>
+        {icon ? <MaterialCommunityIcons name={icon as any} size={18} color={text} /> : null}
+      </View>
       <View style={{ flex: 1 }}>
         <Text style={[styles.title, { color: text }]} numberOfLines={1}>
           {title}
@@ -50,9 +53,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(255,255,255,0.08)",
-  },
-  icon: {
-    fontSize: 16,
   },
   title: {
     fontSize: 15,

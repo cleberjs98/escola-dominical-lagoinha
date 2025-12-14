@@ -2,7 +2,7 @@ export const options = {
   title: "Admin",
 };// app/admin/devotionals/new.tsx - criação de devocional (layout alinhado à criação de aula)
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, ImageBackground } from "react-native";
+import { View, Text, StyleSheet, ActivityIndicator, Alert, ImageBackground } from "react-native";
 import { useRouter } from "expo-router";
 
 import { AppButton } from "../../../components/ui/AppButton";
@@ -14,6 +14,7 @@ import { createDevotional, isDevotionalDateAvailable } from "../../../lib/devoti
 import { DevotionalStatus } from "../../../types/devotional";
 import { maskDate, maskDateTime, parseDateTimeToTimestamp } from "../../../utils/publishAt";
 import { AppBackground } from "../../../components/layout/AppBackground";
+import { KeyboardScreen } from "../../../components/layout/KeyboardScreen";
 import type { AppTheme } from "../../../theme/tokens";
 
 export default function NewDevotionalScreen() {
@@ -132,7 +133,7 @@ export default function NewDevotionalScreen() {
         style={styles.bgImage}
         imageStyle={styles.bgImageStyle}
       >
-        <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <KeyboardScreen style={styles.container} contentContainerStyle={styles.content}>
           <Text style={styles.title}>Criar devocional</Text>
 
           <AppInput label="Título" placeholder="Ex.: Devocional sobre fé" value={titulo} onChangeText={setTitulo} />
@@ -184,7 +185,7 @@ export default function NewDevotionalScreen() {
               disabled={isSubmitting}
             />
           </View>
-        </ScrollView>
+        </KeyboardScreen>
       </ImageBackground>
     </AppBackground>
   );

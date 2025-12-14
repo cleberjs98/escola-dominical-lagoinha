@@ -1,27 +1,31 @@
-﻿import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+﻿// app/lessons/[lessonId].tsx
+import { useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Timestamp } from "firebase/firestore";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppBackground } from "../../components/layout/AppBackground";
 import { RichTextEditor } from "../../components/editor/RichTextEditor";
 import { LessonMaterialsSection } from "../../components/lessons/LessonMaterialsSection";
 import { AppButton } from "../../components/ui/AppButton";
 import { StatusBadge } from "../../components/ui/StatusBadge";
+import { Card } from "../../components/ui/Card";
 import { useAuth } from "../../hooks/useAuth";
 import { useTheme } from "../../hooks/useTheme";
 import { useUserById } from "../../hooks/useUserById";
 import {
   approveReservation,
+  deleteLesson,
   getLessonById,
   publishLessonNow,
   rejectReservation,
   reserveLesson,
   updateProfessorComplement,
 } from "../../lib/lessons";
-import { withAlpha } from "../../theme/utils";
 import type { Lesson } from "../../types/lesson";
 import { formatDateTime, formatTimestampToDateInput } from "../../utils/publishAt";
+import type { AppTheme } from "../../theme/tokens";
 
 export const options = {
   title: "Aula",
@@ -36,6 +40,8 @@ type SanitizedLesson = {
   descricao_base: string;
   complemento_professor?: string;
 };
+
+// --- Funções Auxiliares (Mojibake e Sanitize) ---
 
 function normalizeMojibake(input?: string | null): string {
   if (!input) return "";
@@ -54,11 +60,18 @@ function sanitizeLesson(lesson: Lesson): SanitizedLesson {
   };
 }
 
+// --- Componente Principal ---
+
 export default function LessonDetailsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { lessonId } = useLocalSearchParams<{ lessonId: string }>();
   const { firebaseUser, user, isInitializing } = useAuth();
   const { theme } = useTheme();
+  
+  // Memoização dos estilos com a correção de contraste
+  const styles = useMemo(() => createStyles(theme, insets), [theme, insets]);
+  
   const role = user?.papel as Role;
   const uid = firebaseUser?.uid || "";
 
@@ -67,6 +80,7 @@ export default function LessonDetailsScreen() {
   const [complement, setComplement] = useState("");
   const [savingComplement, setSavingComplement] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!firebaseUser || isInitializing) return;
@@ -78,7 +92,7 @@ export default function LessonDetailsScreen() {
       setLoading(true);
       const data = await getLessonById(lessonId);
       if (!data) {
-        Alert.alert("Erro", "Aula nÃ£o encontrada.");
+        Alert.alert("Erro", "Aula não encontrada.");
         router.replace("/lessons" as any);
         return;
       }
@@ -86,31 +100,34 @@ export default function LessonDetailsScreen() {
       setComplement(data.complemento_professor || "");
     } catch (err) {
       console.error("Erro ao carregar aula:", err);
-      Alert.alert("Erro", "NÃ£o foi possÃ­vel carregar a aula.");
+      Alert.alert("Erro", "Não foi possível carregar a aula.");
       router.replace("/lessons" as any);
     } finally {
       setLoading(false);
     }
   }
 
-  const isAdmin = role === "administrador" || role === "coordenador";
+  // --- Definição de Permissões ---
+  const isAdmin = role === "administrador" || role === "coordenador" || role === "admin";
   const isProfessor = role === "professor";
   const isStudent = role === "aluno";
   const isOwnerProfessor = lesson?.professor_reservado_id === uid;
+  
   const { user: reservedProfessor } = useUserById(lesson?.professor_reservado_id);
-
   const professorNome = normalizeMojibake(
     ((reservedProfessor?.nome_completo || reservedProfessor?.nome || "").trim()) || "Professor reservado"
   );
+
+  // --- Handlers de Ação ---
 
   async function handleReserve() {
     if (!lesson) return;
     try {
       await reserveLesson(lesson.id, uid);
-      Alert.alert("Reserva", "Reserva enviada para aprovaÃ§Ã£o.");
+      Alert.alert("Reserva", "Reserva enviada para aprovação.");
       router.replace("/lessons" as any);
     } catch (err) {
-      Alert.alert("Erro", (err as Error)?.message || "NÃ£o foi possÃ­vel reservar.");
+      Alert.alert("Erro", (err as Error)?.message || "Não foi possível reservar.");
     }
   }
 
@@ -121,7 +138,7 @@ export default function LessonDetailsScreen() {
       Alert.alert("Aprovado", "Reserva aprovada.");
       router.replace("/lessons" as any);
     } catch (err) {
-      Alert.alert("Erro", "NÃ£o foi possÃ­vel aprovar.");
+      Alert.alert("Erro", "Não foi possível aprovar.");
     }
   }
 
@@ -132,7 +149,7 @@ export default function LessonDetailsScreen() {
       Alert.alert("Rejeitado", "Reserva rejeitada.");
       router.replace("/lessons" as any);
     } catch (err) {
-      Alert.alert("Erro", "NÃ£o foi possÃ­vel rejeitar.");
+      Alert.alert("Erro", "Não foi possível rejeitar.");
     }
   }
 
@@ -144,10 +161,41 @@ export default function LessonDetailsScreen() {
       Alert.alert("Publicado", "Aula publicada.");
       router.replace("/lessons" as any);
     } catch (err) {
-      Alert.alert("Erro", "NÃ£o foi possÃ­vel publicar agora.");
+      Alert.alert("Erro", "Não foi possível publicar agora.");
     } finally {
       setPublishing(false);
     }
+  }
+
+  async function handleDelete() {
+    if (!lesson) return;
+    try {
+      setDeleting(true);
+      await deleteLesson(lesson.id);
+      Alert.alert("Sucesso", "Aula excluída.");
+      router.replace("/lessons" as any);
+    } catch (err) {
+      console.error("[LessonDetails] Erro ao excluir aula:", err);
+      Alert.alert("Erro", "Não foi possível excluir.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  function confirmDelete() {
+    if (!lesson || deleting) return;
+
+    // Fallback for web where Alert may feel unresponsive
+    if (Platform.OS === "web") {
+      const proceed = typeof window !== "undefined" ? window.confirm("Deseja realmente excluir esta aula?") : false;
+      if (proceed) void handleDelete();
+      return;
+    }
+
+    Alert.alert("Confirmar exclusão", "Deseja realmente excluir esta aula?", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Excluir", style: "destructive", onPress: () => void handleDelete() },
+    ]);
   }
 
   async function handleSaveComplement() {
@@ -158,18 +206,20 @@ export default function LessonDetailsScreen() {
       Alert.alert("Salvo", "Complemento salvo.");
       router.replace("/lessons" as any);
     } catch (err) {
-      Alert.alert("Erro", (err as Error)?.message || "NÃ£o foi possÃ­vel salvar.");
+      Alert.alert("Erro", (err as Error)?.message || "Não foi possível salvar.");
     } finally {
       setSavingComplement(false);
     }
   }
+
+  // --- Renderização ---
 
   if (isInitializing || loading) {
     return (
       <AppBackground>
         <View style={styles.center}>
           <ActivityIndicator size="large" color={theme.colors.accent} />
-          <Text style={[styles.loadingText, { color: theme.colors.textPrimary }]}>Carregando aula...</Text>
+          <Text style={styles.loadingText}>Carregando aula...</Text>
         </View>
       </AppBackground>
     );
@@ -179,7 +229,7 @@ export default function LessonDetailsScreen() {
     return (
       <AppBackground>
         <View style={styles.center}>
-          <Text style={[styles.loadingText, { color: theme.colors.textPrimary }]}>Aula nÃ£o encontrada.</Text>
+          <Text style={styles.loadingText}>Aula não encontrada.</Text>
         </View>
       </AppBackground>
     );
@@ -188,229 +238,207 @@ export default function LessonDetailsScreen() {
   const sanitized = sanitizeLesson(lesson);
   const dataAulaStr = formatTimestampToDateInput(lesson.data_aula as Timestamp);
   const publishAtStr = lesson.publish_at ? formatDateTime((lesson.publish_at as Timestamp).toDate()) : "-";
-  // forÃ§a contraste alto para esta tela
-  const labelColor = withAlpha("#FFFFFF", 0.9);
-  const valueColor = "#FFFFFF";
-  const helperColor = withAlpha("#FFFFFF", 0.85);
-  const cardBg = withAlpha(theme.colors.card, 0.78);
-  const sectionBg = withAlpha(theme.colors.card, 0.9);
-  const overlayBg = withAlpha(theme.colors.background, 0.4);
-  const borderColor = withAlpha(theme.colors.border || theme.colors.card, 0.6);
 
   return (
     <AppBackground>
-      <View style={[styles.overlay, { backgroundColor: overlayBg }]}>
-        <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-          <View style={styles.inner}>
-            <View style={[styles.cardWrapper, { backgroundColor: cardBg, borderColor }]}>
-              <Text style={styles.title}>{sanitized.titulo || "Aula"}</Text>
-              {!isStudent ? (
-                <View style={styles.statusRow}>
-                  <StatusBadge status={lesson.status} variant="lesson" />
-                </View>
-              ) : null}
-
-              <View style={styles.fieldBlock}>
-                <Text style={[styles.label, { color: labelColor }]}>ReferÃªncia bÃ­blica</Text>
-                <Text style={[styles.value, { color: valueColor }]}>{sanitized.referencia_biblica || "-"}</Text>
-              </View>
-
-              <View style={styles.fieldBlock}>
-                <Text style={[styles.label, { color: labelColor }]}>Data da aula</Text>
-                <Text style={[styles.value, { color: valueColor }]}>{dataAulaStr}</Text>
-              </View>
-
-              {!isStudent ? (
-                <View style={styles.fieldBlock}>
-                  <Text style={[styles.label, { color: labelColor }]}>PublicaÃ§Ã£o automÃ¡tica</Text>
-                  <Text style={[styles.value, { color: valueColor }]}>{publishAtStr}</Text>
-                </View>
-              ) : null}
-
-              <View style={styles.fieldBlock}>
-                <Text style={[styles.label, { color: labelColor }]}>
-                  {isStudent ? "Resumo" : "DescriÃ§Ã£o base"}
-                </Text>
-                <Text style={[styles.value, { color: valueColor }]}>{sanitized.descricao_base || "-"}</Text>
-              </View>
-
-              {lesson.complemento_professor && !isStudent ? (
-                <View style={styles.fieldBlock}>
-                  <Text style={[styles.label, { color: labelColor }]}>Complemento do professor</Text>
-                  <Text style={[styles.value, { color: valueColor }]}>{sanitized.complemento_professor || "-"}</Text>
-                </View>
-              ) : null}
-
-              {(lesson.status === "pendente_reserva" || lesson.status === "reservada") &&
-                lesson.professor_reservado_id &&
-                !isStudent ? (
-                <View style={styles.fieldBlock}>
-                  <Text style={[styles.label, { color: labelColor }]}>Professor reservado</Text>
-                  <Text style={[styles.value, { color: valueColor }]}>{professorNome || "Professor reservado"}</Text>
-                </View>
-              ) : null}
-
-              <View style={[styles.materialsWrapper, { backgroundColor: sectionBg, borderColor }]}>
-                <LessonMaterialsSection
-                  lessonId={lesson.id}
-                  canUpload={Boolean(
-                    isProfessor &&
-                      isOwnerProfessor &&
-                      (lesson.status === "reservada" || lesson.status === "publicada")
-                  )}
-                  currentUserId={uid}
-                  containerStyle={{ backgroundColor: "transparent" }}
-                />
-                {/* TODO: garantir integraÃ§Ã£o de materiais de apoio se necessÃ¡rio */}
-              </View>
-
-              {!isStudent ? (
-                <View style={styles.actions}>
-                  {isAdmin ? (
-                    <>
-                      <AppButton
-                        title="Editar"
-                        variant="secondary"
-                        onPress={() =>
-                          router.push({ pathname: "/admin/lessons/[lessonId]", params: { lessonId } } as any)
-                        }
-                      />
-                      {lesson.status !== "publicada" ? (
-                        <AppButton
-                          title={publishing ? "Publicando..." : "Publicar agora"}
-                          variant="primary"
-                          onPress={handlePublishNow}
-                          disabled={publishing}
-                        />
-                      ) : null}
-                      {lesson.status === "pendente_reserva" ? (
-                        <View style={styles.actionsRow}>
-                          <AppButton title="Aprovar reserva" variant="primary" onPress={handleApprove} />
-                          <AppButton title="Rejeitar reserva" variant="secondary" onPress={handleReject} />
-                        </View>
-                      ) : null}
-                    </>
-                  ) : null}
-
-                  {isProfessor ? (
-                    <>
-                      {lesson.status === "disponivel" ? (
-                        <AppButton title="Reservar aula" variant="primary" onPress={handleReserve} />
-                      ) : null}
-
-                      {lesson.status === "pendente_reserva" && isOwnerProfessor ? (
-                        <Text style={[styles.helper, { color: helperColor }]}>
-                          Aguardando aprovaÃ§Ã£o da coordenaÃ§Ã£o.
-                        </Text>
-                      ) : null}
-
-                      {lesson.status === "reservada" && isOwnerProfessor ? (
-                        <>
-                          <RichTextEditor
-                            value={complement}
-                            onChange={setComplement}
-                            placeholder="Escreva seu complemento para a aula..."
-                            minHeight={140}
-                          />
-                          <View style={styles.actionsRow}>
-                            <AppButton
-                              title={savingComplement ? "Salvando..." : "Salvar complemento"}
-                              variant="secondary"
-                              onPress={handleSaveComplement}
-                              disabled={savingComplement}
-                            />
-                            <AppButton
-                              title={publishing ? "Publicando..." : "Publicar agora"}
-                              variant="primary"
-                              onPress={handlePublishNow}
-                              disabled={publishing}
-                            />
-                          </View>
-                        </>
-                      ) : null}
-                    </>
-                  ) : null}
-                </View>
-              ) : null}
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        
+        {/* Card 1: Informações Principais */}
+        <Card
+          title={sanitized.titulo || "Aula"}
+          subtitle={sanitized.referencia_biblica || "Sem referência"}
+          footer={!isStudent ? <StatusBadge status={lesson.status} variant="lesson" /> : null}
+        >
+          <View style={styles.cardBody}>
+            <View style={styles.fieldBlock}>
+              <Text style={styles.label}>Data da aula</Text>
+              <Text style={styles.value}>{dataAulaStr}</Text>
             </View>
+
+            {!isStudent && (
+              <View style={styles.fieldBlock}>
+                <Text style={styles.label}>Publicação automática</Text>
+                <Text style={styles.value}>{publishAtStr}</Text>
+              </View>
+            )}
+
+            <View style={styles.fieldBlock}>
+              <Text style={styles.label}>{isStudent ? "Resumo" : "Descrição base"}</Text>
+              <Text style={styles.value}>{sanitized.descricao_base || "-"}</Text>
+            </View>
+
+            {/* Professor Reservado (Admin/Professor) */}
+            {(lesson.status === "pendente_reserva" || lesson.status === "reservada") &&
+              lesson.professor_reservado_id &&
+              !isStudent && (
+                <View style={styles.fieldBlock}>
+                  <Text style={styles.label}>Professor reservado</Text>
+                  <Text style={styles.value}>{professorNome}</Text>
+                </View>
+            )}
+            
+            {/* Conteúdo adicional do professor (visível para todos) */}
+            {lesson.complemento_professor && (
+              <View style={styles.fieldBlock}>
+                <Text style={styles.label}>Conteúdo</Text>
+                <Text style={styles.value}>{sanitized.complemento_professor || "-"}</Text>
+              </View>
+            )}
           </View>
-        </ScrollView>
-      </View>
+        </Card>
+
+        {/* Card 2: Materiais */}
+        <Card title="Materiais da Aula">
+           <LessonMaterialsSection
+              lessonId={lesson.id}
+              canUpload={Boolean(
+                isProfessor &&
+                isOwnerProfessor &&
+                (lesson.status === "reservada" || lesson.status === "publicada")
+              )}
+              currentUserId={uid}
+              containerStyle={{ padding: 0 }}
+            />
+        </Card>
+
+        {/* Card 3: Editor (Apenas Professor Dono) */}
+        {isProfessor && isOwnerProfessor && lesson.status === "reservada" && (
+            <Card title="Seu Conteúdo">
+                 <RichTextEditor
+                    value={complement}
+                    onChange={setComplement}
+                    placeholder="Escreva seu conteúdo para a aula..."
+                    minHeight={140}
+                  />
+                  <View style={styles.actionsRow}>
+                    <AppButton
+                      title={savingComplement ? "Salvando..." : "Salvar conteúdo"}
+                      variant="secondary"
+                      fullWidth={false}
+                      onPress={handleSaveComplement}
+                      disabled={savingComplement}
+                    />
+                  </View>
+            </Card>
+        )}
+
+        {/* Bloco de Ações e Botões */}
+        {!isStudent && (
+          <View style={styles.actionsContainer}>
+            {isAdmin && (
+              <>
+                <AppButton
+                  title="Editar Detalhes"
+                  variant="outline"
+                  onPress={() =>
+                    router.push({ pathname: "/admin/lessons/[lessonId]", params: { lessonId } } as any)
+                  }
+                />
+                
+                {lesson.status !== "publicada" && (
+                  <AppButton
+                    title={publishing ? "Publicando..." : "Publicar agora"}
+                    variant="primary"
+                    onPress={handlePublishNow}
+                    disabled={publishing}
+                  />
+                )}
+
+                {lesson.status === "pendente_reserva" && (
+                  <View style={styles.actionsRow}>
+                    <AppButton title="Aprovar reserva" variant="primary" onPress={handleApprove} fullWidth={false} style={{flex: 1}} />
+                    <AppButton title="Rejeitar reserva" variant="destructive" onPress={handleReject} fullWidth={false} style={{flex: 1}} />
+                  </View>
+                )}
+
+                <AppButton
+                  title={deleting ? "Excluindo..." : "Excluir aula"}
+                  variant="destructive"
+                  onPress={confirmDelete}
+                  disabled={deleting}
+                />
+              </>
+            )}
+
+            {isProfessor && (
+               <>
+                 {lesson.status === "disponivel" && (
+                    <AppButton title="Reservar aula para mim" variant="primary" onPress={handleReserve} />
+                 )}
+                 {lesson.status === "pendente_reserva" && isOwnerProfessor && (
+                    <Text style={styles.helperText}>Aguardando aprovação da coordenação.</Text>
+                 )}
+                 {lesson.status === "reservada" && isOwnerProfessor && (
+                    <AppButton
+                        title={publishing ? "Publicando..." : "Publicar agora"}
+                        variant="primary"
+                        onPress={handlePublishNow}
+                        disabled={publishing}
+                    />
+                 )}
+               </>
+            )}
+          </View>
+        )}
+      </ScrollView>
     </AppBackground>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  content: {
-    padding: 16,
-    gap: 16,
-    alignItems: "center",
-  },
-  inner: {
-    width: "100%",
-    maxWidth: 880,
-  },
-  center: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 16,
-  },
-  loadingText: {
-    marginTop: 12,
-  },
-  cardWrapper: {
-    width: "100%",
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-  },
-  title: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 8,
-  },
-  fieldBlock: {
-    marginTop: 10,
-  },
-  label: {
-    fontSize: 13,
-    marginBottom: 2,
-  },
-  value: {
-    fontSize: 14,
-  },
-  actions: {
-    marginTop: 18,
-    gap: 10,
-  },
-  actionsRow: {
-    flexDirection: "row",
-    gap: 10,
-    flexWrap: "wrap",
-  },
-  helper: {
-    marginTop: 6,
-  },
-  statusRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 4,
-  },
-  materialsWrapper: {
-    marginTop: 14,
-    padding: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-  overlay: {
-    flex: 1,
-  },
-});
+// --- Estilos ---
 
+function createStyles(theme: AppTheme, insets: { top: number; bottom: number }) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: "transparent" },
+    content: {
+      paddingHorizontal: 16,
+      paddingTop: insets.top + 20,
+      paddingBottom: insets.bottom + 24,
+      gap: 16,
+    },
+    center: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 16,
+    },
+    loadingText: {
+      marginTop: 12,
+      color: "#FFFFFF", // Forçado branco para contraste
+    },
+    cardBody: {
+      gap: 12,
+    },
+    fieldBlock: {
+      marginBottom: 4,
+    },
+    label: {
+      fontSize: 12,
+      color: "rgba(255, 255, 255, 0.7)", // Cinza claro para contraste com fundo escuro
+      textTransform: "uppercase",
+      marginBottom: 4,
+      fontWeight: "600",
+    },
+    value: {
+      fontSize: 16,
+      color: "#FFFFFF", // Branco puro para contraste com fundo escuro
+      lineHeight: 22,
+    },
+    actionsContainer: {
+      gap: 12,
+      marginTop: 8,
+    },
+    actionsRow: {
+      flexDirection: "row",
+      gap: 10,
+      marginTop: 8,
+    },
+    helperText: {
+      color: "rgba(255, 255, 255, 0.7)", // Cinza claro
+      textAlign: "center",
+      fontSize: 14,
+      marginTop: 8,
+    },
+  });
+}
 

@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { createContext, useEffect, useMemo, useState, useContext } from "react";
 import { Tabs, useRouter } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { doc, getDoc } from "firebase/firestore";
 import { useAuth } from "../../hooks/useAuth";
 import { useTheme } from "../../hooks/useTheme";
@@ -10,9 +11,25 @@ import type { AppTheme } from "../../types/theme";
 
 /* Ajustes fase de testes - Home, notificacoes, gestao de papeis e permissoes */
 
+type TabsMenuContextValue = {
+  openMenu: () => void;
+};
+
+const TabsMenuContext = createContext<TabsMenuContextValue | undefined>(undefined);
+const BASE_TAB_HEIGHT = 58;
+
+export function useTabsMenu(): TabsMenuContextValue {
+  const ctx = useContext(TabsMenuContext);
+  if (!ctx) {
+    throw new Error("useTabsMenu must be used within TabsLayout");
+  }
+  return ctx;
+}
+
 export default function TabsLayout() {
   const router = useRouter();
   const { theme: appTheme } = useTheme();
+  const insets = useSafeAreaInsets();
   const styles = createStyles(appTheme);
   const [menuOpen, setMenuOpen] = useState(false);
   const [lessonsTabFirst, setLessonsTabFirst] = useState(true);
@@ -28,6 +45,8 @@ export default function TabsLayout() {
     void loadNavSettings();
   }, []);
 
+  const openMenu = useMemo(() => ({ openMenu: () => setMenuOpen(true) }), []);
+
   async function loadNavSettings() {
     try {
       const snap = await getDoc(doc(firebaseDb, "navigation_settings", "global"));
@@ -40,6 +59,15 @@ export default function TabsLayout() {
   }
   const isCoordinator = papel === "coordenador";
   const isAdmin = papel === "administrador" || papel === "admin";
+  const rolePriority = isAdmin
+    ? "admin"
+    : isCoordinator
+      ? "coordinator"
+      : isProfessor
+        ? "professor"
+        : isStudent
+          ? "student"
+          : "member";
 
   const MenuItem = ({
     label,
@@ -61,37 +89,31 @@ export default function TabsLayout() {
   );
 
   return (
-    <>
+    <TabsMenuContext.Provider value={openMenu}>
       <Tabs
         screenOptions={({ route }) => ({
-          headerShown: true,
-          headerStyle: { backgroundColor: withAlpha(appTheme.colors.tabBarBackground, 0.78) },
-          headerTintColor: appTheme.colors.text,
-          headerTitleStyle: { color: appTheme.colors.text },
-          headerRight: () => (
-            <Pressable style={styles.menuButton} onPress={() => setMenuOpen(true)}>
-              <Ionicons name="menu" size={22} color={appTheme.colors.text} />
-            </Pressable>
-          ),
+          headerShown: false,
+          tabBarHideOnKeyboard: true,
           tabBarActiveTintColor: appTheme.colors.tabBarActive,
           tabBarInactiveTintColor: appTheme.colors.tabBarInactive,
           tabBarStyle: {
             backgroundColor: withAlpha(appTheme.colors.tabBarBackground, 0.78),
             borderTopColor: appTheme.colors.border || appTheme.colors.tabBarBackground,
-            height: 60,
-            paddingBottom: 6,
+            height: BASE_TAB_HEIGHT + (insets.bottom || 0),
+            paddingBottom: Math.max(insets.bottom || 0, 8),
+            paddingTop: 6,
           },
           tabBarLabel:
-            route.name === "index"
+            route.name === "(home)"
               ? "Home"
-              : route.name === "lessons/index"
+              : route.name === "lessons"
                 ? "Aulas"
-                : route.name === "devotionals/index"
+                : route.name === "devotionals"
                   ? "Devocional"
                   : undefined,
           tabBarIcon: ({ focused, color, size }) => {
             const iconSize = size ?? 22;
-            if (route.name === "index") {
+            if (route.name === "(home)") {
               return (
                 <MaterialCommunityIcons
                   name={focused ? "home" : "home-outline"}
@@ -100,7 +122,7 @@ export default function TabsLayout() {
                 />
               );
             }
-            if (route.name === "lessons/index") {
+            if (route.name === "lessons") {
               return (
                 <MaterialCommunityIcons
                   name={focused ? "book-open-page-variant" : "book-outline"}
@@ -109,7 +131,7 @@ export default function TabsLayout() {
                 />
               );
             }
-            if (route.name === "devotionals/index") {
+            if (route.name === "devotionals") {
               return (
                 <MaterialCommunityIcons
                   name={focused ? "heart" : "heart-outline"}
@@ -123,9 +145,8 @@ export default function TabsLayout() {
         })}
       >
         <Tabs.Screen
-          name="index"
+          name="(home)"
           options={{
-            title: "Home",
             tabBarLabel: "Home",
           }}
         />
@@ -133,18 +154,16 @@ export default function TabsLayout() {
         {lessonsTabFirst ? (
           <>
             <Tabs.Screen
-              name="lessons/index"
+              name="lessons"
               options={{
-                title: "Aulas",
-                headerTitle: "Aulas",
+                href: "lessons/index",
                 tabBarLabel: "Aulas",
               }}
             />
             <Tabs.Screen
-              name="devotionals/index"
+              name="devotionals"
               options={{
-                title: "Devocionais",
-                headerTitle: "Devocionais",
+                href: "devotionals/index",
                 tabBarLabel: "Devocional",
               }}
             />
@@ -152,18 +171,16 @@ export default function TabsLayout() {
         ) : (
           <>
             <Tabs.Screen
-              name="devotionals/index"
+              name="devotionals"
               options={{
-                title: "Devocional",
-                headerTitle: "Devocional",
+                href: "devotionals/index",
                 tabBarLabel: "Devocional",
               }}
             />
             <Tabs.Screen
-              name="lessons/index"
+              name="lessons"
               options={{
-                title: "Aulas",
-                headerTitle: "Aulas",
+                href: "lessons/index",
                 tabBarLabel: "Aulas",
               }}
             />
@@ -172,13 +189,13 @@ export default function TabsLayout() {
 
         {/* Oculta rotas adicionais da tab bar (acesso via menu/desvios internos) */}
         <Tabs.Screen
-          name="manage/index"
+          name="manage"
           options={{
             href: null,
           }}
         />
         <Tabs.Screen
-          name="profile/index"
+          name="profile"
           options={{
             href: null,
           }}
@@ -214,7 +231,7 @@ export default function TabsLayout() {
           </View>
         </View>
       ) : null}
-    </>
+    </TabsMenuContext.Provider>
   );
 
   function handleNavigate(path: string) {
@@ -233,46 +250,61 @@ export default function TabsLayout() {
   }
 
   function buildMenuItems(): { label: string; path?: string; action?: () => void }[] {
-    if (isCoordinator || isAdmin) {
+    const logout = { label: "Sair", action: handleLogout };
+    const baseAcademic = [
+      { label: "Meu Perfil", path: "/(tabs)/profile" },
+      { label: "Aulas", path: "/(tabs)/lessons" },
+      { label: "Devocionais", path: "/(tabs)/devotionals" },
+      { label: "Avisos", path: "/avisos" },
+    ];
+
+    if (rolePriority === "admin") {
       return [
         { label: "Meu Perfil", path: "/(tabs)/profile" },
-        { label: "Aulas", path: "/(tabs)/lessons" },
-        { label: "Devocionais", path: "/(tabs)/devotionals" },
-        { label: "Avisos", path: "/avisos" },
-        { label: "Aprovar usuarios", path: "/manager/pending-users" },
-        { label: "Aprovar reservas", path: "/manager/pending-reservations" },
-        { label: "Sair", action: handleLogout },
+        { label: "Notificacoes", path: "/notifications" },
+        { label: "Gestao de usuarios", path: "/manage/users" },
+        logout,
       ];
     }
 
-    if (isProfessor) {
+    if (rolePriority === "coordinator") {
       return [
-        { label: "Meu perfil", path: "/(tabs)/profile" },
+        { label: "Meu Perfil", path: "/(tabs)/profile" },
+        { label: "Notificacoes", path: "/notifications" },
+        { label: "Gestao de usuarios", path: "/manage/users" },
+        logout,
+      ];
+    }
+
+    if (rolePriority === "professor") {
+      return [
+        { label: "Meu Perfil", path: "/(tabs)/profile" },
         { label: "Criar aviso", path: "/avisos/new" },
         { label: "Aprovar usuarios", path: "/manager/pending-users" },
-        { label: "Sair", action: handleLogout },
+        logout,
       ];
     }
 
-    if (isStudent) {
+    if (rolePriority === "student") {
       return [
-        { label: "Perfil", path: "/(tabs)/profile" },
+        { label: "Meu Perfil", path: "/(tabs)/profile" },
         { label: "Avisos", path: "/avisos" },
-        { label: "Sair", action: handleLogout },
+        logout,
       ];
     }
 
     return [
-      { label: "Perfil", path: "/(tabs)/profile" },
+      { label: "Meu Perfil", path: "/(tabs)/profile" },
       { label: "Avisos", path: "/avisos" },
-      { label: "Notificacoes", path: "/notifications" },
       ...(canCreateAviso ? [{ label: "Criar aviso", path: "/avisos/new" }] : []),
-      { label: "Gerenciar", path: "/(tabs)/manage" },
-      ...(isCoordinatorOrAdmin ? [{ label: "Gestao de usuarios", path: "/manage/users" }] : []),
-      { label: "Aprovar usuarios", path: "/manager/pending-users" },
-      { label: "Aprovar reservas", path: "/manager/pending-reservations" },
-      { label: "Dashboard Admin", path: "/admin/dashboard" },
-      { label: "Sair", action: handleLogout },
+      { label: "Notificacoes", path: "/notifications" },
+      ...(isCoordinatorOrAdmin
+        ? [
+            { label: "Gerenciar", path: "/(tabs)/manage" },
+            { label: "Gestao de usuarios", path: "/manage/users" },
+          ]
+        : []),
+      logout,
     ];
   }
 }

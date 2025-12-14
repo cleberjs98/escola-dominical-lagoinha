@@ -1,4 +1,4 @@
-﻿// utils/textSanitizer.ts
+// utils/textSanitizer.ts
 // Helper simples para remover caracteres corrompidos na exibição sem alterar dados no backend.
 export function normalizeMojibake(text?: string, fieldName?: string): string {
   if (text == null) return "";
@@ -9,4 +9,3 @@ export function normalizeMojibake(text?: string, fieldName?: string): string {
   }
   return cleaned.normalize?.("NFC") ?? cleaned;
 }
-

@@ -1,4 +1,4 @@
-﻿// lib/devotionals.ts - funÃ§Ãµes de devocionais espelhadas em lib/lessons.ts
+// lib/devotionals.ts - funções de devocionais espelhadas em lib/lessons.ts
 import {
   addDoc,
   collection,
@@ -150,7 +150,7 @@ export async function listAvailableAndPublishedForProfessor(limitCount = 50): Pr
         DevotionalStatus.DISPONIVEL,
         "disponivel",
         "disponiveis",
-        "disponÃ­vel",
+        "disponível",
         "Disponivel",
         "publicado",
         "publicados",
@@ -229,13 +229,13 @@ function convertDoc(id: string, data: Record<string, any>): Devotional {
 }
 
 function normalizeDate(input: string): string {
-  if (!input) throw new Error("Data do devocional obrigatÃ³ria.");
+  if (!input) throw new Error("Data do devocional obrigatória.");
   const trimmed = input.trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
     return trimmed;
   }
   const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(trimmed);
-  if (!match) throw new Error("Data do devocional invÃ¡lida.");
+  if (!match) throw new Error("Data do devocional inválida.");
   const [, dd, mm, yyyy] = match;
   return `${yyyy}-${mm}-${dd}`;
 }
@@ -268,8 +268,8 @@ function resolvePublishAt(value?: Timestamp | null, text?: string | null): Times
 }
 
 function validateCreate(data: Omit<CreateParams, "publish_at" | "publish_at_text" | "publishNow">) {
-  if (!data.titulo?.trim()) throw new Error("Informe o tÃ­tulo.");
-  if (!data.referencia_biblica?.trim()) throw new Error("Informe a referÃªncia bÃ­blica.");
+  if (!data.titulo?.trim()) throw new Error("Informe o título.");
+  if (!data.referencia_biblica?.trim()) throw new Error("Informe a referência bíblica.");
   if (!data.data_devocional?.trim()) throw new Error("Informe a data do devocional.");
   if (!data.conteudo_base?.trim()) throw new Error("Informe o devocional.");
 }

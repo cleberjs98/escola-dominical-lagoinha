@@ -27,7 +27,8 @@ export function LessonMaterialsSection({
   canUpload,
   currentUserId,
 }: Props) {
-  const { themeSettings } = useTheme();
+  const { theme, themeSettings } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [materials, setMaterials] = useState<SupportMaterial[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -222,37 +223,39 @@ export function LessonMaterialsSection({
   );
 }
 
-const styles = StyleSheet.create({
-  list: {
-    gap: 8,
-    marginTop: 8,
-  },
-  materialItem: {
-    flexDirection: "row",
-    gap: 8,
-    alignItems: "center",
-    padding: 10,
-    borderWidth: 1,
-    borderColor: "#1f2937",
-    borderRadius: 10,
-    backgroundColor: "#0f172a",
-  },
-  materialIcon: {
-    fontSize: 18,
-  },
-  materialName: {
-    color: "#e5e7eb",
-    fontWeight: "600",
-  },
-  helper: {
-    color: "#cbd5e1",
-  },
-  helperSmall: {
-    color: "#9ca3af",
-    fontSize: 12,
-  },
-  actionsRow: {
-    gap: 8,
-    marginTop: 12,
-  },
-});
+function createStyles(theme: any) {
+  return StyleSheet.create({
+    list: {
+      gap: 8,
+      marginTop: 8,
+    },
+    materialItem: {
+      flexDirection: "row",
+      gap: 8,
+      alignItems: "center",
+      padding: 12,
+      borderWidth: 1,
+      borderColor: theme.colors.border || theme.colors.card,
+      borderRadius: 12,
+      backgroundColor: theme.colors.card,
+    },
+    materialIcon: {
+      fontSize: 18,
+    },
+    materialName: {
+      color: theme.colors.text,
+      fontWeight: "700",
+    },
+    helper: {
+      color: theme.colors.muted || theme.colors.text,
+    },
+    helperSmall: {
+      color: theme.colors.muted || theme.colors.text,
+      fontSize: 12,
+    },
+    actionsRow: {
+      gap: 8,
+      marginTop: 12,
+    },
+  });
+}

@@ -20,10 +20,10 @@ import type {
 } from "../types/notification";
 
 /**
- * Estas fun��es ser�o usadas nas pr�ximas fases (7.2+) para:
+ * Estas funções serão usadas nas próximas fases (7.2+) para:
  * - notificar coordenadores sobre novas reservas
  * - avisar professores quando reservas forem aprovadas/rejeitadas
- * - avisar usu�rios sobre novas aulas/devocionais/not�cias publicadas
+ * - avisar usuários sobre novas aulas/devocionais/notícias publicadas
  * No futuro podemos acoplar onSnapshot/FCM para tempo real.
  */
 
@@ -82,7 +82,7 @@ export async function markAllNotificationsAsRead(usuarioId: string) {
   );
   const snap = await getDocs(q);
 
-  // Simples loop; em produ��o ideal usar batch/transaction para atomizar.
+  // Simples loop; em produção ideal usar batch/transaction para atomizar.
   const updates = snap.docs.map((docSnap) =>
     updateDoc(docSnap.ref, {
       lida: true,

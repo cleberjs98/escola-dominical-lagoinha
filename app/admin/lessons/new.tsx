@@ -1,11 +1,11 @@
 export const options = {
   title: "Admin",
-};import { useEffect, useMemo, useState } from "react";
+};
+import { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   Alert,
   ActivityIndicator,
   ImageBackground,
@@ -19,6 +19,7 @@ import { RichTextEditor } from "../../../components/editor/RichTextEditor";
 import { maskDate, maskDateTime, parseDateTimeToTimestamp } from "../../../utils/publishAt";
 import { createLessonAvailable, createLessonDraft } from "../../../lib/lessons";
 import { AppBackground } from "../../../components/layout/AppBackground";
+import { KeyboardScreen } from "../../../components/layout/KeyboardScreen";
 import type { AppTheme } from "../../../theme/tokens";
 
 export default function NewLessonScreen() {
@@ -43,7 +44,7 @@ export default function NewLessonScreen() {
     }
     const papel = user?.papel;
     if (papel !== "coordenador" && papel !== "administrador") {
-      Alert.alert("Sem permissão", "Apenas coordenador/admin podem criar aulas.");
+      Alert.alert("Sem permissÃ£o", "Apenas coordenador/admin podem criar aulas.");
       router.replace("/lessons" as any);
     }
   }, [firebaseUser, isInitializing, router, user?.papel]);
@@ -51,11 +52,11 @@ export default function NewLessonScreen() {
   function validateBase(): boolean {
     const newErrors: { data?: string; publish?: string } = {};
     if (!titulo.trim()) {
-      Alert.alert("Erro", "Informe o título da aula.");
+      Alert.alert("Erro", "Informe o tÃ­tulo da aula.");
       return false;
     }
     if (!referencia.trim()) {
-      Alert.alert("Erro", "Informe a referência bíblica.");
+      Alert.alert("Erro", "Informe a referÃªncia bÃ­blica.");
       return false;
     }
     if (!dataAula.trim()) {
@@ -71,7 +72,7 @@ export default function NewLessonScreen() {
     if (!publishAt.trim()) return true;
     const parsed = parseDateTimeToTimestamp(publishAt.trim());
     if (!parsed) {
-      setErrors((prev) => ({ ...prev, publish: "Data/hora inválida (dd/mm/aaaa hh:mm)." }));
+      setErrors((prev) => ({ ...prev, publish: "Data/hora invÃ¡lida (dd/mm/aaaa hh:mm)." }));
       return false;
     }
     setErrors((prev) => ({ ...prev, publish: undefined }));
@@ -123,7 +124,7 @@ export default function NewLessonScreen() {
       router.replace("/lessons" as any);
     } catch (err) {
       console.error("Erro ao salvar aula:", err);
-      Alert.alert("Erro", (err as Error)?.message || "Não foi possível salvar a aula.");
+      Alert.alert("Erro", (err as Error)?.message || "NÃ£o foi possÃ­vel salvar a aula.");
     } finally {
       setSubmitting(false);
     }
@@ -147,16 +148,16 @@ export default function NewLessonScreen() {
         style={styles.bgImage}
         imageStyle={styles.bgImageStyle}
       >
-        <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <KeyboardScreen style={styles.container} contentContainerStyle={styles.content}>
           <Text style={styles.title}>Criar aula</Text>
           <AppInput
-            label="Título da aula"
+            label="TÃ­tulo da aula"
             placeholder="Ex.: Aula sobre Romanos 8"
             value={titulo}
             onChangeText={setTitulo}
           />
           <AppInput
-            label="Referência bíblica"
+            label="ReferÃªncia bÃ­blica"
             placeholder="Ex.: Romanos 8"
             value={referencia}
             onChangeText={setReferencia}
@@ -182,12 +183,12 @@ export default function NewLessonScreen() {
               setErrors((prev) => ({ ...prev, publish: undefined }));
             }}
             error={errors.publish}
-            helperText="Digite ddmmaaaa hh:mm. Deixe vazio para não agendar."
+            helperText="Digite ddmmaaaa hh:mm. Deixe vazio para nÃ£o agendar."
           />
           <RichTextEditor
             value={descricao}
             onChange={setDescricao}
-            placeholder="Descrição base da aula..."
+            placeholder="DescriÃ§Ã£o base da aula..."
             minHeight={180}
           />
 
@@ -199,13 +200,13 @@ export default function NewLessonScreen() {
               disabled={submitting}
             />
             <AppButton
-              title={submitting ? "Criando..." : "Criar aula disponível"}
+              title={submitting ? "Criando..." : "Criar aula disponÃ­vel"}
               variant="primary"
               onPress={() => handleSubmit("disponivel")}
               disabled={submitting}
             />
           </View>
-        </ScrollView>
+        </KeyboardScreen>
       </ImageBackground>
     </AppBackground>
   );

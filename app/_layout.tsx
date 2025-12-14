@@ -6,6 +6,7 @@ import { View } from "react-native";
 import { AuthProvider } from "../contexts/AuthContext";
 import { ThemeProvider } from "../contexts/ThemeContext";
 import { useAuth } from "../hooks/useAuth";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useTheme } from "../hooks/useTheme";
 import { AppBackground } from "../components/layout/AppBackground";
 
@@ -37,7 +38,9 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <ThemeProvider>
-        <RootLayoutContent />
+        <SafeAreaProvider>
+          <RootLayoutContent />
+        </SafeAreaProvider>
       </ThemeProvider>
     </AuthProvider>
   );
@@ -55,13 +58,11 @@ function RootLayoutContent() {
         <PendingGuard />
         <Stack
           screenOptions={{
-            headerStyle: { backgroundColor: theme.colors.card },
-            headerTintColor: textColor,
-            headerTitleStyle: { fontWeight: "600" },
+            headerShown: false,
             contentStyle: { backgroundColor: bg },
           }}
         >
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="(tabs)" />
         </Stack>
       </View>
     </AppBackground>

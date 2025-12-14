@@ -1,5 +1,6 @@
 import React from "react";
 import { Pressable, StyleSheet, Text, View, ViewStyle } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
 
 type Props = {
@@ -32,7 +33,7 @@ export function KpiCard({ label, value, icon, onPress, style }: Props) {
         <Text style={[styles.label, { color: muted }]} numberOfLines={1}>
           {label}
         </Text>
-        {icon ? <Text style={styles.icon}>{icon}</Text> : null}
+        {icon ? <MaterialCommunityIcons name={icon as any} size={16} color={muted} /> : null}
       </View>
       <Text style={[styles.value, { color: text }]} numberOfLines={1}>
         {value}
@@ -63,9 +64,6 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 12,
     fontWeight: "600",
-  },
-  icon: {
-    fontSize: 14,
   },
   value: {
     fontSize: 22,

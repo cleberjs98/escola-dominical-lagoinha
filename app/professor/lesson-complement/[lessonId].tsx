@@ -144,7 +144,7 @@ export default function LessonComplementScreen() {
         imageStyle={styles.bgImageStyle}
       >
         <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-          <Text style={styles.title}>Complemento do Professor</Text>
+          <Text style={styles.title}>Conteúdo</Text>
           <Text style={styles.subtitle}>
             Edite o complemento desta aula. A descricao base eh apenas leitura.
           </Text>
@@ -161,7 +161,7 @@ export default function LessonComplementScreen() {
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Complemento do professor</Text>
+            <Text style={styles.cardTitle}>Conteúdo</Text>
             <TextInput
               style={styles.textarea}
               value={complemento}

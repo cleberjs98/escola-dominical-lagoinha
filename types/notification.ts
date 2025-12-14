@@ -1,7 +1,7 @@
 // types/notification.ts
 import type { Timestamp } from "firebase/firestore";
 
-// Tipos de notifica��o conforme plano da Fase 7.1
+// Tipos de notificação conforme plano da Fase 7.1
 export enum NotificationType {
   NOVA_RESERVA = "nova_reserva",
   RESERVA_APROVADA = "reserva_aprovada",

@@ -1,10 +1,10 @@
 # Configurar CORS do Firebase Storage (Expo Web / Localhost)
 
-Uploads web falham com erro de CORS se o bucket nÃ£o estiver liberado para os origins do bundler do Expo. Use este passo a passo com o `gsutil` (Google Cloud SDK) autenticado no projeto `app-ebd-25695`.
+Uploads web falham com erro de CORS se o bucket não estiver liberado para os origins do bundler do Expo. Use este passo a passo com o `gsutil` (Google Cloud SDK) autenticado no projeto `app-ebd-25695`.
 
 ## 1) Arquivo de CORS
 
-JÃ¡ existe o arquivo `scripts/storage-cors.json` neste repo. Ele libera:
+Já existe o arquivo `scripts/storage-cors.json` neste repo. Ele libera:
 
 - http://localhost:8081 e http://127.0.0.1:8081 (Metro/Expo)
 - http://localhost:19006 e http://127.0.0.1:19006 (Expo web)
@@ -37,6 +37,6 @@ gsutil cors get gs://app-ebd-25695.appspot.com
 
 Reinicie o bundler (expo start --web) e teste o upload. Se ainda falhar, confira se:
 
-- O origin usado estÃ¡ listado em `storage-cors.json`.
-- VocÃª estÃ¡ no projeto Firebase correto (`gcloud config get-value project`).
-- NÃ£o hÃ¡ proxy/HTTPS diferente; inclua o host/porta real no arquivo e reaplique.
+- O origin usado está listado em `storage-cors.json`.
+- Você está no projeto Firebase correto (`gcloud config get-value project`).
+- Não há proxy/HTTPS diferente; inclua o host/porta real no arquivo e reaplique.

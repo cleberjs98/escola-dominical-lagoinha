@@ -21,9 +21,9 @@ type ProfessorSections = Awaited<ReturnType<typeof listLessonsForProfessor>>;
 type LessonStatusFilter = "all" | "available" | "reserved" | "published" | "pending" | "mine";
 type MyLessonsSubFilter = "all" | "pending" | "reserved" | "published";
 type DateOrder = "asc" | "desc";
-type AdminLessonFilter = "all" | "available" | "published" | "reservedPending" | "mine";
+type AdminLessonFilter = "all" | "drafts" | "available" | "published" | "reserved" | "pending";
 
-type NormalizedLessonStatus = "disponivel" | "reservada" | "publicada" | "pendente";
+type NormalizedLessonStatus = "disponivel" | "reservada" | "publicada" | "pendente" | "rascunho";
 type Styles = ReturnType<typeof createStyles>;
 
 export const options = {
@@ -50,6 +50,7 @@ function lessonStatusLabel(status: NormalizedLessonStatus) {
   if (status === "reservada") return "Reservada";
   if (status === "publicada") return "Publicada";
   if (status === "pendente") return "Pendente";
+  if (status === "rascunho") return "Rascunho";
   return status;
 }
 
@@ -61,6 +62,8 @@ function lessonStatusVariant(status: NormalizedLessonStatus): AppCardStatusVaria
       return "info";
     case "pendente":
       return "warning";
+    case "rascunho":
+      return "muted";
     case "disponivel":
     default:
       return "muted";
@@ -161,12 +164,14 @@ function AdminLessonsScreen({ uid }: { uid: string }) {
             return true;
           case "available":
             return status === "disponivel";
+          case "drafts":
+            return status === "rascunho";
           case "published":
             return status === "publicada";
-          case "reservedPending":
-            return status === "reservada" || status === "pendente";
-          case "mine":
-            return isMine;
+          case "reserved":
+            return status === "reservada";
+          case "pending":
+            return status === "pendente";
           default:
             return true;
         }
@@ -225,10 +230,11 @@ function AdminLessonsScreen({ uid }: { uid: string }) {
         <View style={{ gap: 12 }}>
           <View style={styles.filtersRow}>
             {renderAdminFilterChip("Todos", "all")}
+            {renderAdminFilterChip("Rascunhos", "drafts")}
             {renderAdminFilterChip("Disponiveis", "available")}
             {renderAdminFilterChip("Publicadas", "published")}
-            {renderAdminFilterChip("Reservadas / Pendentes", "reservedPending")}
-            {renderAdminFilterChip("Minhas aulas", "mine")}
+            {renderAdminFilterChip("Reservadas", "reserved")}
+            {renderAdminFilterChip("Pendentes", "pending")}
           </View>
 
           <View style={styles.orderToggleRow}>
@@ -267,7 +273,7 @@ function AdminLessonsScreen({ uid }: { uid: string }) {
 }
 
 // =========================
-// Tela aluno / pÃºblico
+// Tela aluno / público
 // =========================
 function StudentLessonsScreen() {
   const router = useRouter();

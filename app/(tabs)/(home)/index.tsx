@@ -1,30 +1,31 @@
 export const options = {
   title: "Home",
-};// app/(tabs)/index.tsx - Home principal
+};
+// app/(tabs)/(home)/index.tsx - Home principal
 import { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, ActivityIndicator, Pressable, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 
-import { useAuth } from "../../hooks/useAuth";
-import { getDevotionalOfTheDay, listAvailableAndPublishedForProfessor } from "../../lib/devotionals";
-import { listLessonsForProfessor, listNextPublishedLessons, listAvailableAndPublished } from "../../lib/lessons";
-import { listRecentAvisosForUser } from "../../lib/avisos";
-import type { Devotional } from "../../types/devotional";
-import type { Aviso } from "../../types/aviso";
-import type { Lesson } from "../../types/lesson";
-import { useUnreadNotificationsCount } from "../../hooks/useUnreadNotificationsCount";
-import { Card } from "../../components/ui/Card";
-import { AppButton } from "../../components/ui/AppButton";
-import { EmptyState } from "../../components/ui/EmptyState";
-import { AulaCard } from "../../components/cards/AulaCard";
-import { DevocionalCard } from "../../components/cards/DevocionalCard";
-import { Header } from "../../components/ui/Header";
-import { useTheme } from "../../hooks/useTheme";
-import { AppBackground } from "../../components/layout/AppBackground";
-import { RecentAnnouncements } from "../../components/home/RecentAnnouncements";
-import { AppCard, AppCardStatusVariant } from "../../components/common/AppCard";
-import CoordinatorDashboardScreen from "../(coordenador)";
-import type { AppTheme } from "../../types/theme";
+import { useAuth } from "../../../hooks/useAuth";
+import { getDevotionalOfTheDay, listAvailableAndPublishedForProfessor } from "../../../lib/devotionals";
+import { listLessonsForProfessor, listNextPublishedLessons, listAvailableAndPublished } from "../../../lib/lessons";
+import { listRecentAvisosForUser } from "../../../lib/avisos";
+import type { Devotional } from "../../../types/devotional";
+import type { Aviso } from "../../../types/aviso";
+import type { Lesson } from "../../../types/lesson";
+import { useUnreadNotificationsCount } from "../../../hooks/useUnreadNotificationsCount";
+import { Card } from "../../../components/ui/Card";
+import { AppButton } from "../../../components/ui/AppButton";
+import { EmptyState } from "../../../components/ui/EmptyState";
+import { AulaCard } from "../../../components/cards/AulaCard";
+import { DevocionalCard } from "../../../components/cards/DevocionalCard";
+import { Header } from "../../../components/ui/Header";
+import { useTheme } from "../../../hooks/useTheme";
+import { AppBackground } from "../../../components/layout/AppBackground";
+import { RecentAnnouncements } from "../../../components/home/RecentAnnouncements";
+import { AppCard, AppCardStatusVariant } from "../../../components/common/AppCard";
+import CoordinatorDashboardScreen from "../../(coordenador)";
+import type { AppTheme } from "../../../types/theme";
 
 /* Ajustes fase de testes - Home, notificacoes, gestao de papeis e permissoes */
 
@@ -62,7 +63,7 @@ export default function HomeScreen() {
   const primeiroNome = nome.split(" ")[0] || nome;
 
   useEffect(() => {
-    // Admin/Coord podem carregar mesmo sem checar status; demais sМ se aprovado
+    // Admin/Coord podem carregar mesmo sem checar status; demais só se aprovado
     if (!firebaseUser) return;
     if (!isApproved && !isCoordenador && !isAdmin) return;
 

@@ -1,6 +1,6 @@
 // app/auth/login.tsx - tela de login com UI compartilhada
 import { useMemo, useState } from "react";
-import { View, Text, StyleSheet, Alert } from "react-native";
+import { Text, StyleSheet, Alert, View, Pressable } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
@@ -11,6 +11,7 @@ import { AppInput } from "../../components/ui/AppInput";
 import { AppButton } from "../../components/ui/AppButton";
 import { useTheme } from "../../hooks/useTheme";
 import { AppBackground } from "../../components/layout/AppBackground";
+import { KeyboardScreen } from "../../components/layout/KeyboardScreen";
 import { isNonEmpty, isValidEmail } from "../../utils/validation";
 import { mapAuthErrorToMessage } from "../../lib/auth/errorMessages";
 import type { AppTheme } from "../../types/theme";
@@ -22,6 +23,7 @@ export default function LoginScreen() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -101,7 +103,7 @@ export default function LoginScreen() {
 
   return (
     <AppBackground>
-      <View style={styles.container}>
+      <KeyboardScreen contentContainerStyle={styles.container}>
         <Card title="Entrar" subtitle="Use seu email e senha para acessar o app.">
           <AppInput
             label="Email"
@@ -115,7 +117,12 @@ export default function LoginScreen() {
             value={password}
             onChangeText={setPassword}
             placeholder="******"
-            secureTextEntry
+            secureTextEntry={!showPassword}
+            rightElement={
+              <Pressable onPress={() => setShowPassword((prev) => !prev)}>
+                <Text style={styles.toggleText}>{showPassword ? "Ocultar" : "Ver"}</Text>
+              </Pressable>
+            }
           />
           <AppButton
             title={isSubmitting ? "Entrando..." : "Entrar"}
@@ -135,7 +142,7 @@ export default function LoginScreen() {
             </Link>
           </View>
         </Card>
-      </View>
+      </KeyboardScreen>
     </AppBackground>
   );
 }
@@ -163,6 +170,11 @@ function createStyles(theme: AppTheme) {
     errorText: {
       color: theme.colors.status?.dangerBg || theme.colors.primary,
       marginTop: 8,
+    },
+    toggleText: {
+      color: theme.colors.accent,
+      fontWeight: "600",
+      fontSize: 13,
     },
   });
 }
