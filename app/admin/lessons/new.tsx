@@ -2,14 +2,7 @@ export const options = {
   title: "Admin",
 };
 import { useEffect, useMemo, useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  Alert,
-  ActivityIndicator,
-  ImageBackground,
-} from "react-native";
+import { View, Text, StyleSheet, Alert, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../../hooks/useAuth";
 import { useTheme } from "../../../hooks/useTheme";
@@ -143,71 +136,65 @@ export default function NewLessonScreen() {
 
   return (
     <AppBackground>
-      <ImageBackground
-        source={require("../../../assets/brand/lagoinha-badge-watermark.png")}
-        style={styles.bgImage}
-        imageStyle={styles.bgImageStyle}
-      >
-        <KeyboardScreen style={styles.container} contentContainerStyle={styles.content}>
-          <Text style={styles.title}>Criar aula</Text>
-          <AppInput
-            label="Título da aula"
-            placeholder="Ex.: Aula sobre Romanos 8"
-            value={titulo}
-            onChangeText={setTitulo}
-          />
-          <AppInput
-            label="Referência bíblica"
-            placeholder="Ex.: Romanos 8"
-            value={referencia}
-            onChangeText={setReferencia}
-          />
-          <AppInput
-            label="Data da aula"
-            placeholder="dd/mm/aaaa"
-            keyboardType="number-pad"
-            value={dataAula}
-            onChangeText={(v) => {
-              setDataAula(maskDate(v));
-              setErrors((prev) => ({ ...prev, data: undefined }));
-            }}
-            error={errors.data}
-          />
-          <AppInput
-            label="Publicar automaticamente em (opcional)"
-            placeholder="dd/mm/aaaa hh:mm"
-            keyboardType="number-pad"
-            value={publishAt}
-            onChangeText={(v) => {
-              setPublishAt(maskDateTime(v));
-              setErrors((prev) => ({ ...prev, publish: undefined }));
-            }}
-            error={errors.publish}
-            helperText="Digite ddmmaaaa hh:mm. Deixe vazio para não agendar."
-          />
-          <RichTextEditor
-            value={descricao}
-            onChange={setDescricao}
-            placeholder="Descrição base da aula..."
-            minHeight={180}
-          />
+      <KeyboardScreen style={styles.container} contentContainerStyle={styles.content}>
+        <Text style={styles.title}>Criar aula</Text>
+        <AppInput
+          label="Título da aula"
+          placeholder="Ex.: Aula sobre Romanos 8"
+          value={titulo}
+          onChangeText={setTitulo}
+        />
+        <AppInput
+          label="Referência bíblica"
+          placeholder="Ex.: Romanos 8"
+          value={referencia}
+          onChangeText={setReferencia}
+        />
+        <AppInput
+          label="Data da aula"
+          placeholder="dd/mm/aaaa"
+          keyboardType="number-pad"
+          value={dataAula}
+          onChangeText={(v) => {
+            setDataAula(maskDate(v));
+            setErrors((prev) => ({ ...prev, data: undefined }));
+          }}
+          error={errors.data}
+        />
+        <AppInput
+          label="Publicar automaticamente em (opcional)"
+          placeholder="dd/mm/aaaa hh:mm"
+          keyboardType="number-pad"
+          value={publishAt}
+          onChangeText={(v) => {
+            setPublishAt(maskDateTime(v));
+            setErrors((prev) => ({ ...prev, publish: undefined }));
+          }}
+          error={errors.publish}
+          helperText="Digite ddmmaaaa hh:mm. Deixe vazio para não agendar."
+        />
+        <RichTextEditor
+          value={descricao}
+          onChange={setDescricao}
+          placeholder="Descrição base da aula..."
+          minHeight={180}
+        />
 
-          <View style={styles.actions}>
-            <AppButton
-              title={submitting ? "Salvando..." : "Salvar rascunho"}
-              variant="secondary"
-              onPress={() => handleSubmit("rascunho")}
-              disabled={submitting}
-            />
-            <AppButton
-              title={submitting ? "Criando..." : "Criar aula disponível"}
-              variant="primary"
-              onPress={() => handleSubmit("disponivel")}
-              disabled={submitting}
-            />
-          </View>
-        </KeyboardScreen>
-      </ImageBackground>
+        <View style={styles.actions}>
+          <AppButton
+            title={submitting ? "Salvando..." : "Salvar rascunho"}
+            variant="secondary"
+            onPress={() => handleSubmit("rascunho")}
+            disabled={submitting}
+          />
+          <AppButton
+            title={submitting ? "Criando..." : "Criar aula disponível"}
+            variant="primary"
+            onPress={() => handleSubmit("disponivel")}
+            disabled={submitting}
+          />
+        </View>
+      </KeyboardScreen>
     </AppBackground>
   );
 }
@@ -240,13 +227,6 @@ function createStyles(theme: AppTheme) {
     actions: {
       gap: 8,
       marginTop: 12,
-    },
-    bgImage: {
-      flex: 1,
-    },
-    bgImageStyle: {
-      opacity: 0.05,
-      resizeMode: "cover",
     },
   });
 }

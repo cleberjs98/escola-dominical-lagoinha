@@ -3,12 +3,14 @@ import { Stack, useSegments, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { View } from "react-native";
+import { onAuthStateChanged } from "firebase/auth";
 import { AuthProvider } from "../contexts/AuthContext";
 import { ThemeProvider } from "../contexts/ThemeContext";
 import { useAuth } from "../hooks/useAuth";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useTheme } from "../hooks/useTheme";
 import { AppBackground } from "../components/layout/AppBackground";
+import { firebaseAuth } from "../lib/firebase";
 
 function PendingGuard() {
   const { isAuthenticated, isPending, isInitializing } = useAuth();
@@ -50,6 +52,28 @@ function RootLayoutContent() {
   const { theme } = useTheme();
   const bg = theme.colors.background;
   const textColor = theme.colors.text;
+
+   // Debug temporário para checar claims no Web
+   useEffect(() => {
+     if (typeof window === "undefined") return;
+
+     (window as any).firebaseAuth = firebaseAuth;
+
+     const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
+       if (!user) {
+         console.log("[Auth][Debug] Nenhum usuário logado (web)");
+         return;
+       }
+       try {
+         const token = await user.getIdTokenResult(true);
+         console.log("[Auth][Debug] Claims:", token.claims);
+       } catch (err) {
+         console.error("[Auth][Debug] Erro ao obter claims", err);
+       }
+     });
+
+     return () => unsubscribe();
+   }, []);
 
   return (
     <AppBackground>

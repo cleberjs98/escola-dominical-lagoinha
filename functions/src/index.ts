@@ -1,7 +1,13 @@
 import * as admin from "firebase-admin";
 import * as functions from "firebase-functions";
 import { onSchedule } from "firebase-functions/v2/scheduler";
+import { onObjectFinalized } from "firebase-functions/v2/storage";
 import { logger } from "firebase-functions";
+import * as path from "path";
+import * as os from "os";
+import * as fs from "fs";
+import ffmpeg from "fluent-ffmpeg";
+import ffmpegPath from "ffmpeg-static";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -10,6 +16,123 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 const lessonsCollection = "aulas";
 const devotionalsCollection = "devocionais";
+const MAX_CONVERT_TIMEOUT_SECONDS = 540; // 9 minutos
+
+// Garante que o ffmpeg usa o binário estático (Cloud Functions Linux x64)
+if (ffmpegPath) {
+  ffmpeg.setFfmpegPath(ffmpegPath);
+} else {
+  logger.warn("[Video][Convert] ffmpeg-static path não encontrado; conversão pode falhar");
+}
+
+/**
+ * Converte vídeos enviados ao Storage para H.264/AAC gerando um arquivo com sufixo _output.mp4.
+ * Ajuda a evitar incompatibilidade de codec (H.265/HDR) em web/mobile.
+ */
+export const convertVideo = onObjectFinalized(
+  {
+    region: "us-west1", // precisa casar com a região do bucket
+    memory: "2GiB",
+    timeoutSeconds: MAX_CONVERT_TIMEOUT_SECONDS,
+    cpu: 1,
+  },
+  async (event) => {
+    const fileBucket = event.data.bucket;
+    const filePath = event.data.name;
+    const contentType = event.data.contentType || "";
+
+    if (!filePath) {
+      logger.warn("[Video][Convert] Evento sem caminho de arquivo; ignorando");
+      return;
+    }
+
+    if (!contentType.startsWith("video/")) {
+      logger.info("[Video][Convert] Não é vídeo; ignorando", { filePath, contentType });
+      return;
+    }
+
+    if (filePath.endsWith("_output.mp4")) {
+      logger.info("[Video][Convert] Já é arquivo convertido; ignorando", { filePath });
+      return;
+    }
+
+    // Escopo opcional: só processar pastas de materiais para evitar conversões indesejadas
+    const lowerPath = filePath.toLowerCase();
+    const isMaterialPath =
+      lowerPath.includes("materiais") || lowerPath.includes("materials") || lowerPath.includes("videos");
+    if (!isMaterialPath) {
+      logger.info("[Video][Convert] Caminho fora de materiais; ignorando", { filePath });
+      return;
+    }
+
+    const fileName = path.basename(filePath);
+    const fileNameWithoutExt = path.parse(fileName).name;
+    const bucket = admin.storage().bucket(fileBucket);
+
+    const tempFilePath = path.join(os.tmpdir(), fileName);
+    const targetTempFileName = `${fileNameWithoutExt}_output.mp4`;
+    const targetTempFilePath = path.join(os.tmpdir(), targetTempFileName);
+    const targetStorageFilePath = path.join(path.dirname(filePath), targetTempFileName);
+
+    logger.info("[Video][Convert] Iniciando conversão", {
+      filePath,
+      target: targetStorageFilePath,
+    });
+
+    try {
+      await bucket.file(filePath).download({ destination: tempFilePath });
+
+      await new Promise<void>((resolve, reject) => {
+        ffmpeg(tempFilePath)
+          .outputOptions([
+            "-c:v libx264",
+            "-crf 23", // Qualidade balanceada; menor = melhor
+            "-preset fast",
+            "-c:a aac",
+            "-b:a 128k",
+            "-movflags +faststart", // habilita start progressivo
+            "-vf scale=-2:720", // Reduz para 720p mantendo proporção e paridade de 2
+          ])
+          .on("error", (err) => {
+            logger.error("[Video][Convert] Erro no ffmpeg", { filePath, err });
+            reject(err);
+          })
+          .on("end", () => {
+            logger.info("[Video][Convert] Conversão concluída", {
+              filePath,
+              output: targetTempFilePath,
+            });
+            resolve();
+          })
+          .save(targetTempFilePath);
+      });
+
+      await bucket.upload(targetTempFilePath, {
+        destination: targetStorageFilePath,
+        metadata: {
+          contentType: "video/mp4",
+        },
+      });
+
+      logger.info("[Video][Convert] Upload do convertido concluído", {
+        target: targetStorageFilePath,
+      });
+
+      // Se quiser economizar espaço, descomente abaixo para remover o original
+      // await bucket.file(filePath).delete();
+    } catch (err) {
+      logger.error("[Video][Convert] Falha na conversão", { filePath, err });
+    } finally {
+      // Limpeza dos temporários
+      if (fs.existsSync(tempFilePath)) {
+        fs.unlinkSync(tempFilePath);
+      }
+      if (fs.existsSync(targetTempFilePath)) {
+        fs.unlinkSync(targetTempFilePath);
+      }
+    }
+  }
+);
 
 /**
  * SYNC DE CLAIMS:

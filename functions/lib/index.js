@@ -32,18 +32,129 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.notifyLessonsOnWrite = exports.notifyDevotionalsOnWrite = exports.cleanupOldNotifications = exports.publishScheduledLessons = exports.syncUserClaimsOnUserWrite = void 0;
+exports.notifyLessonsOnWrite = exports.notifyDevotionalsOnWrite = exports.cleanupOldNotifications = exports.publishScheduledLessons = exports.syncUserClaimsOnUserWrite = exports.convertVideo = void 0;
 const admin = __importStar(require("firebase-admin"));
 const functions = __importStar(require("firebase-functions"));
 const scheduler_1 = require("firebase-functions/v2/scheduler");
+const storage_1 = require("firebase-functions/v2/storage");
 const firebase_functions_1 = require("firebase-functions");
+const path = __importStar(require("path"));
+const os = __importStar(require("os"));
+const fs = __importStar(require("fs"));
+const fluent_ffmpeg_1 = __importDefault(require("fluent-ffmpeg"));
+const ffmpeg_static_1 = __importDefault(require("ffmpeg-static"));
 if (!admin.apps.length) {
     admin.initializeApp();
 }
 const db = admin.firestore();
 const lessonsCollection = "aulas";
 const devotionalsCollection = "devocionais";
+const MAX_CONVERT_TIMEOUT_SECONDS = 540; // 9 minutos
+// Garante que o ffmpeg usa o binário estático (Cloud Functions Linux x64)
+if (ffmpeg_static_1.default) {
+    fluent_ffmpeg_1.default.setFfmpegPath(ffmpeg_static_1.default);
+}
+else {
+    firebase_functions_1.logger.warn("[Video][Convert] ffmpeg-static path não encontrado; conversão pode falhar");
+}
+/**
+ * Converte vídeos enviados ao Storage para H.264/AAC gerando um arquivo com sufixo _output.mp4.
+ * Ajuda a evitar incompatibilidade de codec (H.265/HDR) em web/mobile.
+ */
+exports.convertVideo = (0, storage_1.onObjectFinalized)({
+    region: "us-west1", // precisa casar com a região do bucket
+    memory: "2GiB",
+    timeoutSeconds: MAX_CONVERT_TIMEOUT_SECONDS,
+    cpu: 1,
+}, async (event) => {
+    const fileBucket = event.data.bucket;
+    const filePath = event.data.name;
+    const contentType = event.data.contentType || "";
+    if (!filePath) {
+        firebase_functions_1.logger.warn("[Video][Convert] Evento sem caminho de arquivo; ignorando");
+        return;
+    }
+    if (!contentType.startsWith("video/")) {
+        firebase_functions_1.logger.info("[Video][Convert] Não é vídeo; ignorando", { filePath, contentType });
+        return;
+    }
+    if (filePath.endsWith("_output.mp4")) {
+        firebase_functions_1.logger.info("[Video][Convert] Já é arquivo convertido; ignorando", { filePath });
+        return;
+    }
+    // Escopo opcional: só processar pastas de materiais para evitar conversões indesejadas
+    const lowerPath = filePath.toLowerCase();
+    const isMaterialPath = lowerPath.includes("materiais") || lowerPath.includes("materials") || lowerPath.includes("videos");
+    if (!isMaterialPath) {
+        firebase_functions_1.logger.info("[Video][Convert] Caminho fora de materiais; ignorando", { filePath });
+        return;
+    }
+    const fileName = path.basename(filePath);
+    const fileNameWithoutExt = path.parse(fileName).name;
+    const bucket = admin.storage().bucket(fileBucket);
+    const tempFilePath = path.join(os.tmpdir(), fileName);
+    const targetTempFileName = `${fileNameWithoutExt}_output.mp4`;
+    const targetTempFilePath = path.join(os.tmpdir(), targetTempFileName);
+    const targetStorageFilePath = path.join(path.dirname(filePath), targetTempFileName);
+    firebase_functions_1.logger.info("[Video][Convert] Iniciando conversão", {
+        filePath,
+        target: targetStorageFilePath,
+    });
+    try {
+        await bucket.file(filePath).download({ destination: tempFilePath });
+        await new Promise((resolve, reject) => {
+            (0, fluent_ffmpeg_1.default)(tempFilePath)
+                .outputOptions([
+                "-c:v libx264",
+                "-crf 23", // Qualidade balanceada; menor = melhor
+                "-preset fast",
+                "-c:a aac",
+                "-b:a 128k",
+                "-movflags +faststart", // habilita start progressivo
+                "-vf scale=-2:720", // Reduz para 720p mantendo proporção e paridade de 2
+            ])
+                .on("error", (err) => {
+                firebase_functions_1.logger.error("[Video][Convert] Erro no ffmpeg", { filePath, err });
+                reject(err);
+            })
+                .on("end", () => {
+                firebase_functions_1.logger.info("[Video][Convert] Conversão concluída", {
+                    filePath,
+                    output: targetTempFilePath,
+                });
+                resolve();
+            })
+                .save(targetTempFilePath);
+        });
+        await bucket.upload(targetTempFilePath, {
+            destination: targetStorageFilePath,
+            metadata: {
+                contentType: "video/mp4",
+            },
+        });
+        firebase_functions_1.logger.info("[Video][Convert] Upload do convertido concluído", {
+            target: targetStorageFilePath,
+        });
+        // Se quiser economizar espaço, descomente abaixo para remover o original
+        // await bucket.file(filePath).delete();
+    }
+    catch (err) {
+        firebase_functions_1.logger.error("[Video][Convert] Falha na conversão", { filePath, err });
+    }
+    finally {
+        // Limpeza dos temporários
+        if (fs.existsSync(tempFilePath)) {
+            fs.unlinkSync(tempFilePath);
+        }
+        if (fs.existsSync(targetTempFilePath)) {
+            fs.unlinkSync(targetTempFilePath);
+        }
+    }
+});
 /**
  * SYNC DE CLAIMS:
  * Sempre que /users/{userId} for criado/atualizado/deletado,

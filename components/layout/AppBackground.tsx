@@ -4,19 +4,22 @@ import { useTheme } from "../../hooks/useTheme";
 
 type Props = {
   children: ReactNode;
+  showWatermark?: boolean;
 };
 
-export function AppBackground({ children }: Props) {
+export function AppBackground({ children, showWatermark = true }: Props) {
   const { theme } = useTheme();
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Image
-        source={require("../../assets/brand/lagoinha-badge-watermark.png")}
-        style={styles.image}
-        resizeMode="contain"
-        pointerEvents="none"
-      />
+      {showWatermark ? (
+        <Image
+          source={require("../../assets/brand/lagoinha-badge-watermark.png")}
+          style={styles.image}
+          resizeMode="contain"
+          pointerEvents="none"
+        />
+      ) : null}
       <View style={styles.content}>{children}</View>
     </View>
   );

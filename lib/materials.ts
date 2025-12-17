@@ -104,7 +104,7 @@ export async function updateSupportMaterial(params: UpdateSupportMaterialParams)
 export async function deleteSupportMaterial(materialId: string) {
   const refDoc = doc(firebaseDb, "materiais_apoio", materialId);
   await deleteDoc(refDoc);
-  // Importante: em fase futura, deletar também o arquivo no Storage se caminho_storage estiver definido.
+  // Em próxima fase: remover arquivo do Storage se houver caminho_storage
 }
 
 export async function listSupportMaterialsForReference(

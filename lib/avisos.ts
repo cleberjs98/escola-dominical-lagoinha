@@ -98,11 +98,11 @@ export async function getAvisoById(id: string): Promise<Aviso | null> {
 
 export async function listAvisosForUser(user: User | null): Promise<Aviso[]> {
   if (!user) return [];
-  const role = user.papel;
+  const role = user.papel as User["papel"] | "admin";
   const userId = (user as any)?.id || (user as any)?.uid || "";
   const colRef = collection(firebaseDb, collectionName);
 
-  if (role === "administrador" || role === "coordenador") {
+  if (role === "administrador" || role === "coordenador" || role === "admin") {
     const q = query(colRef, orderBy("fixado", "desc"), orderBy("criado_em", "desc"));
     const snap = await getDocs(q);
     return mapAvisoList(snap.docs);
@@ -139,12 +139,12 @@ export async function listAvisosForUser(user: User | null): Promise<Aviso[]> {
 export async function listRecentAvisosForUser(user: User | null, limitCount = 3): Promise<Aviso[]> {
   if (__DEV__) console.log("[AvisosLib] listRecentAvisosForUser", { role: user?.papel });
   if (!user) return [];
-  const role = user.papel;
+  const role = user.papel as User["papel"] | "admin";
   const userId = (user as any)?.id || (user as any)?.uid || "";
   const colRef = collection(firebaseDb, collectionName);
   const limitConstraint = limit(limitCount);
 
-  if (role === "administrador" || role === "coordenador") {
+  if (role === "administrador" || role === "coordenador" || role === "admin") {
     const q = query(colRef, orderBy("criado_em", "desc"), limitConstraint);
     const snap = await getDocs(q);
     const list = mapAvisoList(snap.docs);

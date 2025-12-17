@@ -2,7 +2,7 @@ export const options = {
   title: "Admin",
 };// app/admin/devotionals/new.tsx - criação de devocional (layout alinhado à criação de aula)
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, ActivityIndicator, Alert, ImageBackground } from "react-native";
+import { View, Text, StyleSheet, ActivityIndicator, Alert } from "react-native";
 import { useRouter } from "expo-router";
 
 import { AppButton } from "../../../components/ui/AppButton";
@@ -128,65 +128,59 @@ export default function NewDevotionalScreen() {
 
   return (
     <AppBackground>
-      <ImageBackground
-        source={require("../../../assets/brand/lagoinha-badge-watermark.png")}
-        style={styles.bgImage}
-        imageStyle={styles.bgImageStyle}
-      >
-        <KeyboardScreen style={styles.container} contentContainerStyle={styles.content}>
-          <Text style={styles.title}>Criar devocional</Text>
+      <KeyboardScreen style={styles.container} contentContainerStyle={styles.content}>
+        <Text style={styles.title}>Criar devocional</Text>
 
-          <AppInput label="Título" placeholder="Ex.: Devocional sobre fé" value={titulo} onChangeText={setTitulo} />
-          <AppInput
-            label="Referência bíblica"
-            placeholder="Ex.: João 3:16"
-            value={referenciaBiblica}
-            onChangeText={setReferenciaBiblica}
-          />
-          <AppInput
-            label="Data do devocional"
-            placeholder="dd/mm/aaaa"
-            value={dataDevocional}
-            onChangeText={(text) => setDataDevocional(maskDate(text))}
-          />
-          <AppInput
-            label="Publicar automaticamente em (data e hora)"
-            placeholder="dd/mm/aaaa hh:mm"
-            value={publishAtInput}
-            onChangeText={(text) => setPublishAtInput(maskDateTime(text))}
-          />
-          <RichTextEditor
-            value={conteudoBase}
-            onChange={setConteudoBase}
-            placeholder="Digite o devocional..."
-            minHeight={180}
-          />
+        <AppInput label="Título" placeholder="Ex.: Devocional sobre fé" value={titulo} onChangeText={setTitulo} />
+        <AppInput
+          label="Referência bíblica"
+          placeholder="Ex.: João 3:16"
+          value={referenciaBiblica}
+          onChangeText={setReferenciaBiblica}
+        />
+        <AppInput
+          label="Data do devocional"
+          placeholder="dd/mm/aaaa"
+          value={dataDevocional}
+          onChangeText={(text) => setDataDevocional(maskDate(text))}
+        />
+        <AppInput
+          label="Publicar automaticamente em (data e hora)"
+          placeholder="dd/mm/aaaa hh:mm"
+          value={publishAtInput}
+          onChangeText={(text) => setPublishAtInput(maskDateTime(text))}
+        />
+        <RichTextEditor
+          value={conteudoBase}
+          onChange={setConteudoBase}
+          placeholder="Digite o devocional..."
+          minHeight={180}
+        />
 
-          <View style={styles.actions}>
-            <AppButton
-              title={isSubmitting ? "Salvando..." : "Salvar como rascunho"}
-              variant="secondary"
-              onPress={handleSaveDraft}
-              disabled={isSubmitting}
-            />
-            <AppButton
-              title={isSubmitting ? "Disponibilizando..." : "Disponibilizar"}
-              variant="secondary"
-              onPress={handleMakeAvailable}
-              disabled={isSubmitting}
-            />
-          </View>
+        <View style={styles.actions}>
+          <AppButton
+            title={isSubmitting ? "Salvando..." : "Salvar como rascunho"}
+            variant="secondary"
+            onPress={handleSaveDraft}
+            disabled={isSubmitting}
+          />
+          <AppButton
+            title={isSubmitting ? "Disponibilizando..." : "Disponibilizar"}
+            variant="secondary"
+            onPress={handleMakeAvailable}
+            disabled={isSubmitting}
+          />
+        </View>
 
-          <View style={[styles.actions, { marginTop: 8 }]}>
-            <AppButton
-              title={isSubmitting ? "Publicando..." : "Publicar agora"}
-              variant="primary"
-              onPress={handlePublishNow}
-              disabled={isSubmitting}
-            />
-          </View>
-        </KeyboardScreen>
-      </ImageBackground>
+        <View style={[styles.actions, { marginTop: 8 }]}>
+          <AppButton
+            title={isSubmitting ? "Publicando..." : "Publicar agora"}
+            variant="primary"
+            onPress={handlePublishNow}
+            disabled={isSubmitting}
+          />
+        </View>
+      </KeyboardScreen>
     </AppBackground>
   );
 
@@ -207,8 +201,6 @@ function createStyles(theme: AppTheme) {
     loadingText: { color: theme.colors.text, marginTop: 12 },
     actions: { flexDirection: "row", gap: 8, marginTop: 12, flexWrap: "wrap" },
     title: { color: theme.colors.textPrimary || "#FFFFFF", fontSize: 20, fontWeight: "700" },
-    bgImage: { flex: 1 },
-    bgImageStyle: { opacity: 0.05, resizeMode: "cover" },
   });
 }
 

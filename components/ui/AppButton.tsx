@@ -18,6 +18,7 @@ type Props = {
   disabled?: boolean;
   fullWidth?: boolean;
   style?: ViewStyle;
+  stopPropagation?: boolean;
 };
 
 export function AppButton({
@@ -28,6 +29,7 @@ export function AppButton({
   disabled = false,
   fullWidth = true,
   style,
+  stopPropagation = false,
 }: Props) {
   const { theme } = useTheme();
   const primaryBg = theme.colors.buttons?.primaryBg || "#7A1422";
@@ -52,11 +54,18 @@ export function AppButton({
     width: fullWidth ? "100%" : undefined,
   };
 
+  const handlePress = (event: any) => {
+    if (stopPropagation && event?.stopPropagation) {
+      event.stopPropagation();
+    }
+    onPress();
+  };
+
   return (
     <Pressable
       style={[styles.button, baseStyle, style]}
       disabled={disabled || loading}
-      onPress={onPress}
+      onPress={handlePress}
     >
       {loading ? (
         <ActivityIndicator color={variant === "secondary" ? secondaryText : primaryText} />

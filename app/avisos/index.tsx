@@ -1,6 +1,4 @@
-export const options = {
-  title: "Avisos",
-};import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -8,13 +6,19 @@ import { useRouter } from "expo-router";
 import { useAuth } from "../../hooks/useAuth";
 import { useTheme } from "../../hooks/useTheme";
 import { deleteAviso, listAvisosForUser, updateAviso, type Aviso } from "../../lib/avisos";
+import { AppInput } from "../../components/ui/AppInput";
 import { AppButton } from "../../components/ui/AppButton";
 import { Card } from "../../components/ui/Card";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { StatusBadge } from "../../components/ui/StatusBadge";
+import { StatusFilter } from "../../components/filters/StatusFilter";
 import { AppBackground } from "../../components/layout/AppBackground";
 import type { AppTheme } from "../../types/theme";
 import { withAlpha } from "../../theme/utils";
+
+export const options = {
+  title: "Avisos",
+};
 
 type Role = "aluno" | "professor" | "coordenador" | "administrador" | undefined;
 
@@ -27,10 +31,18 @@ export default function AvisosListScreen() {
   const [avisos, setAvisos] = useState<Aviso[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [actionId, setActionId] = useState<string | null>(null);
+  const [filters, setFilters] = useState({
+    status: "todos" as "todos" | "rascunho" | "publicado",
+    tipo: "todos" as "todos" | Aviso["tipo"],
+    destino: "todos" as "todos" | Aviso["destino"],
+    termo: "",
+  });
 
   const role: Role = user?.papel;
   const canCreate = role === "professor" || role === "coordenador" || role === "administrador";
   const isCoordinatorOrAdmin = role === "coordenador" || role === "administrador";
+  const isAdminLike = role === "coordenador" || role === "administrador" || role === "admin";
+  const isProfessor = role === "professor";
   const isApproved = user?.status === "aprovado";
 
   useEffect(() => {
@@ -87,6 +99,20 @@ export default function AvisosListScreen() {
     }
   }
 
+  const canEdit = isCoordinatorOrAdmin || role === "professor";
+
+  const filteredAvisos = useMemo(() => {
+    const termo = filters.termo.trim().toLowerCase();
+    return avisos.filter((aviso) => {
+      if (filters.status !== "todos" && aviso.status !== filters.status) return false;
+      if (filters.tipo !== "todos" && aviso.tipo !== filters.tipo) return false;
+      if (filters.destino !== "todos" && aviso.destino !== filters.destino) return false;
+      if (!termo) return true;
+      const haystack = `${aviso.titulo} ${aviso.conteudo || ""} ${aviso.criado_por_nome || ""}`.toLowerCase();
+      return haystack.includes(termo);
+    });
+  }, [avisos, filters]);
+
   if (isLoading) {
     return (
       <AppBackground>
@@ -97,8 +123,6 @@ export default function AvisosListScreen() {
       </AppBackground>
     );
   }
-
-  const canEdit = isCoordinatorOrAdmin || role === "professor";
 
   return (
     <AppBackground>
@@ -113,10 +137,74 @@ export default function AvisosListScreen() {
           ) : null}
         </View>
 
-        {avisos.length === 0 ? (
+        {isAdminLike ? (
+          <Card>
+            <View style={styles.filters}>
+              <AppInput
+                label="Buscar"
+                placeholder="Titulo, conteudo ou autor"
+                value={filters.termo}
+                onChangeText={(text) => setFilters((prev) => ({ ...prev, termo: text }))}
+              />
+
+              <StatusFilter
+                label="Status"
+                value={filters.status}
+                onChange={(value) => setFilters((prev) => ({ ...prev, status: value as any }))}
+                options={[
+                  { value: "todos", label: "Todos" },
+                  { value: "publicado", label: "Publicado" },
+                  { value: "rascunho", label: "Rascunho" },
+                ]}
+              />
+
+              <StatusFilter
+                label="Tipo"
+                value={filters.tipo}
+                onChange={(value) => setFilters((prev) => ({ ...prev, tipo: value as any }))}
+                options={[
+                  { value: "todos", label: "Todos" },
+                  { value: "informativo", label: "Informativo" },
+                  { value: "urgente", label: "Urgente" },
+                  { value: "interno", label: "Interno" },
+                  { value: "espiritual", label: "Espiritual" },
+                ]}
+              />
+
+              <StatusFilter
+                label="Destino"
+                value={filters.destino}
+                onChange={(value) => setFilters((prev) => ({ ...prev, destino: value as any }))}
+                options={[
+                  { value: "todos", label: "Todos" },
+                  { value: "alunos", label: "Alunos" },
+                  { value: "professores", label: "Professores" },
+                  { value: "coordenadores", label: "Coordenadores" },
+                  { value: "admin", label: "Administradores" },
+                ]}
+              />
+            </View>
+          </Card>
+        ) : isProfessor ? (
+          <Card>
+            <View style={styles.filters}>
+              <StatusFilter
+                label="Destino"
+                value={filters.destino}
+                onChange={(value) => setFilters((prev) => ({ ...prev, destino: value as any }))}
+                options={[
+                  { value: "todos", label: "Todos" },
+                  { value: "professores", label: "Professores" },
+                ]}
+              />
+            </View>
+          </Card>
+        ) : null}
+
+        {filteredAvisos.length === 0 ? (
           <EmptyState title="Nenhum aviso no momento." />
         ) : (
-          avisos.map((aviso) => {
+          filteredAvisos.map((aviso) => {
             const color = mapTipoToColor(aviso.tipo, theme);
             const summary = aviso.conteudo?.replace(/\s+/g, " ").trim();
             return (

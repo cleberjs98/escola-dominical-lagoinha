@@ -287,19 +287,17 @@ export default function LessonDetailsScreen() {
           </View>
         </Card>
 
-        {/* Card 2: Materiais */}
-        <Card title="Materiais da Aula">
-           <LessonMaterialsSection
-              lessonId={lesson.id}
-              canUpload={Boolean(
-                isProfessor &&
-                isOwnerProfessor &&
-                (lesson.status === "reservada" || lesson.status === "publicada")
-              )}
-              currentUserId={uid}
-              containerStyle={{ padding: 0 }}
-            />
-        </Card>
+        {/* Materiais com preview inline */}
+        <LessonMaterialsSection
+          lessonId={lesson.id}
+          canUpload={Boolean(
+            isProfessor &&
+            isOwnerProfessor &&
+            (lesson.status === "reservada" || lesson.status === "publicada")
+          )}
+          currentUserId={uid}
+          currentUserRole={role ?? null}
+        />
 
         {/* Card 3: Editor (Apenas Professor Dono) */}
         {isProfessor && isOwnerProfessor && lesson.status === "reservada" && (
