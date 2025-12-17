@@ -198,7 +198,6 @@ export function LessonMaterialsSection({
 
     if (!storagePath) {
       const result = { url: externalUrl ?? null, processing: !!externalUrl, convertedUrl: null, originalUrl: externalUrl ?? null };
-      console.log("[Video][Resolve] Sem storagePath", { id: mat.id, externalUrl });
       setPlayableCache((prev) => ({ ...prev, [mat.id]: result }));
       return result;
     }
@@ -216,21 +215,16 @@ export function LessonMaterialsSection({
       }
 
       const result = { url: convertedUrl, processing: false, convertedUrl, originalUrl };
-      console.log("[Video][Resolve] Convertido OK", { id: mat.id, convertedPath, url: convertedUrl });
       setPlayableCache((prev) => ({ ...prev, [mat.id]: result }));
       return result;
     } catch (err) {
-      console.log("[Video][Resolve] Convertido não encontrado", { id: mat.id, convertedPath, err });
-      // Converted não existe ou sem permissão; tenta original e marca como processando
       try {
         const originalUrl = await getDownloadURL(ref(firebaseStorage, storagePath));
         const result = { url: originalUrl, processing: true, convertedUrl: null, originalUrl };
-        console.log("[Video][Resolve] Usando original fallback", { id: mat.id, storagePath, url: originalUrl });
         setPlayableCache((prev) => ({ ...prev, [mat.id]: result }));
         return result;
       } catch (err2) {
         const fallback = { url: externalUrl ?? null, processing: true, convertedUrl: null, originalUrl: externalUrl ?? null };
-        console.log("[Video][Resolve] Nenhuma URL disponível", { id: mat.id, storagePath, externalUrl, err2 });
         setPlayableCache((prev) => ({ ...prev, [mat.id]: fallback }));
         return fallback;
       }
@@ -558,14 +552,11 @@ export function LessonMaterialsSection({
                       }}
                       onWaiting={() => setPreviewBuffering(true)}
                       onPlaying={() => setPreviewBuffering(false)}
-                      onError={(error) => {
-                        console.log("Erro Fatal Video Web:", error);
-                        // Fallback para original se o convertido 404
+                      onError={() => {
                         const currentUrl = previewUrl || "";
                         const cache = playableCache[preview?.id || ""];
                         const isConvertedUrl = currentUrl.includes("_output.mp4");
                         if (isConvertedUrl && cache?.originalUrl && cache.originalUrl !== currentUrl) {
-                          console.log("[Video][Web] Fallback para original após erro");
                           setPreviewUrl(cache.originalUrl);
                           setVideoError(false);
                           setPreviewLoading(false);
@@ -601,13 +592,12 @@ export function LessonMaterialsSection({
                         setPreviewBuffering(false);
                         setVideoError(false);
                       }}
-                      onPlaybackStatusUpdate={(status: AVPlaybackStatus) => {
+                        onPlaybackStatusUpdate={(status: AVPlaybackStatus) => {
                         if (!status.isLoaded) {
-                            if (status.error) {
-                                console.log("Erro no Status Update:", status.error);
-                                setVideoError(true);
-                            }
-                            return;
+                          if (status.error) {
+                            setVideoError(true);
+                          }
+                          return;
                         }
                         
                         setPreviewBuffering(status.isBuffering);
@@ -618,8 +608,7 @@ export function LessonMaterialsSection({
                           setPreviewProgress(percent);
                         }
                       }}
-                      onError={(error) => {
-                        console.log("Erro Fatal Video:", error);
+                      onError={() => {
                         setPreviewLoading(false);
                         setVideoError(true);
                       }}
