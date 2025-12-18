@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { Platform } from "react-native";
 import { Tabs, useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -27,6 +28,7 @@ export default function TabsLayout() {
 	const router = useRouter();
 	const { theme: appTheme } = useTheme();
 	const insets = useSafeAreaInsets();
+	const bottomInset = Platform.OS === "android" ? Math.max(insets.bottom ?? 0, 12) : insets.bottom ?? 0;
 	const [lessonsTabFirst, setLessonsTabFirst] = useState(true);
 	const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -63,8 +65,8 @@ export default function TabsLayout() {
 					tabBarStyle: {
 						backgroundColor: withAlpha(appTheme.colors.tabBarBackground, 0.78),
 						borderTopColor: appTheme.colors.border || appTheme.colors.tabBarBackground,
-						height: BASE_TAB_HEIGHT + (insets.bottom || 0),
-						paddingBottom: Math.max(insets.bottom || 0, 8),
+						height: BASE_TAB_HEIGHT + bottomInset,
+						paddingBottom: Math.max(bottomInset, 10),
 						paddingTop: 6,
 					},
 					tabBarLabel:
