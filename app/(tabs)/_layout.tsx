@@ -28,7 +28,7 @@ export default function TabsLayout() {
 	const router = useRouter();
 	const { theme: appTheme } = useTheme();
 	const insets = useSafeAreaInsets();
-	const bottomInset = Platform.OS === "android" ? Math.max(insets.bottom ?? 0, 12) : insets.bottom ?? 0;
+	const bottomInset = Platform.OS === "android" ? Math.max(insets.bottom ?? 0, 20) : insets.bottom ?? 0;
 	const [lessonsTabFirst, setLessonsTabFirst] = useState(true);
 	const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -65,9 +65,9 @@ export default function TabsLayout() {
 					tabBarStyle: {
 						backgroundColor: withAlpha(appTheme.colors.tabBarBackground, 0.78),
 						borderTopColor: appTheme.colors.border || appTheme.colors.tabBarBackground,
-						height: BASE_TAB_HEIGHT + bottomInset,
-						paddingBottom: Math.max(bottomInset, 10),
-						paddingTop: 6,
+						height: BASE_TAB_HEIGHT + bottomInset + 6,
+						paddingBottom: bottomInset + 6,
+						paddingTop: 8,
 					},
 					tabBarLabel:
 						route.name === "(home)"
