@@ -33,7 +33,6 @@ export default function LoginScreen() {
   const googleWebId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || "";
   const googleIosId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || googleWebId;
   const googleAndroidId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || googleWebId;
-  const hasAnyGoogleId = Boolean(googleWebId || googleIosId || googleAndroidId);
 
   WebBrowser.maybeCompleteAuthSession();
   const [request, response, promptAsync] = Google.useAuthRequest({
@@ -44,30 +43,27 @@ export default function LoginScreen() {
   });
 
   function validate() {
-    if (!isValidEmail(email)) {
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!isValidEmail(trimmedEmail)) {
       setErrorMessage("Informe um email valido.");
-      return false;
+      return { ok: false, trimmedEmail };
     }
     if (!isNonEmpty(password)) {
       setErrorMessage("Informe sua senha.");
-      return false;
+      return { ok: false, trimmedEmail };
     }
     setErrorMessage(null);
-    return true;
+    return { ok: true, trimmedEmail };
   }
 
   async function handleLogin() {
-    if (!validate()) return;
-
-    if (!hasAnyGoogleId) {
-      Alert.alert("Login Google", "IDs do Google não configurados no ambiente.");
-      return;
-    }
+    if (isSubmitting) return;
+    const { ok, trimmedEmail } = validate();
+    if (!ok) return;
 
     try {
       setIsSubmitting(true);
       setErrorMessage(null);
-      const trimmedEmail = email.trim();
 
       const cred = await signInWithEmailAndPassword(
         firebaseAuth,
@@ -228,6 +224,9 @@ export default function LoginScreen() {
             onChangeText={setEmail}
             placeholder="email@exemplo.com"
             keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            textContentType="username"
           />
           <AppInput
             label="Senha"
@@ -235,6 +234,10 @@ export default function LoginScreen() {
             onChangeText={setPassword}
             placeholder="******"
             secureTextEntry={!showPassword}
+            textContentType="password"
+            autoCapitalize="none"
+            returnKeyType="done"
+            onSubmitEditing={handleLogin}
             rightElement={
               <Pressable onPress={() => setShowPassword((prev) => !prev)}>
                 <Text style={styles.toggleText}>{showPassword ? "Ocultar" : "Ver"}</Text>
