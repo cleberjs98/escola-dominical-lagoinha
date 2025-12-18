@@ -1,9 +1,12 @@
 // app/auth/login.tsx - tela de login com UI compartilhada
-import { useMemo, useState } from "react";
-import { Text, StyleSheet, Alert, View, Pressable } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Text, StyleSheet, Alert, View, Pressable, Platform } from "react-native";
 import { Link, useRouter } from "expo-router";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signInWithCredential } from "firebase/auth";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import * as WebBrowser from "expo-web-browser";
+import * as Google from "expo-auth-session/providers/google";
+import * as AuthSession from "expo-auth-session";
 
 import { firebaseAuth, firebaseDb } from "../../lib/firebase";
 import { Card } from "../../components/ui/Card";
@@ -27,6 +30,19 @@ export default function LoginScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const googleWebId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || "";
+  const googleIosId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || googleWebId;
+  const googleAndroidId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || googleWebId;
+  const hasAnyGoogleId = Boolean(googleWebId || googleIosId || googleAndroidId);
+
+  WebBrowser.maybeCompleteAuthSession();
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    expoClientId: googleWebId || "placeholder", // usa proxy; placeholder evita crash em dev
+    webClientId: googleWebId || "placeholder",
+    iosClientId: googleIosId || "placeholder",
+    androidClientId: googleAndroidId || "placeholder",
+  });
+
   function validate() {
     if (!isValidEmail(email)) {
       setErrorMessage("Informe um email valido.");
@@ -42,6 +58,11 @@ export default function LoginScreen() {
 
   async function handleLogin() {
     if (!validate()) return;
+
+    if (!hasAnyGoogleId) {
+      Alert.alert("Login Google", "IDs do Google não configurados no ambiente.");
+      return;
+    }
 
     try {
       setIsSubmitting(true);
@@ -101,6 +122,102 @@ export default function LoginScreen() {
     }
   }
 
+  async function ensureUserDocument(uid: string, displayName: string | null, emailAddr: string | null) {
+    const userRef = doc(firebaseDb, "users", uid);
+    const snap = await getDoc(userRef);
+    const safeEmail = (emailAddr || "").trim();
+    if (snap.exists()) return snap.data() as any;
+
+    await setDoc(userRef, {
+      id: uid,
+      nome: displayName || safeEmail || "Usuário",
+      sobrenome: "",
+      nome_completo: displayName || safeEmail || "Usuário",
+      email: safeEmail,
+      codigo_pais: null,
+      telefone: null,
+      telefone_completo: null,
+      data_nascimento: null,
+      papel: "aluno",
+      status: "pendente",
+      aprovado_por_id: null,
+      aprovado_em: null,
+      alterado_por_id: null,
+      alterado_em: serverTimestamp(),
+      papel_anterior: null,
+      motivo_rejeicao: null,
+      created_at: serverTimestamp(),
+      updated_at: serverTimestamp(),
+    });
+
+    return (await getDoc(userRef)).data();
+  }
+
+  useEffect(() => {
+    if (!response || response.type !== "success") return;
+    const idToken = response.authentication?.idToken;
+    if (!idToken) return;
+
+    (async () => {
+      try {
+        setIsSubmitting(true);
+        const credential = GoogleAuthProvider.credential(idToken);
+        const cred = await signInWithCredential(firebaseAuth, credential);
+        const data = await ensureUserDocument(
+          cred.user.uid,
+          cred.user.displayName,
+          cred.user.email
+        );
+        const status = (data as any)?.status ?? "pendente";
+        if (status === "pendente" || status === "rejeitado" || status === "vazio") {
+          router.replace("/auth/pending" as any);
+        } else {
+          router.replace("/" as any);
+        }
+      } catch (err: any) {
+        console.error("[Auth][Google] Erro ao logar", err);
+        Alert.alert("Erro", "Não foi possível entrar com o Google.");
+      } finally {
+        setIsSubmitting(false);
+      }
+    })();
+  }, [response]);
+
+  async function handleGoogleSignIn() {
+    try {
+      setErrorMessage(null);
+      setIsSubmitting(true);
+
+      if (Platform.OS === "web") {
+        const provider = new GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: "select_account" });
+        const cred = await signInWithPopup(firebaseAuth, provider);
+        const data = await ensureUserDocument(
+          cred.user.uid,
+          cred.user.displayName,
+          cred.user.email
+        );
+        const status = (data as any)?.status ?? "pendente";
+        if (status === "pendente" || status === "rejeitado" || status === "vazio") {
+          router.replace("/auth/pending" as any);
+        } else {
+          router.replace("/" as any);
+        }
+        return;
+      }
+
+      const result = await promptAsync({ useProxy: true, showInRecents: true });
+      if (result?.type !== "success") {
+        setIsSubmitting(false);
+        return;
+      }
+    } catch (error: any) {
+      console.error("[Auth][Google] Erro ao iniciar login", error);
+      Alert.alert("Erro", "Não foi possível iniciar o login com o Google.");
+      setIsSubmitting(false);
+    }
+  }
+
   return (
     <AppBackground>
       <KeyboardScreen contentContainerStyle={styles.container}>
@@ -128,6 +245,14 @@ export default function LoginScreen() {
             title={isSubmitting ? "Entrando..." : "Entrar"}
             onPress={handleLogin}
             loading={isSubmitting}
+          />
+          <AppButton
+            title={isSubmitting ? "Entrando..." : "Entrar com Google"}
+            onPress={handleGoogleSignIn}
+            loading={isSubmitting}
+            variant="secondary"
+            style={{ marginTop: 8 }}
+            disabled={isSubmitting || (!request && Platform.OS !== "web")}
           />
           {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
           <View style={styles.linksRow}>
