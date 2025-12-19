@@ -112,6 +112,7 @@ export default function LessonDetailsScreen() {
   const isProfessor = role === "professor";
   const isStudent = role === "aluno";
   const isOwnerProfessor = lesson?.professor_reservado_id === uid;
+  const canEditComplement = (isProfessor && isOwnerProfessor) || isAdmin;
   
   const { user: reservedProfessor } = useUserById(lesson?.professor_reservado_id);
   const professorNome = normalizeMojibake(
@@ -323,6 +324,16 @@ export default function LessonDetailsScreen() {
         {/* Bloco de Ações e Botões */}
         {!isStudent && (
           <View style={styles.actionsContainer}>
+            {canEditComplement && (
+              <AppButton
+                title="Editar conteúdo"
+                variant="secondary"
+                onPress={() =>
+                  router.push({ pathname: "/professor/lesson-complement/[lessonId]", params: { lessonId } } as any)
+                }
+              />
+            )}
+
             {isAdmin && (
               <>
                 <AppButton

@@ -1,5 +1,5 @@
 ﻿// app/professor/lesson-complement/[lessonId].tsx
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -9,14 +9,17 @@ import {
   ScrollView,
   TextInput,
   ImageBackground,
+  TouchableOpacity,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { useAuth } from "../../../hooks/useAuth";
-import { getLessonById, updateLessonComplement } from "../../../lib/lessons";
+import { getLessonById, updateLessonFields } from "../../../lib/lessons";
 import type { Lesson } from "../../../types/lesson";
 import { AppBackground } from "../../../components/layout/AppBackground";
 import { useTheme } from "../../../hooks/useTheme";
+import { StatusBadge } from "../../../components/ui/StatusBadge";
+import { formatDateTime } from "../../../utils/publishAt";
 import type { AppTheme } from "../../../theme/tokens";
 
 const AUTOSAVE_DELAY = 3000; // ms
@@ -39,6 +42,38 @@ export default function LessonComplementScreen() {
     () => user?.papel === "professor" && user?.status === "aprovado",
     [user?.papel, user?.status]
   );
+  const isAdminOrCoordinator = useMemo(
+    () => user?.papel === "administrador" || user?.papel === "admin" || user?.papel === "coordenador",
+    [user?.papel]
+  );
+
+  const formatLessonDate = (value: any): string => {
+    if (!value) return "-";
+    if (typeof value === "object" && typeof value.toDate === "function") {
+      return formatDateTime(value.toDate());
+    }
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) return formatDateTime(parsed);
+    return String(value);
+  };
+
+  const runSave = useCallback(async (shouldRedirect = false) => {
+    if (!lesson) return;
+
+    try {
+      setIsSaving(true);
+      await updateLessonFields(lesson.id, { complemento_professor: complemento });
+      setLastSavedAt(new Date());
+      if (shouldRedirect) {
+        router.push(`/lessons/${lesson.id}` as any);
+      }
+    } catch (error) {
+      console.error("Erro ao salvar complemento:", error);
+      Alert.alert("Erro", "Nao foi possivel salvar o complemento.");
+    } finally {
+      setIsSaving(false);
+    }
+  }, [complemento, lesson, router]);
 
   useEffect(() => {
     if (isInitializing) return;
@@ -48,10 +83,11 @@ export default function LessonComplementScreen() {
       return;
     }
 
-    if (!isProfessorApproved) {
+    const allowed = isProfessorApproved || isAdminOrCoordinator;
+    if (!allowed) {
       Alert.alert(
         "Sem permissao",
-        "Apenas professor aprovado pode editar complemento de aula."
+        "Apenas professor aprovado, administrador ou coordenador podem editar complemento de aula."
       );
       router.replace("/" as any);
       return;
@@ -66,7 +102,7 @@ export default function LessonComplementScreen() {
           return;
         }
 
-        if (data.professor_reservado_id !== firebaseUser.uid) {
+        if (!isAdminOrCoordinator && data.professor_reservado_id !== firebaseUser.uid) {
           Alert.alert(
             "Sem permissao",
             "Voce nao eh o professor reservado desta aula."
@@ -86,7 +122,7 @@ export default function LessonComplementScreen() {
     }
 
     loadLesson();
-  }, [firebaseUser, isInitializing, isProfessorApproved, lessonId, router]);
+  }, [firebaseUser, isAdminOrCoordinator, isInitializing, isProfessorApproved, lessonId, router]);
 
   useEffect(() => {
     if (!lesson) return;
@@ -95,17 +131,8 @@ export default function LessonComplementScreen() {
       clearTimeout(saveTimeoutRef.current);
     }
 
-    saveTimeoutRef.current = setTimeout(async () => {
-      try {
-        setIsSaving(true);
-        await updateLessonComplement(lesson.id, complemento);
-        setLastSavedAt(new Date());
-      } catch (error) {
-        console.error("Erro ao salvar complemento:", error);
-        Alert.alert("Erro", "Nao foi possivel salvar o complemento.");
-      } finally {
-        setIsSaving(false);
-      }
+    saveTimeoutRef.current = setTimeout(() => {
+      runSave(false);
     }, AUTOSAVE_DELAY);
 
     return () => {
@@ -145,14 +172,15 @@ export default function LessonComplementScreen() {
       >
         <ScrollView style={styles.container} contentContainerStyle={styles.content}>
           <Text style={styles.title}>Conteúdo</Text>
-          <Text style={styles.subtitle}>
-            Edite o complemento desta aula. A descricao base eh apenas leitura.
-          </Text>
+          <Text style={styles.subtitle}>Edite o complemento desta aula.</Text>
 
           <View style={styles.card}>
             <Text style={styles.cardTitle}>{lesson.titulo}</Text>
-            <Text style={styles.cardLine}>Data da aula: {String(lesson.data_aula)}</Text>
-            <Text style={styles.cardLine}>Status: {lesson.status}</Text>
+            <Text style={styles.cardLine}>Data da aula: {formatLessonDate(lesson.data_aula)}</Text>
+            <View style={styles.badgeRow}>
+              <Text style={styles.cardLine}>Status: </Text>
+              <StatusBadge status={lesson.status} variant="lesson" />
+            </View>
           </View>
 
           <View style={styles.card}>
@@ -171,13 +199,28 @@ export default function LessonComplementScreen() {
               multiline
               textAlignVertical="top"
             />
-            <Text style={styles.saveInfo}>
-              {isSaving
-                ? "Salvando..."
-                : lastSavedAt
-                ? `Salvo às ${lastSavedAt.toLocaleTimeString()}`
-                : "Salvo"}
-            </Text>
+            <View style={styles.actionsRow}>
+              <TouchableOpacity
+                style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
+                onPress={async () => {
+                  if (saveTimeoutRef.current) {
+                    clearTimeout(saveTimeoutRef.current);
+                  }
+                  await runSave(true);
+                }}
+                disabled={isSaving}
+              >
+                <Text style={styles.saveButtonText}>{isSaving ? "Salvando..." : "Publicar"}</Text>
+              </TouchableOpacity>
+
+              <Text style={styles.saveInfo}>
+                {isSaving
+                  ? "Salvando..."
+                  : lastSavedAt
+                  ? `Salvo às ${lastSavedAt.toLocaleTimeString()}`
+                  : "Salvo"}
+              </Text>
+            </View>
           </View>
         </ScrollView>
       </ImageBackground>
@@ -207,12 +250,12 @@ function createStyles(theme: AppTheme) {
       marginTop: 12,
     },
     title: {
-      color: theme.colors.textPrimary,
+      color: "#FFFFFF",
       fontSize: 22,
       fontWeight: "700",
     },
     subtitle: {
-      color: theme.colors.textSecondary,
+      color: "#F1F5F9",
       fontSize: 13,
       marginBottom: 4,
     },
@@ -225,16 +268,21 @@ function createStyles(theme: AppTheme) {
       gap: 6,
     },
     cardTitle: {
-      color: theme.colors.textPrimary,
+      color: "#FFFFFF",
       fontSize: 16,
       fontWeight: "700",
     },
     cardLine: {
-      color: theme.colors.textSecondary,
+      color: "#E2E8F0",
       fontSize: 13,
     },
+    badgeRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
     baseText: {
-      color: theme.colors.textSecondary,
+      color: "#E2E8F0",
       fontSize: 13,
       marginTop: 4,
     },
@@ -245,13 +293,34 @@ function createStyles(theme: AppTheme) {
       borderRadius: 10,
       paddingHorizontal: 12,
       paddingVertical: 10,
-      color: theme.colors.textPrimary,
+      color: "#FFFFFF",
       backgroundColor: theme.colors.inputBg,
     },
+    actionsRow: {
+      marginTop: 10,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+    },
+    saveButton: {
+      backgroundColor: theme.colors.primary,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 8,
+    },
+    saveButtonDisabled: {
+      opacity: 0.7,
+    },
+    saveButtonText: {
+      color: "#FFFFFF",
+      fontSize: 14,
+      fontWeight: "700",
+    },
     saveInfo: {
-      color: theme.colors.textMuted,
+      color: "#E2E8F0",
       fontSize: 12,
-      marginTop: 6,
+      marginTop: 2,
     },
     bgImage: {
       flex: 1,

@@ -15,9 +15,6 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAuth } from "../../hooks/useAuth";
 import { getDevotionalById, deleteDevotional } from "../../lib/devotionals";
 import type { Devotional } from "../../types/devotional";
-import { listSupportMaterialsForReference } from "../../lib/materials";
-import type { SupportMaterial } from "../../types/material";
-import { SupportMaterialItem } from "../../components/SupportMaterialItem";
 import { Card } from "../../components/ui/Card";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { StatusBadge } from "../../components/ui/StatusBadge";
@@ -46,8 +43,6 @@ export default function DevotionalDetailsScreen() {
 
   const [devotional, setDevotional] = useState<Devotional | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [materials, setMaterials] = useState<SupportMaterial[]>([]);
-  const [isLoadingMaterials, setIsLoadingMaterials] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -71,16 +66,6 @@ export default function DevotionalDetailsScreen() {
           return;
         }
         setDevotional(data);
-
-        try {
-          setIsLoadingMaterials(true);
-          const mats = await listSupportMaterialsForReference("devocional", devotionalId);
-          setMaterials(mats);
-        } catch (err) {
-          console.error("Erro ao carregar materiais do devocional:", err);
-        } finally {
-          setIsLoadingMaterials(false);
-        }
       } catch (error) {
         console.error("Erro ao carregar devocional:", error);
         Alert.alert("Erro", "Não foi possível carregar o devocional.");
@@ -118,18 +103,6 @@ export default function DevotionalDetailsScreen() {
     );
   }
 
-  function openMaterial(material: SupportMaterial) {
-    const url = material.url_externa;
-    if (url) {
-      Linking.openURL(url).catch((err) => {
-        console.error("Erro ao abrir link:", err);
-        Alert.alert("Erro", "Não foi possível abrir o material.");
-      });
-      return;
-    }
-    Alert.alert("Material sem link", "Este material não possui URL acessível.");
-  }
-
   return (
     <AppBackground>
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -150,25 +123,6 @@ export default function DevotionalDetailsScreen() {
         <Card title="Devocional">
           <Text style={styles.cardText}>{devotional.devocional_texto}</Text>
         </Card>
-
-        {isBasicView && (
-          <Card title="Materiais de apoio">
-            {isLoadingMaterials ? (
-              <ActivityIndicator size="small" color={theme.colors.accent} />
-            ) : materials.length === 0 ? (
-              <EmptyState title="Nenhum material de apoio disponível para este devocional." />
-            ) : (
-              materials.map((mat) => (
-                <SupportMaterialItem
-                  key={mat.id}
-                  material={mat}
-                  onPress={() => openMaterial(mat)}
-                  previewImage
-                />
-              ))
-            )}
-          </Card>
-        )}
 
         {!isBasicView ? (
           <View style={styles.actions}>
