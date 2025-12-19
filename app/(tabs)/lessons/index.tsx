@@ -1,13 +1,14 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, Pressable, TouchableOpacity } from "react-native";
 import { useRouter } from "expo-router";
-import { Timestamp } from "firebase/firestore";
+import { Timestamp, doc, getDoc } from "firebase/firestore";
 
 import { AppButton } from "../../../components/ui/AppButton";
 import { useAuth } from "../../../hooks/useAuth";
 import { useTheme } from "../../../hooks/useTheme";
 import type { Lesson } from "../../../types/lesson";
 import { listLessonsForAdminCoordinator, listLessonsForProfessor, listPublishedLessons } from "../../../lib/lessons";
+import { firebaseDb } from "../../../lib/firebase";
 import { formatTimestampToDateInput } from "../../../utils/publishAt";
 import { AppCard, AppCardStatusVariant } from "../../../components/common/AppCard";
 import { LessonListItem } from "../../../components/lessons/LessonListItem";
@@ -108,6 +109,7 @@ function AdminLessonsScreen({ uid }: { uid: string }) {
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [adminSections, setAdminSections] = useState<AdminSections | null>(null);
+  const [reservedProfessors, setReservedProfessors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [adminStatusFilter, setAdminStatusFilter] = useState<AdminLessonFilter>("available");
   const [adminDateOrder, setAdminDateOrder] = useState<DateOrder>("desc");
@@ -121,6 +123,37 @@ function AdminLessonsScreen({ uid }: { uid: string }) {
       setLoading(true);
       const sections = await listLessonsForAdminCoordinator();
       setAdminSections(sections);
+      const ids = Array.from(
+        new Set(
+          [
+            ...sections.pendingOrReserved,
+            ...sections.drafts,
+            ...sections.available,
+            ...sections.published,
+          ]
+            .map((lesson) => lesson.professor_reservado_id)
+            .filter(Boolean) as string[]
+        )
+      );
+      if (ids.length) {
+        const entries = await Promise.all(
+          ids.map(async (id) => {
+            try {
+              const snap = await getDoc(doc(firebaseDb, "users", id));
+              if (!snap.exists()) return [id, "Professor reservado"] as const;
+              const data = snap.data() as any;
+              const name = data.nome_completo || data.nome || data.apelido || "Professor reservado";
+              return [id, name] as const;
+            } catch (err) {
+              console.error("Erro ao buscar professor reservado", err);
+              return [id, "Professor reservado"] as const;
+            }
+          })
+        );
+        setReservedProfessors(Object.fromEntries(entries));
+      } else {
+        setReservedProfessors({});
+      }
     } catch (err) {
       console.error("[Lessons] Erro ao carregar aulas:", err);
       Alert.alert("Erro", "Nao foi possivel carregar as aulas.");
@@ -249,7 +282,12 @@ function AdminLessonsScreen({ uid }: { uid: string }) {
           ) : (
             filteredAdminLessons.map((lesson) => {
               const status = normalizeLessonStatus(lesson.status);
-              const subtitle = `${formatLessonDate(lesson)} - ${lessonStatusLabel(status)}`;
+              const reservedLabel = lesson.professor_reservado_id
+                ? reservedProfessors[lesson.professor_reservado_id] || "Professor reservado"
+                : null;
+              const subtitle = `${formatLessonDate(lesson)} - ${lessonStatusLabel(status)}${
+                reservedLabel ? ` • Prof.: ${reservedLabel}` : ""
+              }`;
               return (
                 <LessonListItem
                   key={lesson.id}
