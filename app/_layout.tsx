@@ -10,6 +10,7 @@ import { useAuth } from "../hooks/useAuth";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useTheme } from "../hooks/useTheme";
 import { AppBackground } from "../components/layout/AppBackground";
+import { PWAInstallBanner } from "../components/pwa/InstallBanner";
 import { firebaseAuth } from "../lib/firebase";
 
 function PendingGuard() {
@@ -78,6 +79,7 @@ function RootLayoutContent() {
   return (
     <AppBackground>
       <View style={{ flex: 1, backgroundColor: bg }}>
+        <PWAInstallBanner />
         <StatusBar style="light" />
         <PendingGuard />
         <Stack
