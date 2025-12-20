@@ -25,7 +25,7 @@ const FILES_TO_COPY = [
 
 const TAGS = [
   { test: 'rel="manifest"', tag: '<link rel="manifest" href="/manifest.json" />' },
-  { test: 'rel="icon"', tag: '<link rel="icon" href="/favicon.ico" />' },
+  { test: 'rel="icon"', tag: '<link rel="icon" href="/pwa-icon-192.png" />' },
   { test: 'rel="apple-touch-icon"', tag: '<link rel="apple-touch-icon" href="/pwa-icon-192.png" />' },
   { test: 'name="theme-color"', tag: '<meta name="theme-color" content="#7A1422" />' },
 ];
