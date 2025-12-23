@@ -1,5 +1,5 @@
 ﻿// app/devotionals/[devotionalId].tsx - detalhe de devocional com ajustes para aluno
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -10,7 +10,9 @@ import {
   Linking,
   Platform,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { HeaderBackButton } from "@react-navigation/elements";
+import { BackHandler } from "react-native";
 
 import { useAuth } from "../../hooks/useAuth";
 import { getDevotionalById, deleteDevotional } from "../../lib/devotionals";
@@ -30,10 +32,12 @@ export const options = {
 
 export default function DevotionalDetailsScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { devotionalId } = useLocalSearchParams<{ devotionalId: string }>();
   const { firebaseUser, user, isInitializing } = useAuth();
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const backTarget = "/(tabs)/devotionals";
   const role = user?.papel;
   const isStudent = role === "aluno";
   const isProfessor = role === "professor";
@@ -62,7 +66,7 @@ export default function DevotionalDetailsScreen() {
         const data = await getDevotionalById(devotionalId);
         if (!data) {
           Alert.alert("Erro", "Devocional não encontrado.");
-          router.replace("/devotionals" as any);
+          router.replace(backTarget as any);
           return;
         }
         setDevotional(data);
@@ -75,7 +79,30 @@ export default function DevotionalDetailsScreen() {
     }
 
     load();
-  }, [devotionalId, firebaseUser, isInitializing, router, user?.status, isAdminOrCoordinator]);
+  }, [backTarget, devotionalId, firebaseUser, isInitializing, router, user?.status, isAdminOrCoordinator]);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerBackVisible: false,
+      headerLeft: () => (
+        <HeaderBackButton onPress={() => router.replace(backTarget as any)} tintColor={theme.colors.text} />
+      ),
+    });
+  }, [navigation, router, theme.colors.text, backTarget]);
+
+  useFocusEffect(
+    useMemo(
+      () => () => {
+        const onBack = () => {
+          router.replace(backTarget as any);
+          return true;
+        };
+        const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
+        return () => sub.remove();
+      },
+      [router, backTarget]
+    )
+  );
 
   if (isInitializing || isLoading) {
     return (
@@ -96,7 +123,7 @@ export default function DevotionalDetailsScreen() {
           <AppButton
             title="Voltar"
             variant="outline"
-            onPress={() => router.replace("/devotionals" as any)}
+            onPress={() => router.replace(backTarget as any)}
           />
         </View>
       </AppBackground>
@@ -147,7 +174,7 @@ export default function DevotionalDetailsScreen() {
             title="Voltar"
             variant="outline"
             fullWidth={false}
-            onPress={() => router.replace("/(tabs)/devotionals" as any)}
+            onPress={() => router.replace(backTarget as any)}
           />
         </View>
       </ScrollView>
@@ -162,7 +189,7 @@ export default function DevotionalDetailsScreen() {
         setSubmitting(true);
         await deleteDevotional(devotional.id);
         Alert.alert("Sucesso", "Devocional excluído.");
-        router.replace("/(tabs)/devotionals" as any);
+        router.replace(backTarget as any);
       } catch (err) {
         console.error("Erro ao excluir devocional:", err);
         Alert.alert("Erro", "Não foi possível excluir o devocional.");

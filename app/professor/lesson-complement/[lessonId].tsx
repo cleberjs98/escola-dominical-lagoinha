@@ -1,5 +1,5 @@
 ﻿// app/professor/lesson-complement/[lessonId].tsx
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -8,10 +8,11 @@ import {
   Alert,
   ScrollView,
   TextInput,
-  ImageBackground,
   TouchableOpacity,
+  BackHandler,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { HeaderBackButton } from "@react-navigation/elements";
 
 import { useAuth } from "../../../hooks/useAuth";
 import { getLessonById, updateLessonFields } from "../../../lib/lessons";
@@ -22,14 +23,16 @@ import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { formatDateTime } from "../../../utils/publishAt";
 import type { AppTheme } from "../../../theme/tokens";
 
-const AUTOSAVE_DELAY = 3000; // ms
+const AUTOSAVE_DELAY = 2000; // ms
 
 export default function LessonComplementScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { lessonId } = useLocalSearchParams<{ lessonId: string }>();
   const { firebaseUser, user, isInitializing } = useAuth();
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const backTarget = "/(tabs)/lessons";
 
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -45,6 +48,29 @@ export default function LessonComplementScreen() {
   const isAdminOrCoordinator = useMemo(
     () => user?.papel === "administrador" || user?.papel === "admin" || user?.papel === "coordenador",
     [user?.papel]
+  );
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerBackVisible: false,
+      headerLeft: () => (
+        <HeaderBackButton onPress={() => router.replace(backTarget as any)} tintColor={theme.colors.text} />
+      ),
+    });
+  }, [navigation, router, theme.colors.text, backTarget]);
+
+  useFocusEffect(
+    useMemo(
+      () => () => {
+        const onBack = () => {
+          router.replace(backTarget as any);
+          return true;
+        };
+        const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
+        return () => sub.remove();
+      },
+      [router, backTarget]
+    )
   );
 
   const formatLessonDate = (value: any): string => {
@@ -65,7 +91,7 @@ export default function LessonComplementScreen() {
       await updateLessonFields(lesson.id, { complemento_professor: complemento });
       setLastSavedAt(new Date());
       if (shouldRedirect) {
-        router.push(`/lessons/${lesson.id}` as any);
+        router.replace(backTarget as any);
       }
     } catch (error) {
       console.error("Erro ao salvar complemento:", error);
@@ -73,7 +99,7 @@ export default function LessonComplementScreen() {
     } finally {
       setIsSaving(false);
     }
-  }, [complemento, lesson, router]);
+  }, [backTarget, complemento, lesson, router]);
 
   useEffect(() => {
     if (isInitializing) return;
@@ -89,7 +115,7 @@ export default function LessonComplementScreen() {
         "Sem permissao",
         "Apenas professor aprovado, administrador ou coordenador podem editar complemento de aula."
       );
-      router.replace("/" as any);
+      router.replace(backTarget as any);
       return;
     }
 
@@ -98,7 +124,7 @@ export default function LessonComplementScreen() {
         const data = await getLessonById(lessonId);
         if (!data) {
           Alert.alert("Erro", "Aula nao encontrada.");
-          router.replace("/" as any);
+          router.replace(backTarget as any);
           return;
         }
 
@@ -107,7 +133,7 @@ export default function LessonComplementScreen() {
             "Sem permissao",
             "Voce nao eh o professor reservado desta aula."
           );
-          router.replace("/" as any);
+          router.replace(backTarget as any);
           return;
         }
 
@@ -122,7 +148,7 @@ export default function LessonComplementScreen() {
     }
 
     loadLesson();
-  }, [firebaseUser, isAdminOrCoordinator, isInitializing, isProfessorApproved, lessonId, router]);
+  }, [backTarget, firebaseUser, isAdminOrCoordinator, isInitializing, isProfessorApproved, lessonId, router]);
 
   useEffect(() => {
     if (!lesson) return;
@@ -165,65 +191,59 @@ export default function LessonComplementScreen() {
 
   return (
     <AppBackground>
-      <ImageBackground
-        source={require("../../../assets/brand/lagoinha-badge-watermark.png")}
-        style={styles.bgImage}
-        imageStyle={styles.bgImageStyle}
-      >
-        <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-          <Text style={styles.title}>Conteúdo</Text>
-          <Text style={styles.subtitle}>Edite o complemento desta aula.</Text>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <Text style={styles.title}>Conteúdo</Text>
+        <Text style={styles.subtitle}>Edite o complemento desta aula.</Text>
 
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>{lesson.titulo}</Text>
-            <Text style={styles.cardLine}>Data da aula: {formatLessonDate(lesson.data_aula)}</Text>
-            <View style={styles.badgeRow}>
-              <Text style={styles.cardLine}>Status: </Text>
-              <StatusBadge status={lesson.status} variant="lesson" />
-            </View>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>{lesson.titulo}</Text>
+          <Text style={styles.cardLine}>Data da aula: {formatLessonDate(lesson.data_aula)}</Text>
+          <View style={styles.badgeRow}>
+            <Text style={styles.cardLine}>Status: </Text>
+            <StatusBadge status={lesson.status} variant="lesson" />
           </View>
+        </View>
 
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Descricao base (leitura)</Text>
-            <Text style={styles.baseText}>{lesson.descricao_base}</Text>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Descricao base (leitura)</Text>
+          <Text style={styles.baseText}>{lesson.descricao_base}</Text>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Conteúdo</Text>
+          <TextInput
+            style={styles.textarea}
+            value={complemento}
+            onChangeText={setComplemento}
+            placeholder="Escreva aqui suas observacoes, anotacoes ou complementos para esta aula..."
+            placeholderTextColor={theme.colors.textMuted}
+            multiline
+            textAlignVertical="top"
+          />
+          <View style={styles.actionsRow}>
+            <TouchableOpacity
+              style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
+              onPress={async () => {
+                if (saveTimeoutRef.current) {
+                  clearTimeout(saveTimeoutRef.current);
+                }
+                await runSave(true);
+              }}
+              disabled={isSaving}
+            >
+              <Text style={styles.saveButtonText}>{isSaving ? "Salvando..." : "Voltar"}</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.saveInfo}>
+              {isSaving
+                ? "Salvando..."
+                : lastSavedAt
+                ? `Salvo às ${lastSavedAt.toLocaleTimeString()}`
+                : "Salvo"}
+            </Text>
           </View>
-
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Conteúdo</Text>
-            <TextInput
-              style={styles.textarea}
-              value={complemento}
-              onChangeText={setComplemento}
-              placeholder="Escreva aqui suas observacoes, anotacoes ou complementos para esta aula..."
-              placeholderTextColor={theme.colors.textMuted}
-              multiline
-              textAlignVertical="top"
-            />
-            <View style={styles.actionsRow}>
-              <TouchableOpacity
-                style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
-                onPress={async () => {
-                  if (saveTimeoutRef.current) {
-                    clearTimeout(saveTimeoutRef.current);
-                  }
-                  await runSave(true);
-                }}
-                disabled={isSaving}
-              >
-                <Text style={styles.saveButtonText}>{isSaving ? "Salvando..." : "Publicar"}</Text>
-              </TouchableOpacity>
-
-              <Text style={styles.saveInfo}>
-                {isSaving
-                  ? "Salvando..."
-                  : lastSavedAt
-                  ? `Salvo às ${lastSavedAt.toLocaleTimeString()}`
-                  : "Salvo"}
-              </Text>
-            </View>
-          </View>
-        </ScrollView>
-      </ImageBackground>
+        </View>
+      </ScrollView>
     </AppBackground>
   );
 }
@@ -321,13 +341,6 @@ function createStyles(theme: AppTheme) {
       color: "#E2E8F0",
       fontSize: 12,
       marginTop: 2,
-    },
-    bgImage: {
-      flex: 1,
-    },
-    bgImageStyle: {
-      opacity: 0.05,
-      resizeMode: "cover",
     },
   });
 }

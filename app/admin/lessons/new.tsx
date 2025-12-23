@@ -2,8 +2,9 @@ export const options = {
   title: "Admin",
 };
 import { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, Alert, ActivityIndicator } from "react-native";
-import { useRouter } from "expo-router";
+import { View, Text, StyleSheet, Alert, ActivityIndicator, BackHandler } from "react-native";
+import { useFocusEffect, useNavigation, useRouter } from "expo-router";
+import { HeaderBackButton } from "@react-navigation/elements";
 import { useAuth } from "../../../hooks/useAuth";
 import { useTheme } from "../../../hooks/useTheme";
 import { AppInput } from "../../../components/ui/AppInput";
@@ -17,9 +18,11 @@ import type { AppTheme } from "../../../theme/tokens";
 
 export default function NewLessonScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { firebaseUser, user, isInitializing } = useAuth();
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const backTarget = "/(tabs)/lessons";
 
   const [titulo, setTitulo] = useState("");
   const [referencia, setReferencia] = useState("");
@@ -38,9 +41,32 @@ export default function NewLessonScreen() {
     const papel = user?.papel;
     if (papel !== "coordenador" && papel !== "administrador") {
       Alert.alert("Sem permissão", "Apenas coordenador/admin podem criar aulas.");
-      router.replace("/lessons" as any);
+      router.replace(backTarget as any);
     }
   }, [firebaseUser, isInitializing, router, user?.papel]);
+
+  useEffect(() => {
+    navigation.setOptions({
+      headerBackVisible: false,
+      headerLeft: () => (
+        <HeaderBackButton onPress={() => router.replace(backTarget as any)} tintColor={theme.colors.text} />
+      ),
+    });
+  }, [navigation, router, theme.colors.text, backTarget]);
+
+  useFocusEffect(
+    useMemo(
+      () => () => {
+        const onBack = () => {
+          router.replace(backTarget as any);
+          return true;
+        };
+        const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
+        return () => sub.remove();
+      },
+      [router, backTarget]
+    )
+  );
 
   function validateBase(): boolean {
     const newErrors: { data?: string; publish?: string } = {};
@@ -114,7 +140,7 @@ export default function NewLessonScreen() {
         Alert.alert("Sucesso", "Aula criada e disponibilizada para os professores.");
       }
       clearForm();
-      router.replace("/lessons" as any);
+      router.replace(backTarget as any);
     } catch (err) {
       console.error("Erro ao salvar aula:", err);
       Alert.alert("Erro", (err as Error)?.message || "Não foi possível salvar a aula.");

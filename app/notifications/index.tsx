@@ -1,7 +1,8 @@
 export const options = {
-  title: "Notifica��es",
-};// app/notifications/index.tsx - centro de notificações com UI compartilhada
-import { useEffect, useMemo, useState } from "react";
+  title: "Notificações",
+};
+// app/notifications/index.tsx - centro de notificações com UI compartilhada
+import { useEffect, useMemo, useState, useLayoutEffect } from "react";
 import {
   View,
   Text,
@@ -10,8 +11,10 @@ import {
   Pressable,
   ScrollView,
   Alert,
+  BackHandler,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useNavigation, useRouter } from "expo-router";
+import { HeaderBackButton } from "@react-navigation/elements";
 import { useAuth } from "../../hooks/useAuth";
 import {
   listUserNotifications,
@@ -34,6 +37,7 @@ type FilterKey = "todas" | NotificationReferenceType;
 
 export default function NotificationsScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { firebaseUser, isInitializing } = useAuth();
   const { themeSettings } = useTheme();
   const { reload: reloadUnread } = useUnreadNotificationsCount(firebaseUser?.uid);
@@ -50,6 +54,29 @@ export default function NotificationsScreen() {
       router.replace("/auth/login" as any);
     }
   }, [firebaseUser, isInitializing, router]);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerBackVisible: false,
+      headerLeft: () => (
+        <HeaderBackButton onPress={() => router.replace("/(tabs)" as any)} tintColor={themeSettings?.cor_texto || "#fff"} />
+      ),
+    });
+  }, [navigation, router, themeSettings?.cor_texto]);
+
+  useFocusEffect(
+    useMemo(
+      () => () => {
+        const onBack = () => {
+          router.replace("/(tabs)" as any);
+          return true;
+        };
+        const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
+        return () => sub.remove();
+      },
+      [router]
+    )
+  );
 
   useEffect(() => {
     if (!userId) return;

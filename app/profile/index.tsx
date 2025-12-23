@@ -1,6 +1,6 @@
 export const options = {
   title: "Meu Perfil",
-};import { useEffect, useMemo, useState } from "react";
+};import { useEffect, useMemo, useState, useLayoutEffect } from "react";
 import {
   View,
   Text,
@@ -12,8 +12,10 @@ import {
   Image,
   Modal,
   TouchableWithoutFeedback,
+  BackHandler,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useNavigation, useRouter } from "expo-router";
+import { HeaderBackButton } from "@react-navigation/elements";
 import * as ImagePicker from "expo-image-picker";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { doc, updateDoc } from "firebase/firestore";
@@ -28,6 +30,7 @@ import { KeyboardScreen } from "../../components/layout/KeyboardScreen";
 
 export default function ProfileScreen() {
   const router = useRouter();
+    const navigation = useNavigation();
   const { firebaseUser, user, isInitializing } = useAuth();
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -48,6 +51,29 @@ export default function ProfileScreen() {
       router.replace("/auth/login" as any);
     }
   }, [firebaseUser, isInitializing, router]);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerBackVisible: false,
+      headerLeft: () => (
+        <HeaderBackButton onPress={() => router.replace("/(tabs)" as any)} tintColor={theme.colors.text} />
+      ),
+    });
+  }, [navigation, router, theme.colors.text]);
+
+  useFocusEffect(
+    useMemo(
+      () => () => {
+        const onBack = () => {
+          router.replace("/(tabs)" as any);
+          return true;
+        };
+        const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
+        return () => sub.remove();
+      },
+      [router]
+    )
+  );
 
   useEffect(() => {
     if (user) {

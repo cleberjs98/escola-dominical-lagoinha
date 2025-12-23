@@ -1,9 +1,10 @@
 export const options = {
   title: "Admin",
 };// app/admin/devotionals/new.tsx - criação de devocional (layout alinhado à criação de aula)
-import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, ActivityIndicator, Alert } from "react-native";
-import { useRouter } from "expo-router";
+import React, { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { View, Text, StyleSheet, ActivityIndicator, Alert, BackHandler } from "react-native";
+import { useFocusEffect, useNavigation, useRouter } from "expo-router";
+import { HeaderBackButton } from "@react-navigation/elements";
 
 import { AppButton } from "../../../components/ui/AppButton";
 import { AppInput } from "../../../components/ui/AppInput";
@@ -19,9 +20,11 @@ import type { AppTheme } from "../../../theme/tokens";
 
 export default function NewDevotionalScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { firebaseUser, user, isInitializing } = useAuth();
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const backTarget = "/(tabs)/devotionals";
 
   const [titulo, setTitulo] = useState("");
   const [referenciaBiblica, setReferenciaBiblica] = useState("");
@@ -39,9 +42,32 @@ export default function NewDevotionalScreen() {
     const papel = user?.papel;
     if (papel !== "coordenador" && papel !== "administrador" && papel !== "admin") {
       Alert.alert("Sem permissão", "Apenas coordenador/admin podem criar devocionais.");
-      router.replace("/" as any);
+      router.replace("/(tabs)" as any);
     }
   }, [firebaseUser, isInitializing, router, user?.papel]);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerBackVisible: false,
+      headerLeft: () => (
+        <HeaderBackButton onPress={() => router.replace(backTarget as any)} tintColor={theme.colors.text} />
+      ),
+    });
+  }, [navigation, router, theme.colors.text, backTarget]);
+
+  useFocusEffect(
+    useMemo(
+      () => () => {
+        const onBack = () => {
+          router.replace(backTarget as any);
+          return true;
+        };
+        const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
+        return () => sub.remove();
+      },
+      [router, backTarget]
+    )
+  );
 
   function validate() {
     if (!titulo.trim()) {

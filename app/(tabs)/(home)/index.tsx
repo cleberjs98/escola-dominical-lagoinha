@@ -2,8 +2,8 @@ export const options = {
   title: "Home",
 };
 // app/(tabs)/(home)/index.tsx - Home principal
-import { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, ActivityIndicator, Pressable, ScrollView } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { View, Text, StyleSheet, ActivityIndicator, Pressable, ScrollView, RefreshControl } from "react-native";
 import { useRouter } from "expo-router";
 
 import { useAuth } from "../../../hooks/useAuth";
@@ -26,6 +26,7 @@ import { RecentAnnouncements } from "../../../components/home/RecentAnnouncement
 import { AppCard, AppCardStatusVariant } from "../../../components/common/AppCard";
 import CoordinatorDashboardScreen from "../../(coordenador)";
 import type { AppTheme } from "../../../types/theme";
+import { useScreenRefresh } from "../../../hooks/useScreenRefresh";
 
 /* Ajustes fase de testes - Home, notificacoes, gestao de papeis e permissoes */
 
@@ -62,93 +63,104 @@ export default function HomeScreen() {
   const isStudent = papel === "aluno";
   const primeiroNome = nome.split(" ")[0] || nome;
 
-  useEffect(() => {
-    // Admin/Coord podem carregar mesmo sem checar status; demais só se aprovado
+  const loadHomeData = useCallback(async () => {
     if (!firebaseUser) return;
-    if (!isApproved && !isCoordenador && !isAdmin) return;
-
-    async function loadDevotional() {
-      try {
-        setIsLoadingDevotional(true);
-        const today = new Date();
-        const dateStr = today.toISOString().slice(0, 10); // "YYYY-MM-DD"
-        const devoToday = await getDevotionalOfTheDay(dateStr);
-        if (devoToday) {
-          setDevotionalOfDay(devoToday);
-          return;
-        }
-
-        // fallback: primeiro publicado/disponivel para admin/coord/professor
-        if (isCoordenador || isAdmin || isProfessor) {
-          const list = await listAvailableAndPublishedForProfessor();
-          setDevotionalOfDay(list.length ? list[0] : null);
-        } else {
-          setDevotionalOfDay(null);
-        }
-      } catch (error) {
-        console.error("Erro ao carregar devocional do dia:", error);
-      } finally {
-        setIsLoadingDevotional(false);
-      }
+    const canLoad = isApproved || isCoordenador || isAdmin;
+    if (!canLoad) {
+      setDevotionalOfDay(null);
+      setNextLessons([]);
+      setRecentAvisos([]);
+      setIsLoadingDevotional(false);
+      setIsLoadingLessons(false);
+      setIsLoadingAvisos(false);
+      return;
     }
 
-    async function loadLessons() {
-      try {
-        setIsLoadingLessons(true);
-        let lessons: Lesson[] = [];
-        if (isAdmin || isCoordenador) {
-          // coord/admin veem disponiveis + publicadas (proximas)
-          lessons = await listAvailableAndPublished(3);
-        } else if (isProfessor) {
-          const sections = await listLessonsForProfessor(firebaseUser.uid);
-          const own = [...sections.mine, ...sections.published]
-            .filter((lesson) => {
-              const isMine =
-                lesson.professor_reservado_id === firebaseUser.uid ||
-                (lesson as any).publicado_por_id === firebaseUser.uid;
-              return isMine;
-            })
-            .sort((a, b) => {
-              const aDate = (a.data_aula as any)?.toDate?.() ?? new Date(a.data_aula as any);
-              const bDate = (b.data_aula as any)?.toDate?.() ?? new Date(b.data_aula as any);
-              return aDate.getTime() - bDate.getTime();
-            })
-            .slice(0, 3);
-          lessons = own;
-        } else {
-          lessons = await listNextPublishedLessons(3);
+    const targetUser = user ? ({ ...user, id: user.id || firebaseUser.uid } as any) : null;
+
+    await Promise.all([
+      (async () => {
+        try {
+          setIsLoadingDevotional(true);
+          const today = new Date();
+          const dateStr = today.toISOString().slice(0, 10);
+          const devoToday = await getDevotionalOfTheDay(dateStr);
+          if (devoToday) {
+            setDevotionalOfDay(devoToday);
+            return;
+          }
+
+          if (isCoordenador || isAdmin || isProfessor) {
+            const list = await listAvailableAndPublishedForProfessor();
+            setDevotionalOfDay(list.length ? list[0] : null);
+          } else {
+            setDevotionalOfDay(null);
+          }
+        } catch (error) {
+          console.error("Erro ao carregar devocional do dia:", error);
+        } finally {
+          setIsLoadingDevotional(false);
         }
-        setNextLessons(lessons);
-      } catch (error) {
-        console.error("Erro ao carregar aulas:", error);
-      } finally {
-        setIsLoadingLessons(false);
-      }
-    }
+      })(),
+      (async () => {
+        try {
+          setIsLoadingLessons(true);
+          let lessons: Lesson[] = [];
+          if (isAdmin || isCoordenador) {
+            lessons = await listAvailableAndPublished(3);
+          } else if (isProfessor) {
+            const sections = await listLessonsForProfessor(firebaseUser.uid);
+            const own = [...sections.mine, ...sections.published]
+              .filter((lesson) => {
+                const isMine =
+                  lesson.professor_reservado_id === firebaseUser.uid ||
+                  (lesson as any).publicado_por_id === firebaseUser.uid;
+                return isMine;
+              })
+              .sort((a, b) => {
+                const aDate = (a.data_aula as any)?.toDate?.() ?? new Date(a.data_aula as any);
+                const bDate = (b.data_aula as any)?.toDate?.() ?? new Date(b.data_aula as any);
+                return aDate.getTime() - bDate.getTime();
+              })
+              .slice(0, 3);
+            lessons = own;
+          } else {
+            lessons = await listNextPublishedLessons(3);
+          }
+          setNextLessons(lessons);
+        } catch (error) {
+          console.error("Erro ao carregar aulas:", error);
+        } finally {
+          setIsLoadingLessons(false);
+        }
+      })(),
+      (async () => {
+        try {
+          setIsLoadingAvisos(true);
+          const list = await listRecentAvisosForUser(targetUser);
+          setRecentAvisos(list);
+        } catch (error) {
+          console.error("Erro ao carregar avisos recentes:", error);
+        } finally {
+          setIsLoadingAvisos(false);
+        }
+      })(),
+    ]);
 
-    async function loadAvisos() {
-      try {
-        setIsLoadingAvisos(true);
-        const targetUser = user ? ({ ...user, id: user.id || firebaseUser.uid } as any) : null;
-        const list = await listRecentAvisosForUser(targetUser);
-        setRecentAvisos(list);
-      } catch (error) {
-        console.error("Erro ao carregar avisos recentes:", error);
-      } finally {
-        setIsLoadingAvisos(false);
-      }
+    if (isApproved) {
+      await reloadUnread();
     }
+  }, [firebaseUser, isAdmin, isApproved, isCoordenador, isProfessor, reloadUnread, user]);
 
-    loadDevotional();
-    loadLessons();
-    loadAvisos();
-  }, [firebaseUser, isApproved, papel, isCoordenador, isAdmin, isProfessor, user]);
+  const { refreshing, refresh } = useScreenRefresh(loadHomeData, {
+    enabled: !!firebaseUser && !isInitializing,
+  });
 
   useEffect(() => {
-    if (isApproved) {
-      void reloadUnread();
-    }
-  }, [isApproved, reloadUnread]);
+    if (isInitializing) return;
+    if (!firebaseUser) return;
+    void refresh();
+  }, [firebaseUser, isInitializing, refresh]);
 
   if (isInitializing || (!firebaseUser && isInitializing)) {
     return (
@@ -213,7 +225,10 @@ export default function HomeScreen() {
 
   return (
     <AppBackground>
-      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.contentContainer}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={theme.colors.accent} />}>
         <Header
           title={`Bem-vindo(a), ${primeiroNome}`}
           subtitle={bannerSubtitle()}

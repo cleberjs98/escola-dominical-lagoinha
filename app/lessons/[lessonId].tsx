@@ -1,7 +1,8 @@
 ﻿// app/lessons/[lessonId].tsx
-import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useMemo, useState, useLayoutEffect } from "react";
+import { ActivityIndicator, Alert, BackHandler, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { HeaderBackButton } from "@react-navigation/elements";
 import { Timestamp } from "firebase/firestore";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -64,6 +65,7 @@ function sanitizeLesson(lesson: Lesson): SanitizedLesson {
 
 export default function LessonDetailsScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { lessonId } = useLocalSearchParams<{ lessonId: string }>();
   const { firebaseUser, user, isInitializing } = useAuth();
@@ -71,6 +73,7 @@ export default function LessonDetailsScreen() {
   
   // Memoização dos estilos com a correção de contraste
   const styles = useMemo(() => createStyles(theme, insets), [theme, insets]);
+  const backTarget = "/(tabs)/lessons";
   
   const role = user?.papel as Role;
   const uid = firebaseUser?.uid || "";
@@ -87,13 +90,36 @@ export default function LessonDetailsScreen() {
     void loadLesson();
   }, [firebaseUser, isInitializing, lessonId]);
 
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerBackVisible: false,
+      headerLeft: () => (
+        <HeaderBackButton onPress={() => router.replace(backTarget as any)} tintColor={theme.colors.text} />
+      ),
+    });
+  }, [navigation, router, theme.colors.text, backTarget]);
+
+  useFocusEffect(
+    useMemo(
+      () => () => {
+        const onBack = () => {
+          router.replace(backTarget as any);
+          return true;
+        };
+        const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
+        return () => sub.remove();
+      },
+      [router, backTarget]
+    )
+  );
+
   async function loadLesson() {
     try {
       setLoading(true);
       const data = await getLessonById(lessonId);
       if (!data) {
         Alert.alert("Erro", "Aula não encontrada.");
-        router.replace("/lessons" as any);
+        router.replace(backTarget as any);
         return;
       }
       setLesson(data);
@@ -101,7 +127,7 @@ export default function LessonDetailsScreen() {
     } catch (err) {
       console.error("Erro ao carregar aula:", err);
       Alert.alert("Erro", "Não foi possível carregar a aula.");
-      router.replace("/lessons" as any);
+      router.replace(backTarget as any);
     } finally {
       setLoading(false);
     }
@@ -126,7 +152,7 @@ export default function LessonDetailsScreen() {
     try {
       await reserveLesson(lesson.id, uid);
       Alert.alert("Reserva", "Reserva enviada para aprovação.");
-      router.replace("/lessons" as any);
+      router.replace(backTarget as any);
     } catch (err) {
       Alert.alert("Erro", (err as Error)?.message || "Não foi possível reservar.");
     }
@@ -137,7 +163,7 @@ export default function LessonDetailsScreen() {
     try {
       await approveReservation(lesson.id, uid);
       Alert.alert("Aprovado", "Reserva aprovada.");
-      router.replace("/lessons" as any);
+      router.replace(backTarget as any);
     } catch (err) {
       Alert.alert("Erro", "Não foi possível aprovar.");
     }
@@ -148,7 +174,7 @@ export default function LessonDetailsScreen() {
     try {
       await rejectReservation(lesson.id, uid);
       Alert.alert("Rejeitado", "Reserva rejeitada.");
-      router.replace("/lessons" as any);
+      router.replace(backTarget as any);
     } catch (err) {
       Alert.alert("Erro", "Não foi possível rejeitar.");
     }
@@ -160,7 +186,7 @@ export default function LessonDetailsScreen() {
       setPublishing(true);
       await publishLessonNow(lesson.id, uid);
       Alert.alert("Publicado", "Aula publicada.");
-      router.replace("/lessons" as any);
+      router.replace(backTarget as any);
     } catch (err) {
       Alert.alert("Erro", "Não foi possível publicar agora.");
     } finally {
@@ -174,7 +200,7 @@ export default function LessonDetailsScreen() {
       setDeleting(true);
       await deleteLesson(lesson.id);
       Alert.alert("Sucesso", "Aula excluída.");
-      router.replace("/lessons" as any);
+      router.replace(backTarget as any);
     } catch (err) {
       console.error("[LessonDetails] Erro ao excluir aula:", err);
       Alert.alert("Erro", "Não foi possível excluir.");
@@ -205,7 +231,7 @@ export default function LessonDetailsScreen() {
       setSavingComplement(true);
       await updateProfessorComplement(lesson.id, uid, complement);
       Alert.alert("Salvo", "Complemento salvo.");
-      router.replace("/lessons" as any);
+      router.replace(backTarget as any);
     } catch (err) {
       Alert.alert("Erro", (err as Error)?.message || "Não foi possível salvar.");
     } finally {

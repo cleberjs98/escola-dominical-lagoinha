@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View, Platform } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View, Platform, RefreshControl } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
@@ -15,6 +15,7 @@ import { StatusFilter } from "../../components/filters/StatusFilter";
 import { AppBackground } from "../../components/layout/AppBackground";
 import type { AppTheme } from "../../types/theme";
 import { withAlpha } from "../../theme/utils";
+import { useScreenRefresh } from "../../hooks/useScreenRefresh";
 
 export const options = {
   title: "Avisos",
@@ -30,6 +31,7 @@ export default function AvisosListScreen() {
 
   const [avisos, setAvisos] = useState<Aviso[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
   const [filters, setFilters] = useState({
     status: "todos" as "todos" | "rascunho" | "publicado",
@@ -51,27 +53,34 @@ export default function AvisosListScreen() {
     }
   }, [firebaseUser, isInitializing, router]);
 
-  useEffect(() => {
-    if (!firebaseUser || isInitializing) return;
-    if (!isCoordinatorOrAdmin && !isApproved) {
+  const loadAvisos = useCallback(async () => {
+    if (!firebaseUser) {
       setIsLoading(false);
       return;
     }
-    void loadAvisos();
-  }, [firebaseUser, isInitializing, role, isCoordinatorOrAdmin, isApproved]);
-
-  async function loadAvisos() {
+    const canLoad = isCoordinatorOrAdmin || isApproved;
+    if (!canLoad) {
+      setAvisos([]);
+      setIsLoading(false);
+      setHasLoaded(true);
+      return;
+    }
     try {
-      setIsLoading(true);
-      const data = await listAvisosForUser(role);
+      setIsLoading((prev) => prev || !hasLoaded);
+      const data = await listAvisosForUser(user ?? null);
       setAvisos(data);
+      setHasLoaded(true);
     } catch (error) {
       console.error("[Avisos] Erro ao carregar:", error);
       Alert.alert("Erro", "Nao foi possivel carregar os avisos.");
     } finally {
       setIsLoading(false);
     }
-  }
+  }, [firebaseUser, isCoordinatorOrAdmin, isApproved, user, hasLoaded]);
+
+  const { refreshing, refresh } = useScreenRefresh(loadAvisos, {
+    enabled: !!firebaseUser && !isInitializing,
+  });
 
   async function handlePublish(avisoId: string) {
     try {
@@ -113,7 +122,7 @@ export default function AvisosListScreen() {
     });
   }, [avisos, filters]);
 
-  if (isLoading) {
+  if (isLoading && !hasLoaded) {
     return (
       <AppBackground>
         <View style={styles.center}>
@@ -126,7 +135,10 @@ export default function AvisosListScreen() {
 
   return (
     <AppBackground>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={theme.colors.accent} />}>
         <View style={styles.header}>
           <View>
             <Text style={styles.title}>Avisos</Text>

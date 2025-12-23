@@ -1,5 +1,5 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, Pressable, TouchableOpacity } from "react-native";
+﻿import React, { useCallback, useMemo, useState } from "react";
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, Pressable, TouchableOpacity, RefreshControl } from "react-native";
 import { useRouter } from "expo-router";
 import { Timestamp, doc, getDoc } from "firebase/firestore";
 
@@ -14,6 +14,7 @@ import { AppCard, AppCardStatusVariant } from "../../../components/common/AppCar
 import { LessonListItem } from "../../../components/lessons/LessonListItem";
 import { AppBackground } from "../../../components/layout/AppBackground";
 import type { AppTheme } from "../../../types/theme";
+import { useScreenRefresh } from "../../../hooks/useScreenRefresh";
 
 type Role = "aluno" | "professor" | "coordenador" | "administrador" | "admin" | undefined;
 
@@ -111,16 +112,13 @@ function AdminLessonsScreen({ uid }: { uid: string }) {
   const [adminSections, setAdminSections] = useState<AdminSections | null>(null);
   const [reservedProfessors, setReservedProfessors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [adminStatusFilter, setAdminStatusFilter] = useState<AdminLessonFilter>("available");
   const [adminDateOrder, setAdminDateOrder] = useState<DateOrder>("desc");
 
-  useEffect(() => {
-    void loadData();
-  }, []);
-
-  async function loadData() {
+  const loadData = useCallback(async () => {
     try {
-      setLoading(true);
+      setLoading((prev) => prev || !hasLoaded);
       const sections = await listLessonsForAdminCoordinator();
       setAdminSections(sections);
       const ids = Array.from(
@@ -154,13 +152,16 @@ function AdminLessonsScreen({ uid }: { uid: string }) {
       } else {
         setReservedProfessors({});
       }
+      setHasLoaded(true);
     } catch (err) {
       console.error("[Lessons] Erro ao carregar aulas:", err);
       Alert.alert("Erro", "Nao foi possivel carregar as aulas.");
     } finally {
       setLoading(false);
     }
-  }
+  }, [hasLoaded]);
+
+  const { refreshing, refresh } = useScreenRefresh(loadData);
 
   function goTo(pathname: string, params?: Record<string, string>) {
     router.push({ pathname, params } as any);
@@ -217,7 +218,7 @@ function AdminLessonsScreen({ uid }: { uid: string }) {
       });
   }, [adminLessons, adminStatusFilter, adminDateOrder, uid]);
 
-  if (loading) {
+  if (loading && !hasLoaded) {
     return (
       <AppBackground>
         <View style={styles.center}>
@@ -259,7 +260,10 @@ function AdminLessonsScreen({ uid }: { uid: string }) {
 
   return (
     <AppBackground>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={theme.colors.accent} />}>
         <View style={{ gap: 12 }}>
           <View style={styles.filtersRow}>
             {renderAdminFilterChip("Todos", "all")}
@@ -319,30 +323,30 @@ function StudentLessonsScreen() {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [publishedForStudent, setPublishedForStudent] = useState<Lesson[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [order, setOrder] = useState<DateOrder>("desc");
 
-  useEffect(() => {
-    void loadData();
-  }, []);
-
-  async function loadData() {
+  const loadData = useCallback(async () => {
     try {
-      setLoading(true);
+      setLoading((prev) => prev || !hasLoaded);
       const published = await listPublishedLessons();
       setPublishedForStudent(published);
+      setHasLoaded(true);
     } catch (err) {
       console.error("[Lessons] Erro ao carregar aulas:", err);
       Alert.alert("Erro", "Nao foi possivel carregar as aulas.");
     } finally {
       setLoading(false);
     }
-  }
+  }, [hasLoaded]);
+
+  const { refreshing, refresh } = useScreenRefresh(loadData);
 
   function goTo(pathname: string, params?: Record<string, string>) {
     router.push({ pathname, params } as any);
   }
 
-  if (loading) {
+  if (loading && !hasLoaded) {
     return (
       <AppBackground>
         <View style={styles.center}>
@@ -355,7 +359,10 @@ function StudentLessonsScreen() {
 
   return (
     <AppBackground>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={theme.colors.accent} />}>
         <View style={{ gap: 8 }}>
           <View style={styles.orderRow}>
             <View />
@@ -411,26 +418,26 @@ function ProfessorLessonsTabScreen({ uid }: { uid: string }) {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [profSections, setProfSections] = useState<ProfessorSections | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [statusFilter, setStatusFilter] = useState<LessonStatusFilter>("all");
   const [mySubFilter, setMySubFilter] = useState<MyLessonsSubFilter>("all");
   const [dateOrder, setDateOrder] = useState<DateOrder>("desc");
 
-  useEffect(() => {
-    void loadData();
-  }, [uid]);
-
-  async function loadData() {
+  const loadData = useCallback(async () => {
     try {
-      setLoading(true);
+      setLoading((prev) => prev || !hasLoaded);
       const sections = await listLessonsForProfessor(uid);
       setProfSections(sections);
+      setHasLoaded(true);
     } catch (err) {
       console.error("[Lessons] Erro ao carregar aulas (professor):", err);
       Alert.alert("Erro", "Nao foi possivel carregar as aulas.");
     } finally {
       setLoading(false);
     }
-  }
+  }, [hasLoaded, uid]);
+
+  const { refreshing, refresh } = useScreenRefresh(loadData, { enabled: !!uid });
 
   const professorLessons = useMemo(() => {
     if (!profSections) return [];
@@ -525,7 +532,7 @@ function ProfessorLessonsTabScreen({ uid }: { uid: string }) {
     setDateOrder((prev) => (prev === "asc" ? "desc" : "asc"));
   }
 
-  if (loading) {
+  if (loading && !hasLoaded) {
     return (
       <AppBackground>
         <View style={styles.center}>
@@ -538,7 +545,10 @@ function ProfessorLessonsTabScreen({ uid }: { uid: string }) {
 
   return (
     <AppBackground>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={theme.colors.accent} />}>
         <View style={{ gap: 12 }}>
           <View style={styles.filtersRow}>
             {renderFilterChip("Todas", "all", counts.all)}

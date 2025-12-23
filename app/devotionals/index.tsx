@@ -1,6 +1,6 @@
 // app/devotionals/index.tsx - lista principal de devocionais (tab "Devocional")
-import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, TouchableOpacity, Pressable } from "react-native";
+import React, { useCallback, useMemo, useState } from "react";
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, TouchableOpacity, Pressable, RefreshControl } from "react-native";
 import { useRouter } from "expo-router";
 
 import { AppButton } from "../../components/ui/AppButton";
@@ -19,6 +19,7 @@ import {
 import { formatDate } from "../../utils/publishAt";
 import { AppCardStatusVariant } from "../../components/common/AppCard";
 import type { AppTheme } from "../../types/theme";
+import { useScreenRefresh } from "../../hooks/useScreenRefresh";
 
 type Role = "aluno" | "professor" | "coordenador" | "administrador" | "admin" | undefined;
 type DateOrder = "asc" | "desc";
@@ -73,25 +74,25 @@ function AdminDevotionalsTab({ uid }: { uid: string }) {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [sections, setSections] = useState<Awaited<ReturnType<typeof listDevotionalsForAdmin>> | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [filter, setFilter] = useState<DevotionalFilter>("disponiveis");
   const [dateOrder, setDateOrder] = useState<DateOrder>("desc");
 
-  useEffect(() => {
-    void loadData();
-  }, []);
-
-  async function loadData() {
+  const loadData = useCallback(async () => {
     try {
-      setLoading(true);
+      setLoading((prev) => prev || !hasLoaded);
       const data = await listDevotionalsForAdmin();
       setSections(data);
+      setHasLoaded(true);
     } catch (error) {
       console.error("[Devotionals][Admin] Erro ao carregar:", error);
       Alert.alert("Erro", "Nao foi possivel carregar os devocionais.");
     } finally {
       setLoading(false);
     }
-  }
+  }, [hasLoaded]);
+
+  const { refreshing, refresh } = useScreenRefresh(loadData);
 
   const allDevotionals = useMemo(() => {
     if (!sections) return [];
@@ -139,7 +140,7 @@ function AdminDevotionalsTab({ uid }: { uid: string }) {
     setDateOrder((prev) => (prev === "asc" ? "desc" : "asc"));
   }
 
-  if (loading) {
+  if (loading && !hasLoaded) {
     return (
       <AppBackground>
         <View style={styles.center}>
@@ -159,7 +160,10 @@ function AdminDevotionalsTab({ uid }: { uid: string }) {
 
   return (
     <AppBackground>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={theme.colors.accent} />}>
         <View style={styles.header}>
           <Text style={styles.sectionTitle}>Devocionais - Gestao</Text>
           <AppButton title="Criar devocional" variant="primary" fullWidth={false} onPress={() => router.push("/admin/devotionals/new" as any)} />
@@ -216,26 +220,26 @@ function ProfessorDevotionalsTab() {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [list, setList] = useState<Devotional[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [order, setOrder] = useState<DateOrder>("desc");
 
-  useEffect(() => {
-    void loadData();
-  }, []);
-
-  async function loadData() {
+  const loadData = useCallback(async () => {
     try {
-      setLoading(true);
+      setLoading((prev) => prev || !hasLoaded);
       const devos = await listAvailableAndPublishedForProfessor();
       setList(devos);
+      setHasLoaded(true);
     } catch (error) {
       console.error("[Devotionals][Professor] Erro ao carregar:", error);
       Alert.alert("Erro", "Nao foi possivel carregar os devocionais.");
     } finally {
       setLoading(false);
     }
-  }
+  }, [hasLoaded]);
 
-  if (loading) {
+  const { refreshing, refresh } = useScreenRefresh(loadData);
+
+  if (loading && !hasLoaded) {
     return (
       <AppBackground>
         <View style={styles.center}>
@@ -254,7 +258,10 @@ function ProfessorDevotionalsTab() {
 
   return (
     <AppBackground>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={theme.colors.accent} />}>
         <View style={styles.orderToggleRow}>
           <Text style={styles.sectionTitle}>Devocionais</Text>
           <TouchableOpacity onPress={() => setOrder((prev) => (prev === "asc" ? "desc" : "asc"))} style={styles.orderToggleButton}>
@@ -294,26 +301,26 @@ function StudentDevotionalsTab() {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [list, setList] = useState<Devotional[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [order, setOrder] = useState<DateOrder>("desc");
 
-  useEffect(() => {
-    void loadData();
-  }, []);
-
-  async function loadData() {
+  const loadData = useCallback(async () => {
     try {
-      setLoading(true);
+      setLoading((prev) => prev || !hasLoaded);
       const published = await listPublishedDevotionals();
       setList(published);
+      setHasLoaded(true);
     } catch (error) {
       console.error("[Devotionals][Aluno] Erro ao carregar:", error);
       Alert.alert("Erro", "Nao foi possivel carregar os devocionais.");
     } finally {
       setLoading(false);
     }
-  }
+  }, [hasLoaded]);
 
-  if (loading) {
+  const { refreshing, refresh } = useScreenRefresh(loadData);
+
+  if (loading && !hasLoaded) {
     return (
       <AppBackground>
         <View style={styles.center}>
@@ -332,7 +339,10 @@ function StudentDevotionalsTab() {
 
   return (
     <AppBackground>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={theme.colors.accent} />}>
         <View style={styles.orderToggleRow}>
           <Text style={styles.sectionTitle}>Devocionais</Text>
           <TouchableOpacity onPress={() => setOrder((prev) => (prev === "asc" ? "desc" : "asc"))} style={styles.orderToggleButton}>

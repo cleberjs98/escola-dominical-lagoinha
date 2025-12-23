@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useLayoutEffect } from "react";
 import {
   View,
   Text,
@@ -9,8 +9,10 @@ import {
   TextInput,
   Modal,
   Alert,
+  BackHandler,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useNavigation, useRouter } from "expo-router";
+import { HeaderBackButton } from "@react-navigation/elements";
 import {
   collection,
   doc,
@@ -23,6 +25,7 @@ import {
 import { firebaseDb } from "../../lib/firebase";
 import { useAuth } from "../../hooks/useAuth";
 import type { User, UserRole } from "../../types/user";
+import { useScreenRefresh } from "../../hooks/useScreenRefresh";
 
 /* Ajustes fase de testes — Home, notificações, gestão de papéis e permissões */
 
@@ -33,6 +36,7 @@ const ROLE_OPTIONS: UserRole[] = ["aluno", "professor", "coordenador", "administ
 export default function ManageUserRolesScreen() {
   const router = useRouter();
   const { user: currentUser, role, isInitializing, isAuthenticated } = useAuth();
+  const navigation = useNavigation();
 
   const [isLoading, setIsLoading] = useState(true);
   const [users, setUsers] = useState<User[]>([]);
@@ -42,6 +46,7 @@ export default function ManageUserRolesScreen() {
   const [targetUser, setTargetUser] = useState<User | null>(null);
   const [selectedRole, setSelectedRole] = useState<UserRole>("aluno");
   const [saving, setSaving] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
   const isCoordinator = role === "coordenador";
   const isAdmin = role === "administrador";
@@ -53,14 +58,35 @@ export default function ManageUserRolesScreen() {
     }
   }, [isAuthenticated, isCoordinator, isAdmin, isInitializing, router]);
 
-  useEffect(() => {
-    if (!isCoordinator && !isAdmin) return;
-    loadUsers();
-  }, [isCoordinator, isAdmin]);
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerBackVisible: false,
+      headerLeft: () => (
+        <HeaderBackButton onPress={() => router.replace("/(tabs)" as any)} tintColor="#e5e7eb" />
+      ),
+    });
+  }, [navigation, router]);
 
-  async function loadUsers() {
+  useFocusEffect(
+    useCallback(() => {
+      const onBack = () => {
+        router.replace("/(tabs)" as any);
+        return true;
+      };
+      const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
+      return () => sub.remove();
+    }, [router])
+  );
+
+  const loadUsers = useCallback(async () => {
+    if (!isCoordinator && !isAdmin) {
+      setUsers([]);
+      setIsLoading(false);
+      setHasLoaded(true);
+      return;
+    }
     try {
-      setIsLoading(true);
+      setIsLoading((prev) => prev || !hasLoaded);
       const usersRef = collection(firebaseDb, "users");
       const q = query(usersRef, orderBy("nome"));
       const snap = await getDocs(q);
@@ -70,13 +96,23 @@ export default function ManageUserRolesScreen() {
         list.push({ ...data, id: docSnap.id });
       });
       setUsers(list);
+      setHasLoaded(true);
     } catch (error) {
       console.error("Erro ao carregar usuarios:", error);
       Alert.alert("Erro", "Nao foi possivel carregar usuarios.");
     } finally {
       setIsLoading(false);
     }
-  }
+  }, [hasLoaded, isAdmin, isCoordinator]);
+
+  const { refreshing, refresh } = useScreenRefresh(loadUsers, {
+    enabled: isCoordinator || isAdmin,
+  });
+
+  useEffect(() => {
+    if (!isCoordinator && !isAdmin) return;
+    void refresh();
+  }, [isCoordinator, isAdmin, refresh]);
 
   const filteredUsers = useMemo(() => {
     const term = search.toLowerCase();
@@ -215,6 +251,8 @@ export default function ManageUserRolesScreen() {
         keyExtractor={(item) => item.id}
         renderItem={renderUser}
         contentContainerStyle={styles.listContent}
+        refreshing={refreshing}
+        onRefresh={refresh}
       />
 
       <Modal visible={modalVisible} transparent animationType="fade" onRequestClose={() => setModalVisible(false)}>

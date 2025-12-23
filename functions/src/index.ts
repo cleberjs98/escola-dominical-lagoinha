@@ -232,6 +232,23 @@ export const syncUserClaimsOnUserWrite = functions.firestore
   });
 
 /**
+ * Quando o documento de /users/{userId} é deletado, remove também o usuário do Auth
+ * para não deixar contas órfãs.
+ */
+export const deleteAuthOnUserDelete = functions.firestore
+  .document("users/{userId}")
+  .onDelete(async (_snap, context) => {
+    const uid = context.params.userId as string;
+
+    try {
+      await admin.auth().deleteUser(uid);
+      logger.info("[Auth] Usuário removido do Auth após delete do doc", { uid });
+    } catch (err) {
+      logger.error("[Auth] Falha ao remover usuário do Auth", { uid, err });
+    }
+  });
+
+/**
  * Publicação automática de aulas/devocionais agendados
  */
 export const publishScheduledLessons = onSchedule("every 1 minutes", async () => {

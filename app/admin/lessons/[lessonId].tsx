@@ -1,6 +1,7 @@
-﻿import { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+﻿import { useEffect, useMemo, useState, useLayoutEffect } from "react";
+import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator, BackHandler } from "react-native";
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { HeaderBackButton } from "@react-navigation/elements";
 import { Timestamp } from "firebase/firestore";
 
 import { useAuth } from "../../../hooks/useAuth";
@@ -28,11 +29,13 @@ import type { AppTheme } from "../../../theme/tokens";
 
 export default function EditLessonScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { lessonId } = useLocalSearchParams<{ lessonId: string }>();
   const { firebaseUser, user, isInitializing } = useAuth();
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const papel = user?.papel;
+  const backTarget = "/(tabs)/lessons";
 
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [titulo, setTitulo] = useState("");
@@ -53,11 +56,34 @@ export default function EditLessonScreen() {
     const papelAtual = user?.papel;
     if (papelAtual !== "coordenador" && papelAtual !== "administrador" && papelAtual !== "admin") {
       Alert.alert("Sem permissão", "Apenas coordenador/admin podem editar aulas.");
-      router.replace("/lessons" as any);
+      router.replace(backTarget as any);
       return;
     }
     void loadLesson();
   }, [firebaseUser, isInitializing, lessonId, router, user?.papel]);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerBackVisible: false,
+      headerLeft: () => (
+        <HeaderBackButton onPress={() => router.replace(backTarget as any)} tintColor={theme.colors.text} />
+      ),
+    });
+  }, [navigation, router, theme.colors.text, backTarget]);
+
+  useFocusEffect(
+    useMemo(
+      () => () => {
+        const onBack = () => {
+          router.replace(backTarget as any);
+          return true;
+        };
+        const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
+        return () => sub.remove();
+      },
+      [router, backTarget]
+    )
+  );
 
   async function loadLesson() {
     try {
@@ -65,7 +91,7 @@ export default function EditLessonScreen() {
       const data = await getLessonById(lessonId);
       if (!data) {
         Alert.alert("Erro", "Aula não encontrada.");
-        router.replace("/lessons" as any);
+        router.replace(backTarget as any);
         return;
       }
       setLesson(data);
@@ -150,7 +176,7 @@ export default function EditLessonScreen() {
       <AppBackground>
         <View style={styles.center}>
           <Text style={styles.loadingText}>Aula não encontrada.</Text>
-          <AppButton title="Voltar" variant="outline" onPress={() => router.replace("/(tabs)/lessons" as any)} />
+          <AppButton title="Voltar" variant="outline" onPress={() => router.replace(backTarget as any)} />
         </View>
       </AppBackground>
     );

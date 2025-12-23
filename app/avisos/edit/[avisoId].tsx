@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Alert, BackHandler, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { HeaderBackButton } from "@react-navigation/elements";
 
 import { useAuth } from "../../../hooks/useAuth";
 import { useTheme } from "../../../hooks/useTheme";
@@ -16,11 +17,13 @@ import type { AppTheme } from "../../../types/theme";
 
 export default function EditAvisoScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const params = useLocalSearchParams();
   const avisoId = params.avisoId as string;
   const { firebaseUser, user, isInitializing } = useAuth();
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const backTarget = "/avisos";
 
   const papel = user?.papel;
   const canEdit = papel === "professor" || papel === "coordenador" || papel === "administrador";
@@ -41,6 +44,29 @@ export default function EditAvisoScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerBackVisible: false,
+      headerLeft: () => (
+        <HeaderBackButton onPress={() => router.replace(backTarget as any)} tintColor={theme.colors.text} />
+      ),
+    });
+  }, [navigation, router, theme.colors.text, backTarget]);
+
+  useFocusEffect(
+    useMemo(
+      () => () => {
+        const onBack = () => {
+          router.replace(backTarget as any);
+          return true;
+        };
+        const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
+        return () => sub.remove();
+      },
+      [router, backTarget]
+    )
+  );
+
   useEffect(() => {
     if (isInitializing) return;
     if (!firebaseUser) {
@@ -56,7 +82,7 @@ export default function EditAvisoScreen() {
       const fetched = await getAvisoById(avisoId);
       if (!fetched) {
         Alert.alert("Aviso não encontrado", "Ele pode ter sido removido.");
-        router.replace("/avisos");
+        router.replace(backTarget as any);
         return;
       }
       setAviso(fetched);
@@ -89,7 +115,7 @@ export default function EditAvisoScreen() {
         status,
       });
       Alert.alert("Sucesso", status === "publicado" ? "Aviso atualizado e publicado." : "Rascunho atualizado.");
-      router.replace("/avisos");
+      router.replace(backTarget as any);
     } catch (error) {
       console.error("[Avisos] Erro ao atualizar aviso", error);
       Alert.alert("Erro", "Nao foi possivel salvar o aviso agora.");
@@ -149,7 +175,7 @@ export default function EditAvisoScreen() {
               onPress={() => handleSubmit("publicado")}
               disabled={isSubmitting}
             />
-            <AppButton title="Cancelar" variant="outline" onPress={() => router.back()} fullWidth={false} disabled={isSubmitting} />
+            <AppButton title="Cancelar" variant="outline" onPress={() => router.replace(backTarget as any)} fullWidth={false} disabled={isSubmitting} />
           </View>
         </Card>
       </ScrollView>

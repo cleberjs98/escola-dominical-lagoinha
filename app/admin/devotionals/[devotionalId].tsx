@@ -1,7 +1,8 @@
 ﻿// app/admin/devotionals/[devotionalId].tsx - edição de devocional com tema bordô
-import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, Platform } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, Platform, BackHandler } from "react-native";
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { HeaderBackButton } from "@react-navigation/elements";
 import { Timestamp } from "firebase/firestore";
 
 import { AppButton } from "../../../components/ui/AppButton";
@@ -27,10 +28,12 @@ import type { AppTheme } from "../../../theme/tokens";
 
 export default function EditDevotionalScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { devotionalId } = useLocalSearchParams<{ devotionalId: string }>();
   const { firebaseUser, user, isInitializing } = useAuth();
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const backTarget = "/(tabs)/devotionals";
 
   const [devotional, setDevotional] = useState<Devotional | null>(null);
   const [titulo, setTitulo] = useState("");
@@ -50,11 +53,34 @@ export default function EditDevotionalScreen() {
     const papel = user?.papel;
     if (papel !== "coordenador" && papel !== "administrador" && papel !== "admin") {
       Alert.alert("Sem permissão", "Apenas coordenador/admin podem editar devocionais.");
-      router.replace("/" as any);
+      router.replace("/(tabs)" as any);
       return;
     }
     void load();
   }, [firebaseUser, isInitializing, user?.papel, devotionalId, router]);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerBackVisible: false,
+      headerLeft: () => (
+        <HeaderBackButton onPress={() => router.replace(backTarget as any)} tintColor={theme.colors.text} />
+      ),
+    });
+  }, [navigation, router, theme.colors.text, backTarget]);
+
+  useFocusEffect(
+    useMemo(
+      () => () => {
+        const onBack = () => {
+          router.replace(backTarget as any);
+          return true;
+        };
+        const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
+        return () => sub.remove();
+      },
+      [router, backTarget]
+    )
+  );
 
   async function load() {
     try {
@@ -62,7 +88,7 @@ export default function EditDevotionalScreen() {
       const data = await getDevotionalById(devotionalId);
       if (!data) {
         Alert.alert("Erro", "Devocional não encontrado.");
-        router.replace("/(tabs)/devotionals" as any);
+        router.replace(backTarget as any);
         return;
       }
       setDevotional(data);
@@ -127,7 +153,7 @@ export default function EditDevotionalScreen() {
         data_publicacao_auto: publishParsed?.display ?? null,
       });
       Alert.alert("Sucesso", "Devocional atualizado.");
-      router.replace("/(tabs)/devotionals" as any);
+      router.replace(backTarget as any);
     } catch (err) {
       console.error("[DevotionalEdit] Erro ao salvar:", err);
       Alert.alert("Erro", (err as any)?.message || "Não foi possível salvar.");
@@ -157,7 +183,7 @@ export default function EditDevotionalScreen() {
       });
       await setDevotionalStatus(devotional.id, DevotionalStatus.RASCUNHO);
       Alert.alert("Sucesso", "Rascunho salvo.");
-      router.replace("/(tabs)/devotionals" as any);
+      router.replace(backTarget as any);
     } catch (err) {
       console.error("[DevotionalEdit] Erro ao salvar rascunho:", err);
       Alert.alert("Erro", (err as any)?.message || "Não foi possível salvar.");
@@ -187,7 +213,7 @@ export default function EditDevotionalScreen() {
       });
       await setDevotionalStatus(devotional.id, DevotionalStatus.DISPONIVEL);
       Alert.alert("Sucesso", "Devocional disponibilizado.");
-      router.replace("/(tabs)/devotionals" as any);
+      router.replace(backTarget as any);
     } catch (err) {
       console.error("[DevotionalEdit] Erro ao disponibilizar:", err);
       Alert.alert("Erro", (err as any)?.message || "Não foi possível disponibilizar.");
@@ -203,7 +229,7 @@ export default function EditDevotionalScreen() {
       setSubmitting(true);
       await publishDevotionalNow(devotional.id, firebaseUser?.uid || "system");
       Alert.alert("Sucesso", "Devocional publicado.");
-      router.replace("/(tabs)/devotionals" as any);
+      router.replace(backTarget as any);
     } catch (err) {
       console.error("[DevotionalEdit] Erro ao publicar agora:", err);
       Alert.alert("Erro", (err as any)?.message || "Não foi possível publicar.");
@@ -220,7 +246,7 @@ export default function EditDevotionalScreen() {
         setSubmitting(true);
         await deleteDevotional(devotional.id);
         Alert.alert("Sucesso", "Devocional excluído.");
-        router.replace("/(tabs)/devotionals" as any);
+        router.replace(backTarget as any);
       } catch (err) {
         console.error("[DevotionalEdit] Erro ao excluir:", err);
         Alert.alert("Erro", (err as any)?.message || "Não foi possível excluir.");

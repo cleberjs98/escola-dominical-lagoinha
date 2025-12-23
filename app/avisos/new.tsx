@@ -2,9 +2,10 @@ export const options = {
   title: "Criar aviso",
 };
 
-import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, StyleSheet, Text, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Alert, BackHandler, StyleSheet, Text, View } from "react-native";
+import { useFocusEffect, useNavigation, useRouter } from "expo-router";
+import { HeaderBackButton } from "@react-navigation/elements";
 
 import { useAuth } from "../../hooks/useAuth";
 import { useTheme } from "../../hooks/useTheme";
@@ -20,9 +21,11 @@ import type { AppTheme } from "../../types/theme";
 
 export default function NewAvisoScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { firebaseUser, user, isInitializing } = useAuth();
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const backTarget = "/avisos";
 
   const [titulo, setTitulo] = useState("");
   const [destino, setDestino] = useState<AvisoDestino>("todos");
@@ -46,6 +49,29 @@ export default function NewAvisoScreen() {
       router.replace("/auth/login");
     }
   }, [firebaseUser, isInitializing, router]);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerBackVisible: false,
+      headerLeft: () => (
+        <HeaderBackButton onPress={() => router.replace(backTarget as any)} tintColor={theme.colors.text} />
+      ),
+    });
+  }, [navigation, router, theme.colors.text, backTarget]);
+
+  useFocusEffect(
+    useMemo(
+      () => () => {
+        const onBack = () => {
+          router.replace(backTarget as any);
+          return true;
+        };
+        const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
+        return () => sub.remove();
+      },
+      [router, backTarget]
+    )
+  );
 
   async function handleSubmit(status: "rascunho" | "publicado") {
     if (!firebaseUser) {
@@ -81,7 +107,7 @@ export default function NewAvisoScreen() {
         }
       );
       Alert.alert("Sucesso", status === "publicado" ? "Aviso publicado." : "Rascunho salvo.");
-      router.replace("/avisos");
+      router.replace(backTarget as any);
     } catch (error) {
       console.error("[Avisos] Erro ao salvar aviso", error);
       Alert.alert("Erro", "Nao foi possivel salvar o aviso agora.");
@@ -145,7 +171,7 @@ export default function NewAvisoScreen() {
         </View>
 
         <View style={[styles.actionsRow, { marginTop: 8 }]}>
-          <AppButton title="Cancelar" variant="outline" onPress={() => router.back()} fullWidth={false} disabled={isSubmitting} />
+          <AppButton title="Cancelar" variant="outline" onPress={() => router.replace(backTarget as any)} fullWidth={false} disabled={isSubmitting} />
         </View>
       </KeyboardScreen>
     </AppBackground>

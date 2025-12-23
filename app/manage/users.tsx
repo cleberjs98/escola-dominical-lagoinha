@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useLayoutEffect } from "react";
 import {
 	ActivityIndicator,
 	Alert,
@@ -9,14 +9,17 @@ import {
 	Text,
 	TextInput,
 	View,
+	BackHandler,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useNavigation, useRouter } from "expo-router";
+import { HeaderBackButton } from "@react-navigation/elements";
 import {
 	collection,
 	deleteDoc,
 	doc,
 	FirestoreError,
 	onSnapshot,
+	getDocs,
 } from "firebase/firestore";
 
 import { AppBackground } from "../../components/layout/AppBackground";
@@ -27,6 +30,7 @@ import { approveUser, updateUserRole } from "../../lib/users";
 import type { AppTheme } from "../../types/theme";
 import type { User, UserRole, UserStatus } from "../../types/user";
 import { withAlpha } from "../../theme/utils";
+import { useScreenRefresh } from "../../hooks/useScreenRefresh";
 
 type ManagedUser = Pick<User, "id" | "nome" | "email" | "telefone" | "papel" | "status">;
 
@@ -38,6 +42,7 @@ export default function ManageUsersScreen() {
 	const { user: currentUser, firebaseUser, role, isAuthenticated, isInitializing } = useAuth();
 	const { theme } = useTheme();
 	const styles = useMemo(() => createStyles(theme), [theme]);
+	const navigation = useNavigation();
 
 	const [isLoading, setIsLoading] = useState(true);
 	const [users, setUsers] = useState<ManagedUser[]>([]);
@@ -48,6 +53,7 @@ export default function ManageUsersScreen() {
 	const [selectedRole, setSelectedRole] = useState<UserRole>("aluno");
 	const [roleModalVisible, setRoleModalVisible] = useState(false);
 	const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+	const [hasLoaded, setHasLoaded] = useState(false);
 
 	const currentUid = useMemo(
 		() => currentUser?.id || firebaseUser?.uid || "",
@@ -66,6 +72,26 @@ export default function ManageUsersScreen() {
 			router.replace("/");
 		}
 	}, [isAuthenticated, isCoordinatorOrAdmin, isInitializing, router]);
+
+	useLayoutEffect(() => {
+		navigation.setOptions({
+			headerBackVisible: false,
+			headerLeft: () => (
+				<HeaderBackButton onPress={() => router.replace("/(tabs)" as any)} tintColor={theme.colors.text} />
+			),
+		});
+	}, [navigation, router, theme.colors.text]);
+
+	useFocusEffect(
+		useCallback(() => {
+			const onBack = () => {
+				router.replace("/(tabs)" as any);
+				return true;
+			};
+			const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
+			return () => sub.remove();
+		}, [router])
+	);
 
 	useEffect(() => {
 		if (!isCoordinatorOrAdmin) return;
@@ -88,6 +114,7 @@ export default function ManageUsersScreen() {
 				});
 				setUsers(list);
 				setIsLoading(false);
+				setHasLoaded(true);
 			},
 			(error: FirestoreError) => {
 				console.error("[AdminUsers] Erro ao carregar usuarios:", error);
@@ -98,6 +125,48 @@ export default function ManageUsersScreen() {
 
 		return () => unsub();
 	}, [isCoordinatorOrAdmin]);
+
+	const loadUsersOnce = useCallback(async () => {
+		if (!isCoordinatorOrAdmin) {
+			setUsers([]);
+			setIsLoading(false);
+			setHasLoaded(true);
+			return;
+		}
+		try {
+			setIsLoading((prev) => prev || !hasLoaded);
+			const usersRef = collection(firebaseDb, "users");
+			const snap = await getDocs(usersRef);
+			const list: ManagedUser[] = [];
+			snap.forEach((docSnap) => {
+				const data = docSnap.data() as User;
+				list.push({
+					id: docSnap.id,
+					nome: data.nome,
+					email: (data as any).email,
+					telefone: data.telefone,
+					papel: data.papel,
+					status: data.status,
+				});
+			});
+			setUsers(list);
+			setHasLoaded(true);
+		} catch (error) {
+			console.error("[AdminUsers] Erro ao recarregar usuarios:", error);
+			Alert.alert("Erro", "Nao foi possivel recarregar usuarios.");
+		} finally {
+			setIsLoading(false);
+		}
+	}, [hasLoaded, isCoordinatorOrAdmin]);
+
+	const { refreshing, refresh } = useScreenRefresh(loadUsersOnce, {
+		enabled: isCoordinatorOrAdmin,
+	});
+
+	useEffect(() => {
+		if (!isCoordinatorOrAdmin) return;
+		void refresh();
+	}, [isCoordinatorOrAdmin, refresh]);
 
 	const filteredUsers = useMemo(() => {
 		const term = search.trim().toLowerCase();
@@ -361,6 +430,8 @@ export default function ManageUsersScreen() {
 						keyExtractor={(item) => item.id}
 						renderItem={renderItem}
 						contentContainerStyle={styles.listContent}
+						refreshing={refreshing}
+						onRefresh={refresh}
 					/>
 				)}
 			</View>

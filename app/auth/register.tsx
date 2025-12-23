@@ -18,6 +18,7 @@ import { Card } from "../../components/ui/Card";
 import { AppInput } from "../../components/ui/AppInput";
 import { AppButton } from "../../components/ui/AppButton";
 import { useTheme } from "../../hooks/useTheme";
+import type { AppTheme } from "../../theme/tokens";
 import {
   isNonEmpty,
   isValidDateLike,
@@ -81,7 +82,7 @@ function normalizeDateToISO(value: string): string | null {
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const { themeSettings } = useTheme();
+  const { theme, themeSettings } = useTheme();
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -95,6 +96,7 @@ export default function RegisterScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const corFundo = themeSettings?.cor_fundo || "#1A0509";
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   const flag = useMemo(() => {
     const digits = codigoPais.replace(/\D/g, "");
@@ -348,83 +350,85 @@ export default function RegisterScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  scrollContainer: {
-    flexGrow: 1,
-  },
-  inner: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 80,
-    paddingBottom: 32,
-  },
-  form: {
-    gap: 12,
-  },
-  label: {
-    color: "#9ca3af",
-    fontSize: 12,
-    marginTop: 4,
-  },
-  phoneRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 8,
-  },
-  codeSelector: {
-    borderWidth: 1,
-    borderColor: "#1f2937",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: "#0f172a",
-    minWidth: 120,
-  },
-  codeLabel: {
-    color: "#9ca3af",
-    fontSize: 11,
-    marginBottom: 2,
-  },
-  codeInputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  flag: {
-    fontSize: 18,
-  },
-  codeTextInput: {
-    color: "#e5e7eb",
-    fontSize: 14,
-    minWidth: 50,
-    paddingVertical: 2,
-    borderBottomWidth: 1,
-    borderBottomColor: "#1f2937",
-  },
-  plus: {
-    color: "#e5e7eb",
-    fontSize: 16,
-  },
-  phoneInput: {
-    flex: 1,
-  },
-  linksRow: {
-    flexDirection: "row",
-    marginTop: 12,
-    alignItems: "center",
-  },
-  linkText: {
-    color: "#38bdf8",
-    fontWeight: "500",
-  },
-  smallText: {
-    color: "#9ca3af",
-    fontSize: 13,
-  },
-  errorText: {
-    color: "#ef4444",
-    fontSize: 12,
-    marginTop: 2,
-  },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    scrollContainer: {
+      flexGrow: 1,
+    },
+    inner: {
+      flex: 1,
+      paddingHorizontal: 16,
+      paddingTop: 80,
+      paddingBottom: 32,
+    },
+    form: {
+      gap: 12,
+    },
+    label: {
+      color: theme.colors.textMuted || theme.colors.textSecondary || "#9ca3af",
+      fontSize: 12,
+      marginTop: 4,
+    },
+    phoneRow: {
+      flexDirection: "row",
+      alignItems: "flex-end",
+      gap: 8,
+    },
+    codeSelector: {
+      borderWidth: 1,
+      borderColor: theme.colors.inputBorder || theme.colors.border || "#243447",
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      backgroundColor: theme.colors.inputBg || theme.colors.card || "#1f2430",
+      minWidth: 120,
+    },
+    codeLabel: {
+      color: theme.colors.textMuted || theme.colors.textSecondary || "#9ca3af",
+      fontSize: 11,
+      marginBottom: 2,
+    },
+    codeInputRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+    },
+    flag: {
+      fontSize: 18,
+    },
+    codeTextInput: {
+      color: theme.colors.text || "#e5e7eb",
+      fontSize: 14,
+      minWidth: 50,
+      paddingVertical: 2,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.inputBorder || theme.colors.border || "#243447",
+    },
+    plus: {
+      color: theme.colors.text || "#e5e7eb",
+      fontSize: 16,
+    },
+    phoneInput: {
+      flex: 1,
+    },
+    linksRow: {
+      flexDirection: "row",
+      marginTop: 12,
+      alignItems: "center",
+    },
+    linkText: {
+      color: theme.colors.link || "#38bdf8",
+      fontWeight: "500",
+    },
+    smallText: {
+      color: theme.colors.textMuted || theme.colors.textSecondary || "#9ca3af",
+      fontSize: 13,
+    },
+    errorText: {
+      color: theme.colors.status?.dangerText || "#ef4444",
+      fontSize: 12,
+      marginTop: 2,
+    },
+  });
+}
 
