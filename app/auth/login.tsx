@@ -1,6 +1,6 @@
 // app/auth/login.tsx - tela de login com UI compartilhada
 import { useEffect, useMemo, useState } from "react";
-import { Text, StyleSheet, Alert, View, Pressable, Platform } from "react-native";
+import { Text, StyleSheet, Alert, View, Pressable, Platform, Image } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signInWithCredential } from "firebase/auth";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
@@ -23,6 +23,8 @@ export default function LoginScreen() {
   const router = useRouter();
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+
+  const googleLogoUri = "https://developers.google.com/identity/images/g-logo.png";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -255,6 +257,7 @@ export default function LoginScreen() {
             loading={isSubmitting}
             variant="secondary"
             style={{ marginTop: 8 }}
+            leftIcon={<Image source={{ uri: googleLogoUri }} style={{ width: 18, height: 18, resizeMode: "contain" }} />}
             disabled={isSubmitting || (!request && Platform.OS !== "web")}
           />
           {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
