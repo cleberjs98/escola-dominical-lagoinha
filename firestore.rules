@@ -1,231 +1,349 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isSignedIn() {
-      return request.auth != null;
-    }
 
-    function userDoc(uid) {
-      return get(/databases/$(database)/documents/users/$(uid));
-    }
+    // ==========================================================
+    // HELPERS GERAIS
+    // Firestore Rules
+    rules_version = '2';
+    service cloud.firestore {
+      match /databases/{database}/documents {
 
-    function requestUserRole() {
-      return isSignedIn()
-        ? (request.auth.token.role != null ? request.auth.token.role : userDoc(request.auth.uid).data.papel)
-        : null;
-    }
-
-    function requestUserStatus() {
-      return isSignedIn() ? userDoc(request.auth.uid).data.status : null;
-    }
-
-    function isAdmin()       { return requestUserRole() == 'administrador'; }
-    function isCoordinator() { return requestUserRole() == 'coordenador'; }
-    function isProfessor()   { return requestUserRole() == 'professor'; }
-    function isApprovedUser() { return isSignedIn() && requestUserStatus() == 'aprovado'; }
-    function isApprovedOrManager() { return isAdmin() || isCoordinator() || isApprovedUser(); }
-
-    // Users
-    match /users/{userId} {
-      function isSelf() { return isSignedIn() && request.auth.uid == userId; }
-      function isNonAdminTarget() { return resource.data.papel != 'administrador'; }
-      function allowedProfileUpdate() {
-        return request.resource.data.diff(resource.data).changedKeys().hasOnly([
-          'nome','sobrenome','nome_completo','telefone','telefone_completo','codigo_pais','data_nascimento','updated_at'
-        ]) &&
-          request.resource.data.papel == resource.data.papel &&
-          request.resource.data.status == resource.data.status;
-      }
-      function allowedApprovalUpdate() {
-        return request.resource.data.diff(resource.data).changedKeys().hasOnly([
-          'status','aprovado_por_id','aprovado_em','motivo_rejeicao',
-          'alterado_por_id','alterado_em','updated_at','papel_anterior'
-        ]) &&
-        request.resource.data.papel == resource.data.papel;
-      }
-      function allowedCoordinatorRoleUpdate() {
-        return request.resource.data.diff(resource.data).changedKeys().hasOnly([
-          'papel','papel_anterior','alterado_por_id','alterado_em','updated_at'
-        ]) &&
-        request.resource.data.papel != 'administrador' &&
-        resource.data.papel != 'administrador';
-      }
-
-      allow get: if isSelf() || isCoordinator() || isAdmin() || isProfessor();
-      allow list: if isCoordinator() || isAdmin() || isProfessor();
-      allow create: if isSignedIn() && (isSelf() || isAdmin());
-      allow update: if
-        (isSelf() && allowedProfileUpdate()) ||
-        (isProfessor() && allowedApprovalUpdate()) ||
-        (isCoordinator() && (allowedApprovalUpdate() || (isNonAdminTarget() && allowedCoordinatorRoleUpdate()))) ||
-        (isAdmin() && (
-          (request.auth.uid == userId && request.resource.data.papel == 'administrador') ||
-          request.auth.uid != userId
-        ));
-      function canDeleteUser() {
-        if (!isSignedIn()) return false;
-
-        // Admin: pode deletar qualquer um, exceto a si mesmo e outros admins
-        if (isAdmin()) {
-          return request.auth.uid != userId && resource.data.papel != 'administrador';
+        // ==========================================================
+        // HELPERS GERAIS
+        // ==========================================================
+        function isSignedIn() {
+          return request.auth != null;
         }
 
-        // Coordenador: pode deletar apenas não-admins e não-coordenadores, nunca a si mesmo
-        if (isCoordinator()) {
-          return request.auth.uid != userId &&
+        function userDoc(uid) {
+          return get(/databases/$(database)/documents/users/$(uid));
+        }
+
+        function requestUserRole() {
+          return isSignedIn() ? userDoc(request.auth.uid).data.papel : null;
+        }
+
+        function requestUserStatus() {
+          return isSignedIn() ? userDoc(request.auth.uid).data.status : null;
+        }
+
+        // Aceita "administrador" OU "admin"
+        function isAdmin()       { return requestUserRole() == 'administrador' || requestUserRole() == 'admin'; }
+        function isCoordinator() { return requestUserRole() == 'coordenador'; }
+        function isProfessor()   { return requestUserRole() == 'professor'; }
+
+        // Usuário logado + aprovado OU tem papel de coord/admin
+        function isApprovedUser() {
+          return isSignedIn() && (
+            requestUserStatus() == 'aprovado' ||
+            isAdmin() ||
+            isCoordinator()
+          );
+        }
+
+        // ==========================================================
+        // USERS
+        // ==========================================================
+        match /users/{userId} {
+          function isSelf() { return isSignedIn() && request.auth.uid == userId; }
+          function isNonAdminTarget() { return resource.data.papel != 'administrador'; }
+
+          // Permite editar/remover foto de perfil (photoURL) e dados básicos
+          function allowedProfileUpdate() {
+            return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+              'nome',
+              'sobrenome',
+              'nome_completo',
+              'telefone',
+              'telefone_completo',
+              'codigo_pais',
+              'data_nascimento',
+              'photoURL',
+              'updated_at'
+            ]) &&
+            request.resource.data.papel == resource.data.papel &&
+            request.resource.data.status == resource.data.status;
+          }
+
+          function allowedApprovalUpdate() {
+            return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+              'status','aprovado_por_id','aprovado_em','motivo_rejeicao',
+              'alterado_por_id','alterado_em','updated_at','papel_anterior'
+            ]) &&
+            request.resource.data.papel == resource.data.papel &&
+            resource.data.status == 'pendente' &&
+            (request.resource.data.status == 'aprovado' || request.resource.data.status == 'rejeitado');
+          }
+
+          function allowedCoordinatorRoleUpdate() {
+            return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+              'papel','papel_anterior','alterado_por_id','alterado_em','updated_at'
+            ]) &&
             resource.data.papel != 'administrador' &&
-            resource.data.papel != 'coordenador';
+            request.resource.data.papel != 'administrador';
+          }
+
+          allow get: if isSelf() || isCoordinator() || isAdmin() || isProfessor();
+          allow list: if isCoordinator() || isAdmin() || isProfessor();
+          allow create: if isSignedIn() && (isSelf() || isAdmin());
+
+          allow update: if
+            (isSelf() && allowedProfileUpdate()) ||
+            (isProfessor() && allowedApprovalUpdate()) ||
+            (isCoordinator() && (allowedApprovalUpdate() || (isNonAdminTarget() && allowedCoordinatorRoleUpdate()))) ||
+            (isAdmin() && (
+              (request.auth.uid == userId &&
+               request.resource.data.papel == resource.data.papel &&
+               resource.data.papel == 'administrador') ||
+              (request.auth.uid != userId)
+            ));
+
+          // Admin pode deletar qualquer um, exceto a si mesmo.
+          // Coordenador pode deletar apenas não-admins e não-coordenadores, e nunca a si mesmo.
+          allow delete: if
+            (isAdmin() && request.auth.uid != userId) ||
+            (isCoordinator() &&
+              request.auth.uid != userId &&
+              resource.data.papel != 'administrador' &&
+              resource.data.papel != 'coordenador');
         }
 
-        return false;
-      }
+        // ==========================================================
+        // AULAS
+        // ==========================================================
+        match /aulas/{id} {
+          function isAssignedProfessor() {
+            return isProfessor() &&
+              resource != null &&
+              resource.data.professor_reservado_id == request.auth.uid;
+          }
 
-      allow delete: if canDeleteUser();
-    }
+          function professorFieldsOnly() {
+            return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+              'complemento_professor','rascunho_salvo_em','updated_at'
+            ]);
+          }
 
-    // Aulas
-    match /aulas/{id} {
-      function isAssignedProfessor() {
-        return isProfessor() && resource != null && resource.data.professor_reservado_id == request.auth.uid;
-      }
-      function professorFieldsOnly() {
-        return request.resource.data.diff(resource.data).changedKeys().hasOnly([
-          'complemento_professor','rascunho_salvo_em','updated_at'
-        ]);
-      }
+          function isProfessorReservation() {
+            return isProfessor() &&
+              resource != null &&
+              resource.data.status == 'disponivel' &&
+              request.resource.data.status == 'pendente_reserva' &&
+              request.resource.data.professor_reservado_id == request.auth.uid &&
+              request.resource.data.diff(resource.data).changedKeys().hasOnly([
+                'status','professor_reservado_id','reservado_em',
+                'reserva_aprovada_por_id','reserva_aprovada_em',
+                'reserva_motivo_rejeicao','updated_at'
+              ]);
+          }
 
-      allow get, list: if resource.data.status == 'publicada' || isApprovedUser() || isCoordinator() || isAdmin();
-      allow create, update: if isCoordinator() || isAdmin();
-      allow update: if isAssignedProfessor() && professorFieldsOnly();
-      allow delete: if isAdmin() || isCoordinator();
-    }
+          function isProfessorPublishOwn() {
+            return isAssignedProfessor() &&
+              resource.data.status == 'reservada' &&
+              request.resource.data.status == 'publicada' &&
+              request.resource.data.publicado_por_id == request.auth.uid &&
+              request.resource.data.diff(resource.data).changedKeys().hasOnly([
+                'status','publicado_em','publicado_por_id','publish_at','data_publicacao_auto','updated_at'
+              ]);
+          }
 
-    // Reservas de aula
-    match /reservas_aula/{id} {
-      allow create: if isProfessor()
-        && request.resource.data.professor_id == request.auth.uid
-        && request.resource.data.status == 'pendente';
+          allow get, list: if
+            resource.data.status == 'publicada' ||
+            isApprovedUser() ||
+            isCoordinator() ||
+            isAdmin();
 
-      allow get, list: if isAdmin() || isCoordinator()
-        || (isProfessor() && ((resource != null && resource.data.professor_id == request.auth.uid) || (request.resource != null && request.resource.data.professor_id == request.auth.uid)));
+          allow create: if isCoordinator() || isAdmin();
 
-      allow update: if (isAdmin() || isCoordinator())
-        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status','aprovado_por_id','aprovado_em','motivo_rejeicao']);
+          allow update: if
+            (isCoordinator() || isAdmin()) ||
+            isProfessorReservation() ||
+            (isAssignedProfessor() && professorFieldsOnly()) ||
+            isProfessorPublishOwn();
 
-      allow delete: if false;
-    }
-
-    // Devocionais
-    match /devocionais/{id} {
-      allow get, list: if (resource.data.status == 'publicado' && isApprovedUser()) || isCoordinator() || isAdmin();
-      allow create, update, delete: if isCoordinator() || isAdmin();
-    }
-
-    // Avisos
-    match /avisos/{avisoId} {
-      function isAuthor() {
-        return isSignedIn() && resource.data.criado_por_id == request.auth.uid;
-      }
-
-      function canReadAviso() {
-        if (!(isSignedIn() && isApprovedUser())) return false;
-
-        let role = requestUserRole();
-        let destino = resource.data.destino;
-        let status = resource.data.status;
-
-        // Rascunho: somente autor + coord + admin
-        if (status == "rascunho") {
-          return isAuthor() || isCoordinator() || isAdmin();
+          allow delete: if isAdmin() || isCoordinator();
         }
 
-        // Publicado
-        if (status == "publicado") {
-          if (destino == "todos") {
-            return true;
-          }
-          if (destino == "alunos") {
-            return role == "aluno" || isCoordinator() || isAdmin();
-          }
-          if (destino == "professores") {
-            return role == "professor" || isCoordinator() || isAdmin();
-          }
-          if (destino == "coordenadores") {
-            return isCoordinator() || isAdmin();
-          }
-          if (destino == "admin") {
-            return isAdmin();
-          }
+        // ==========================================================
+        // RESERVAS DE AULA
+        // ==========================================================
+        match /reservas_aula/{id} {
+          allow create: if
+            isProfessor() &&
+            request.resource.data.professor_id == request.auth.uid &&
+            request.resource.data.status == 'pendente';
+
+          allow get, list: if
+            isAdmin() ||
+            isCoordinator() ||
+            (
+              isProfessor() &&
+              (
+                (resource != null && resource.data.professor_id == request.auth.uid) ||
+                (request.resource != null && request.resource.data.professor_id == request.auth.uid)
+              )
+            );
+
+          allow update: if
+            (isAdmin() || isCoordinator()) &&
+            request.resource.data.diff(resource.data).changedKeys().hasOnly([
+              'status','aprovado_por_id','aprovado_em','motivo_rejeicao'
+            ]);
+
+          allow delete: if false;
         }
 
-        return false;
+        // ==========================================================
+        // DEVOCIONAIS (LIST/GET sem depender de status no resource)
+        // - LIST não usa resource.data (evita permission-denied em query)
+        // - GET liberado para aprovados (se aparece na lista, pode ler)
+        // ==========================================================
+        match /devocionais/{id} {
+
+          // LIST: admin/coord sempre; aprovados (inclui aluno/prof) podem listar
+          // (o filtro por status fica no app via query where("status","in",...))
+          allow list: if isAdmin() || isCoordinator() || isApprovedUser();
+
+          // GET: se é aprovado, pode ler qualquer devocional que tenha id
+          allow get: if isAdmin() || isCoordinator() || isApprovedUser();
+
+          // Escrita: apenas coord/admin
+          allow create, update, delete: if isCoordinator() || isAdmin();
+        }
+
+        // ==========================================================
+        // AVISOS (quadro de avisos)
+        // ==========================================================
+        match /avisos/{avisoId} {
+
+          function isAuthor() {
+            return isSignedIn() && resource.data.criado_por_id == request.auth.uid;
+          }
+
+          allow get, list: if
+            isAdmin() ||
+            isCoordinator() ||
+            (
+              isApprovedUser() &&
+              resource.data.status == 'publicado'
+            ) ||
+            (
+              isApprovedUser() &&
+              isAuthor()
+            );
+
+          allow create: if
+            isApprovedUser() &&
+            (isProfessor() || isCoordinator() || isAdmin()) &&
+            request.resource.data.criado_por_id == request.auth.uid;
+
+          allow update: if
+            (
+              isApprovedUser() &&
+              isProfessor() &&
+              isAuthor()
+            ) ||
+            isCoordinator() ||
+            isAdmin();
+
+          allow delete: if
+            (
+              isApprovedUser() &&
+              isProfessor() &&
+              isAuthor()
+            ) ||
+            isCoordinator() ||
+            isAdmin();
+        }
+
+        // ==========================================================
+        // MATERIAIS DE APOIO
+        // ==========================================================
+        match /materiais_apoio/{id} {
+          function isOwner() { return isSignedIn() && resource.data.enviado_por_id == request.auth.uid; }
+
+          allow get, list: if isApprovedUser();
+
+          allow create: if
+            isApprovedUser() &&
+            (isProfessor() || isCoordinator() || isAdmin()) &&
+            request.resource.data.enviado_por_id == request.auth.uid;
+
+          allow update, delete: if
+            isAdmin() ||
+            isCoordinator() ||
+            isOwner();
+        }
+
+        // ==========================================================
+        // NOTIFICAÇÕES
+        // ==========================================================
+        match /notificacoes/{id} {
+
+          function isOwner() {
+            return isSignedIn() && resource.data.usuario_id == request.auth.uid;
+          }
+
+          function isAdminOrCoordinatorTarget() {
+            let alvo = userDoc(request.resource.data.usuario_id);
+            return alvo.data.papel == 'administrador' || alvo.data.papel == 'admin' || alvo.data.papel == 'coordenador';
+          }
+
+          allow get, list: if isOwner();
+
+          allow create: if
+            isSignedIn() && (
+              request.resource.data.usuario_id == request.auth.uid ||
+              isCoordinator() ||
+              isAdmin() ||
+              (isProfessor() && isAdminOrCoordinatorTarget())
+            );
+
+          allow update: if
+            (
+              isOwner() &&
+              request.resource.data.diff(resource.data).changedKeys().hasOnly([
+                'lida',
+                'lida_em'
+              ])
+            ) ||
+            isCoordinator() ||
+            isAdmin();
+
+          allow delete: if isAdmin();
+        }
+
+        // ==========================================================
+        // CONFIGURAÇÕES GERAIS (TEMA / LAYOUT)
+        // ==========================================================
+        match /theme_settings/{id} {
+          allow get, list: if true;
+          allow create, update, delete: if isAdmin() || isCoordinator();
+        }
+
+        match /layout_settings/{id} {
+          allow get, list: if true;
+          allow create, update, delete: if isAdmin() || isCoordinator();
+        }
+
+        match /backgrounds/{id} {
+          allow get, list: if true;
+          allow create, update, delete: if isAdmin() || isCoordinator();
+        }
+
+        match /navigation_settings/{id} {
+          allow get, list: if true;
+          allow create, update, delete: if isAdmin() || isCoordinator();
+        }
+
+        match /layout_templates/{id} {
+          allow get, list: if true;
+          allow create, update, delete: if isAdmin() || isCoordinator();
+        }
       }
-
-      allow get, list: if canReadAviso();
-
-      allow create: if isSignedIn()
-        && (isProfessor() || isCoordinator() || isAdmin())
-        && request.resource.data.criado_por_id == request.auth.uid;
-
-      allow update: if isSignedIn()
-        && (
-          (isProfessor() && isAuthor()) ||
-          isCoordinator() ||
-          isAdmin()
-        );
-
-      allow delete: if isSignedIn()
-        && (
-          (isProfessor() && isAuthor()) ||
-          isCoordinator() ||
-          isAdmin()
-        );
     }
-
-    // Materiais de apoio
-    match /materiais_apoio/{id} {
-      function isOwner() { return isSignedIn() && resource.data.enviado_por_id == request.auth.uid; }
-      allow get, list: if isApprovedUser();
-      allow create: if (isProfessor() || isCoordinator() || isAdmin()) &&
-        request.resource.data.enviado_por_id == request.auth.uid;
-      allow update, delete: if isAdmin() || isCoordinator() || isOwner();
-    }
-
-    // Notificacoes
-    match /notificacoes/{id} {
-      function isOwner() { return isSignedIn() && resource.data.usuario_id == request.auth.uid; }
-      allow get, list: if isOwner();
-      allow create: if isSignedIn() &&
-        (request.resource.data.usuario_id == request.auth.uid || isCoordinator() || isAdmin());
-      allow update: if (isOwner() &&
-        request.resource.data.diff(resource.data).changedKeys().hasOnly(['lida','lida_em'])) || isCoordinator() || isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    // Theme / Layout / Background / Navegacao / Layout de telas
-    match /theme_settings/{id} {
-      allow get, list: if isApprovedOrManager();
-      allow create, update, delete: if isAdmin();
-    }
-    match /layout_settings/{id} {
-      allow get, list: if isApprovedOrManager();
-      allow create, update, delete: if isAdmin();
-    }
-    match /backgrounds/{id} {
-      allow get, list: if isApprovedOrManager();
-      allow create, update, delete: if isAdmin();
-    }
-    match /navigation_tabs/{id} {
-      allow get, list: if isApprovedOrManager();
-      allow create, update, delete: if isAdmin();
-    }
-    match /screen_layouts/{id} {
-      allow get, list: if isApprovedOrManager();
-      allow create, update, delete: if isAdmin();
-    }
-    match /navigation_settings/{id} {
-      allow get, list: if isApprovedOrManager();
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if isAdmin() || isCoordinator();
     }
   }
 }

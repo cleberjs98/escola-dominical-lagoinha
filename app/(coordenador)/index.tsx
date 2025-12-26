@@ -11,12 +11,14 @@ import {
   Text,
   View,
   RefreshControl,
+  Pressable,
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { doc, getDoc } from "firebase/firestore";
 
 import { useAuth } from "../../hooks/useAuth";
 import { useTheme } from "../../hooks/useTheme";
+import { useUnreadNotificationsCount } from "../../hooks/useUnreadNotificationsCount";
 import { firebaseDb } from "../../lib/firebase";
 import { getDevotionalOfTheDay } from "../../lib/devotionals";
 import { listRecentAvisosForUser } from "../../lib/avisos";
@@ -57,6 +59,8 @@ export default function CoordinatorDashboardScreen() {
   const isAdmin = papel === "administrador";
   const isCoordinator = papel === "coordenador";
   const isAllowed = useMemo(() => isAdmin || isCoordinator, [isAdmin, isCoordinator]);
+  const userId = firebaseUser?.uid;
+  const { unreadCount, reload: reloadUnread } = useUnreadNotificationsCount(userId);
 
   const [isLoading, setIsLoading] = useState(true);
   const [pending, setPending] = useState<Awaited<ReturnType<typeof getPendingInsights>> | null>(
@@ -106,6 +110,7 @@ export default function CoordinatorDashboardScreen() {
       setKpis(kpisData);
       setDevotional(devo);
       setRecentAvisos(avisos);
+      reloadUnread();
     } catch (error) {
       console.error("Erro ao carregar dashboard coordenador/admin:", error);
       Alert.alert("Erro", "Não foi possível carregar o dashboard.");
@@ -146,6 +151,17 @@ export default function CoordinatorDashboardScreen() {
         alwaysBounceVertical
         overScrollMode="always"
         contentInsetAdjustmentBehavior="automatic">
+        <View style={styles.headerRow}>
+          <Text style={styles.headerTitle}>Dashboard</Text>
+          <Pressable style={styles.bellContainer} onPress={() => router.push("/notifications" as any)}>
+            <Text style={styles.bellIcon}>{"\uD83D\uDD14"}</Text>
+            {unreadCount ? (
+              <View style={styles.badgeBubble}>
+                <Text style={styles.badgeBubbleText}>{unreadCount}</Text>
+              </View>
+            ) : null}
+          </Pressable>
+        </View>
         {orderedSections.map((section) => {
           if (section === "pendencias") return renderPendencias();
           if (section === "conteudos") return renderConteudos();
@@ -383,6 +399,47 @@ function createStyles(theme: AppTheme) {
       flex: 1,
       alignItems: "center",
       justifyContent: "center",
+    },
+    headerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 12,
+    },
+    headerTitle: {
+      color: "#fff",
+      fontSize: 22,
+      fontWeight: "800",
+    },
+    bellContainer: {
+      padding: 8,
+      borderRadius: 14,
+      backgroundColor: withAlpha(theme.colors.card, 0.7),
+      borderWidth: 1,
+      borderColor: withAlpha(theme.colors.border || theme.colors.card, 0.6),
+      minWidth: 44,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    bellIcon: {
+      fontSize: 20,
+    },
+    badgeBubble: {
+      position: "absolute",
+      top: -4,
+      right: -4,
+      minWidth: 18,
+      paddingHorizontal: 5,
+      height: 18,
+      borderRadius: 10,
+      backgroundColor: theme.colors.accent,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    badgeBubbleText: {
+      color: "#000",
+      fontSize: 11,
+      fontWeight: "800",
     },
     loadingText: {
       color: theme.colors.textSecondary,

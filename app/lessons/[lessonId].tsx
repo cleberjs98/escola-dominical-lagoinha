@@ -19,9 +19,12 @@ import {
   approveReservation,
   deleteLesson,
   getLessonById,
+  makeLessonAvailable,
   publishLessonNow,
   rejectReservation,
   reserveLesson,
+  reserveLessonAsAdmin,
+  setLessonStatus,
   updateProfessorComplement,
 } from "../../lib/lessons";
 import type { Lesson } from "../../types/lesson";
@@ -84,6 +87,8 @@ export default function LessonDetailsScreen() {
   const [savingComplement, setSavingComplement] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [adminReserving, setAdminReserving] = useState(false);
+  const [makingAvailable, setMakingAvailable] = useState(false);
 
   useEffect(() => {
     if (!firebaseUser || isInitializing) return;
@@ -139,6 +144,11 @@ export default function LessonDetailsScreen() {
   const isStudent = role === "aluno";
   const isOwnerProfessor = lesson?.professor_reservado_id === uid;
   const canEditComplement = (isProfessor && isOwnerProfessor) || isAdmin;
+  const canUploadMaterials =
+    isAdmin ||
+    (isProfessor &&
+      isOwnerProfessor &&
+      (lesson?.status === "reservada" || lesson?.status === "publicada"));
   
   const { user: reservedProfessor } = useUserById(lesson?.professor_reservado_id);
   const professorNome = normalizeMojibake(
@@ -180,6 +190,20 @@ export default function LessonDetailsScreen() {
     }
   }
 
+  async function handleAdminReserveNow() {
+    if (!lesson) return;
+    try {
+      setAdminReserving(true);
+      await reserveLessonAsAdmin(lesson.id, uid);
+      await loadLesson();
+      Alert.alert("Reservada", "Aula reservada para você sem necessidade de aprovação.");
+    } catch (err) {
+      Alert.alert("Erro", (err as Error)?.message || "Não foi possível reservar diretamente.");
+    } finally {
+      setAdminReserving(false);
+    }
+  }
+
   async function handlePublishNow() {
     if (!lesson) return;
     try {
@@ -191,6 +215,20 @@ export default function LessonDetailsScreen() {
       Alert.alert("Erro", "Não foi possível publicar agora.");
     } finally {
       setPublishing(false);
+    }
+  }
+
+  async function handleMakeAvailable() {
+    if (!lesson) return;
+    try {
+      setMakingAvailable(true);
+      await makeLessonAvailable(lesson.id);
+      await loadLesson();
+      Alert.alert("Disponibilizada", "Aula marcada como disponível para reserva.");
+    } catch (err) {
+      Alert.alert("Erro", (err as Error)?.message || "Não foi possível disponibilizar.");
+    } finally {
+      setMakingAvailable(false);
     }
   }
 
@@ -317,11 +355,7 @@ export default function LessonDetailsScreen() {
         {/* Materiais com preview inline */}
         <LessonMaterialsSection
           lessonId={lesson.id}
-          canUpload={Boolean(
-            isProfessor &&
-            isOwnerProfessor &&
-            (lesson.status === "reservada" || lesson.status === "publicada")
-          )}
+          canUpload={Boolean(canUploadMaterials)}
           currentUserId={uid}
           currentUserRole={role ?? null}
         />
@@ -369,6 +403,24 @@ export default function LessonDetailsScreen() {
                     router.push({ pathname: "/admin/lessons/[lessonId]", params: { lessonId } } as any)
                   }
                 />
+
+                {lesson && lesson.status !== "publicada" && (
+                  <AppButton
+                    title={makingAvailable ? "Disponibilizando..." : "Disponibilizar"}
+                    variant="secondary"
+                    onPress={handleMakeAvailable}
+                    disabled={makingAvailable || lesson.status === "disponivel"}
+                  />
+                )}
+
+                {lesson.status === "disponivel" && (
+                  <AppButton
+                    title={adminReserving ? "Reservando..." : "Reservar (sem aprovação)"}
+                    variant="primary"
+                    onPress={handleAdminReserveNow}
+                    disabled={adminReserving}
+                  />
+                )}
                 
                 {lesson.status !== "publicada" && (
                   <AppButton

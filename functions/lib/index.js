@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.notifyLessonsOnWrite = exports.notifyDevotionalsOnWrite = exports.cleanupOldNotifications = exports.publishScheduledLessons = exports.syncUserClaimsOnUserWrite = exports.convertVideo = void 0;
+exports.notifyLessonsOnWrite = exports.notifyDevotionalsOnWrite = exports.cleanupOldNotifications = exports.publishScheduledLessons = exports.deleteUserEverywhere = exports.deleteAuthOnUserDelete = exports.syncUserClaimsOnUserWrite = exports.convertVideo = void 0;
 const admin = __importStar(require("firebase-admin"));
 const functions = __importStar(require("firebase-functions"));
 const scheduler_1 = require("firebase-functions/v2/scheduler");
@@ -54,6 +54,12 @@ const db = admin.firestore();
 const lessonsCollection = "aulas";
 const devotionalsCollection = "devocionais";
 const MAX_CONVERT_TIMEOUT_SECONDS = 540; // 9 minutos
+function isAdminRole(papel) {
+    return papel === "administrador" || papel === "admin";
+}
+function isCoordinatorRole(papel) {
+    return papel === "coordenador";
+}
 // Garante que o ffmpeg usa o binário estático (Cloud Functions Linux x64)
 if (ffmpeg_static_1.default) {
     fluent_ffmpeg_1.default.setFfmpegPath(ffmpeg_static_1.default);
@@ -161,8 +167,9 @@ exports.convertVideo = (0, storage_1.onObjectFinalized)({
  * atualizamos as custom claims do usuário no Firebase Auth
  * e geramos notificações relacionadas a usuários.
  */
-exports.syncUserClaimsOnUserWrite = functions.firestore
-    .document("users/{userId}")
+exports.syncUserClaimsOnUserWrite = functions
+    .region("europe-west3")
+    .firestore.document("users/{userId}")
     .onWrite(async (change, context) => {
     const uid = context.params.userId;
     const beforeData = change.before.exists
@@ -232,9 +239,78 @@ exports.syncUserClaimsOnUserWrite = functions.firestore
     }
 });
 /**
+ * Quando o documento de /users/{userId} é deletado, remove também o usuário do Auth
+ * para não deixar contas órfãs.
+ */
+exports.deleteAuthOnUserDelete = functions
+    .region("europe-west3")
+    .firestore.document("users/{userId}")
+    .onDelete(async (_snap, context) => {
+    const uid = context.params.userId;
+    try {
+        await admin.auth().deleteUser(uid);
+        firebase_functions_1.logger.info("[Auth] Usuário removido do Auth após delete do doc", { uid });
+    }
+    catch (err) {
+        firebase_functions_1.logger.error("[Auth] Falha ao remover usuário do Auth", { uid, err });
+    }
+});
+/**
+ * Callable para excluir usuario tanto do Auth quanto do Firestore, com validação de permissão.
+ * Regras:
+ * - Apenas admin ou coordenador podem chamar
+ * - Coordenador não pode excluir admin/admin (alias) nem coordenador
+ * - Ninguém pode excluir a si mesmo por aqui
+ */
+exports.deleteUserEverywhere = functions.region("europe-west3").https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Necessita autenticação.");
+    }
+    const targetUid = data?.userId || data?.uid;
+    if (!targetUid) {
+        throw new functions.https.HttpsError("invalid-argument", "Campo userId é obrigatório.");
+    }
+    const callerUid = context.auth.uid;
+    const callerSnap = await db.doc(`users/${callerUid}`).get();
+    const callerRole = callerSnap.exists ? callerSnap.data()?.papel : undefined;
+    if (!isAdminRole(callerRole) && !isCoordinatorRole(callerRole)) {
+        throw new functions.https.HttpsError("permission-denied", "Sem permissão para excluir usuários.");
+    }
+    if (callerUid === targetUid) {
+        throw new functions.https.HttpsError("failed-precondition", "Não é permitido excluir a si mesmo.");
+    }
+    const targetSnap = await db.doc(`users/${targetUid}`).get();
+    const targetRole = targetSnap.exists ? targetSnap.data()?.papel : undefined;
+    if (isCoordinatorRole(callerRole)) {
+        if (isAdminRole(targetRole) || isCoordinatorRole(targetRole)) {
+            throw new functions.https.HttpsError("permission-denied", "Coordenador não pode excluir admin/coordenador.");
+        }
+    }
+    try {
+        await admin
+            .auth()
+            .deleteUser(targetUid)
+            .catch((err) => {
+            // Ignora se já não existe no Auth
+            if (err?.code === "auth/user-not-found")
+                return;
+            throw err;
+        });
+        if (targetSnap.exists) {
+            await targetSnap.ref.delete();
+        }
+        firebase_functions_1.logger.info("[Auth] Usuário removido (Auth + Firestore) via callable", { callerUid, targetUid });
+        return { ok: true };
+    }
+    catch (err) {
+        firebase_functions_1.logger.error("[Auth] Falha ao remover usuário (Auth + Firestore)", { callerUid, targetUid, err });
+        throw new functions.https.HttpsError("internal", "Falha ao excluir usuário.");
+    }
+});
+/**
  * Publicação automática de aulas/devocionais agendados
  */
-exports.publishScheduledLessons = (0, scheduler_1.onSchedule)("every 1 minutes", async () => {
+exports.publishScheduledLessons = (0, scheduler_1.onSchedule)({ schedule: "every 1 minutes", region: "europe-west3" }, async () => {
     const now = admin.firestore.Timestamp.now();
     const [lessonsProcessed, devotionalsProcessed] = await Promise.all([
         processLessons(now),
@@ -250,7 +326,7 @@ exports.publishScheduledLessons = (0, scheduler_1.onSchedule)("every 1 minutes",
  * Limpeza automática de notificações antigas (> 7 dias)
  * Roda 1x por dia e apaga em lotes de até 500 docs por execução.
  */
-exports.cleanupOldNotifications = (0, scheduler_1.onSchedule)("every 24 hours", async () => {
+exports.cleanupOldNotifications = (0, scheduler_1.onSchedule)({ schedule: "every 24 hours", region: "europe-west3" }, async () => {
     const now = admin.firestore.Timestamp.now();
     const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
     const cutoff = admin.firestore.Timestamp.fromMillis(now.toMillis() - sevenDaysMs);
@@ -280,8 +356,9 @@ exports.cleanupOldNotifications = (0, scheduler_1.onSchedule)("every 24 hours", 
 /**
  * Notificações de devocionais (publicados)
  */
-exports.notifyDevotionalsOnWrite = functions.firestore
-    .document("devocionais/{devocionalId}")
+exports.notifyDevotionalsOnWrite = functions
+    .region("europe-west3")
+    .firestore.document("devocionais/{devocionalId}")
     .onWrite(async (change, context) => {
     const devocionalId = context.params.devocionalId;
     const before = change.before.exists ? change.before.data() : null;
@@ -306,8 +383,9 @@ exports.notifyDevotionalsOnWrite = functions.firestore
 /**
  * Notificações de aulas (disponível, pendente_reserva, reservada, publicada)
  */
-exports.notifyLessonsOnWrite = functions.firestore
-    .document("aulas/{lessonId}")
+exports.notifyLessonsOnWrite = functions
+    .region("europe-west3")
+    .firestore.document("aulas/{lessonId}")
     .onWrite(async (change, context) => {
     const lessonId = context.params.lessonId;
     const before = change.before.exists ? change.before.data() : null;

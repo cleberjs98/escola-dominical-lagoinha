@@ -20,6 +20,8 @@ export default function AdminDashboardScreen() {
   const { firebaseUser, isInitializing, user } = useAuth();
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const userId = firebaseUser?.uid;
+  const { unreadCount } = useUnreadNotificationsCount(userId);
 
   const [pendingUsers, setPendingUsers] = useState<number | null>(null);
   const [pendingReservations, setPendingReservations] = useState<number | null>(null);
@@ -70,6 +72,17 @@ export default function AdminDashboardScreen() {
   return (
     <AppBackground>
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <View style={styles.headerRow}>
+          <Text style={styles.title}>Dashboard Admin</Text>
+          <Pressable style={styles.bellContainer} onPress={() => router.push("/notifications" as any)}>
+            <Text style={styles.bellIcon}>{"\uD83D\uDD14"}</Text>
+            {unreadCount ? (
+              <View style={styles.badgeBubble}>
+                <Text style={styles.badgeBubbleText}>{unreadCount}</Text>
+              </View>
+            ) : null}
+          </Pressable>
+        </View>
         <Text style={styles.title}>Dashboard Admin</Text>
 
         <View style={styles.grid}>
@@ -118,6 +131,11 @@ function createStyles(theme: AppTheme) {
       paddingHorizontal: 16,
       paddingVertical: 24,
       gap: 12,
+    headerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
     },
     center: {
       flex: 1,
@@ -132,7 +150,37 @@ function createStyles(theme: AppTheme) {
     title: {
       fontSize: 20,
       fontWeight: "700",
-      color: theme.colors.text,
+      color: "#fff",
+    bellContainer: {
+      padding: 8,
+      borderRadius: 14,
+      backgroundColor: theme.colors.card,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      minWidth: 44,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    bellIcon: {
+      fontSize: 20,
+    },
+    badgeBubble: {
+      position: "absolute",
+      top: -4,
+      right: -4,
+      minWidth: 18,
+      paddingHorizontal: 5,
+      height: 18,
+      borderRadius: 10,
+      backgroundColor: theme.colors.accent,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    badgeBubbleText: {
+      color: "#000",
+      fontSize: 11,
+      fontWeight: "800",
+    },
     },
     grid: {
       gap: 12,

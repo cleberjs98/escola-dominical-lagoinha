@@ -10,7 +10,8 @@ import {
   where,
   query,
 } from "firebase/firestore";
-import { firebaseDb } from "./firebase";
+import { httpsCallable } from "firebase/functions";
+import { firebaseDb, firebaseFunctions } from "./firebase";
 import type { User, UserRole, UserStatus } from "../types/user";
 import { logAudit } from "./audit";
 
@@ -247,4 +248,11 @@ export async function searchUsers(filters: UserSearchFilters): Promise<User[]> {
   }
 
   return list;
+}
+
+// Remove usuário tanto do Auth quanto do Firestore via Cloud Function protegida.
+export async function deleteUserEverywhere(targetUserId: string): Promise<void> {
+  if (!targetUserId) throw new Error("ID do usuario obrigatorio.");
+  const callable = httpsCallable(firebaseFunctions, "deleteUserEverywhere");
+  await callable({ userId: targetUserId });
 }

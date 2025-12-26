@@ -162,6 +162,21 @@ export async function setLessonStatus(lessonId: string, status: LessonStatus) {
   });
 }
 
+// Torna a aula disponível e limpa qualquer reserva prévia.
+export async function makeLessonAvailable(lessonId: string) {
+  if (__DEV__) console.log("[lessons] makeLessonAvailable", { lessonId });
+  const ref = doc(firebaseDb, collectionName, lessonId);
+  await updateDoc(ref, {
+    status: "disponivel",
+    professor_reservado_id: null,
+    reservado_em: null,
+    reserva_aprovada_por_id: null,
+    reserva_aprovada_em: null,
+    reserva_motivo_rejeicao: null,
+    updated_at: serverTimestamp() as any,
+  });
+}
+
 export async function reserveLesson(lessonId: string, professorId: string) {
   if (__DEV__) console.log("[lessons] reserveLesson", { lessonId, professorId });
   const ref = doc(firebaseDb, collectionName, lessonId);
@@ -179,6 +194,30 @@ export async function reserveLesson(lessonId: string, professorId: string) {
     reserva_aprovada_em: null,
     reserva_motivo_rejeicao: null,
     updated_at: serverTimestamp() as any,
+  });
+}
+
+export async function reserveLessonAsAdmin(lessonId: string, adminId: string) {
+  if (__DEV__) console.log("[lessons] reserveLessonAsAdmin", { lessonId, adminId });
+  const ref = doc(firebaseDb, collectionName, lessonId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error("Aula não encontrada.");
+  const data = snap.data() as Lesson;
+
+  if (data.status !== "disponivel") {
+    throw new Error("Aula não está disponível para reserva imediata.");
+  }
+
+  const now = serverTimestamp() as any;
+
+  await updateDoc(ref, {
+    status: "reservada",
+    professor_reservado_id: adminId,
+    reservado_em: now,
+    reserva_aprovada_por_id: adminId,
+    reserva_aprovada_em: now,
+    reserva_motivo_rejeicao: null,
+    updated_at: now,
   });
 }
 

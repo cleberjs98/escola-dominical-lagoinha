@@ -18,6 +18,14 @@ const lessonsCollection = "aulas";
 const devotionalsCollection = "devocionais";
 const MAX_CONVERT_TIMEOUT_SECONDS = 540; // 9 minutos
 
+function isAdminRole(papel?: string | null) {
+  return papel === "administrador" || papel === "admin";
+}
+
+function isCoordinatorRole(papel?: string | null) {
+  return papel === "coordenador";
+}
+
 // Garante que o ffmpeg usa o binário estático (Cloud Functions Linux x64)
 if (ffmpegPath) {
   ffmpeg.setFfmpegPath(ffmpegPath);
@@ -140,8 +148,9 @@ export const convertVideo = onObjectFinalized(
  * atualizamos as custom claims do usuário no Firebase Auth
  * e geramos notificações relacionadas a usuários.
  */
-export const syncUserClaimsOnUserWrite = functions.firestore
-  .document("users/{userId}")
+export const syncUserClaimsOnUserWrite = functions
+  .region("europe-west3")
+  .firestore.document("users/{userId}")
   .onWrite(async (change, context) => {
     const uid = context.params.userId as string;
 
@@ -235,8 +244,9 @@ export const syncUserClaimsOnUserWrite = functions.firestore
  * Quando o documento de /users/{userId} é deletado, remove também o usuário do Auth
  * para não deixar contas órfãs.
  */
-export const deleteAuthOnUserDelete = functions.firestore
-  .document("users/{userId}")
+export const deleteAuthOnUserDelete = functions
+  .region("europe-west3")
+  .firestore.document("users/{userId}")
   .onDelete(async (_snap, context) => {
     const uid = context.params.userId as string;
 
@@ -249,9 +259,71 @@ export const deleteAuthOnUserDelete = functions.firestore
   });
 
 /**
+ * Callable para excluir usuario tanto do Auth quanto do Firestore, com validação de permissão.
+ * Regras:
+ * - Apenas admin ou coordenador podem chamar
+ * - Coordenador não pode excluir admin/admin (alias) nem coordenador
+ * - Ninguém pode excluir a si mesmo por aqui
+ */
+export const deleteUserEverywhere = functions.region("europe-west3").https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Necessita autenticação.");
+  }
+
+  const targetUid: string | undefined = data?.userId || data?.uid;
+  if (!targetUid) {
+    throw new functions.https.HttpsError("invalid-argument", "Campo userId é obrigatório.");
+  }
+
+  const callerUid = context.auth.uid;
+  const callerSnap = await db.doc(`users/${callerUid}`).get();
+  const callerRole = callerSnap.exists ? (callerSnap.data()?.papel as string | undefined) : undefined;
+
+  if (!isAdminRole(callerRole) && !isCoordinatorRole(callerRole)) {
+    throw new functions.https.HttpsError("permission-denied", "Sem permissão para excluir usuários.");
+  }
+
+  if (callerUid === targetUid) {
+    throw new functions.https.HttpsError("failed-precondition", "Não é permitido excluir a si mesmo.");
+  }
+
+  const targetSnap = await db.doc(`users/${targetUid}`).get();
+  const targetRole = targetSnap.exists ? (targetSnap.data()?.papel as string | undefined) : undefined;
+
+  if (isCoordinatorRole(callerRole)) {
+    if (isAdminRole(targetRole) || isCoordinatorRole(targetRole)) {
+      throw new functions.https.HttpsError("permission-denied", "Coordenador não pode excluir admin/coordenador.");
+    }
+  }
+
+  try {
+    await admin
+      .auth()
+      .deleteUser(targetUid)
+      .catch((err) => {
+        // Ignora se já não existe no Auth
+        if ((err as any)?.code === "auth/user-not-found") return;
+        throw err;
+      });
+
+    if (targetSnap.exists) {
+      await targetSnap.ref.delete();
+    }
+
+    logger.info("[Auth] Usuário removido (Auth + Firestore) via callable", { callerUid, targetUid });
+    return { ok: true };
+  } catch (err) {
+    logger.error("[Auth] Falha ao remover usuário (Auth + Firestore)", { callerUid, targetUid, err });
+    throw new functions.https.HttpsError("internal", "Falha ao excluir usuário.");
+  }
+});
+
+/**
  * Publicação automática de aulas/devocionais agendados
  */
-export const publishScheduledLessons = onSchedule("every 1 minutes", async () => {
+export const publishScheduledLessons = onSchedule(
+  { schedule: "every 1 minutes", region: "europe-west3" },
+  async () => {
   const now = admin.firestore.Timestamp.now();
 
   const [lessonsProcessed, devotionalsProcessed] = await Promise.all([
@@ -264,13 +336,16 @@ export const publishScheduledLessons = onSchedule("every 1 minutes", async () =>
     devocionais_processados: devotionalsProcessed,
     horario: now.toDate().toISOString(),
   });
-});
+  }
+);
 
 /**
  * Limpeza automática de notificações antigas (> 7 dias)
  * Roda 1x por dia e apaga em lotes de até 500 docs por execução.
  */
-export const cleanupOldNotifications = onSchedule("every 24 hours", async () => {
+export const cleanupOldNotifications = onSchedule(
+  { schedule: "every 24 hours", region: "europe-west3" },
+  async () => {
   const now = admin.firestore.Timestamp.now();
   const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
   const cutoff = admin.firestore.Timestamp.fromMillis(now.toMillis() - sevenDaysMs);
@@ -302,13 +377,15 @@ export const cleanupOldNotifications = onSchedule("every 24 hours", async () => 
   logger.info("[Notify][Cleanup] Limpeza concluída", {
     totalDeleted,
   });
-});
+  }
+);
 
 /**
  * Notificações de devocionais (publicados)
  */
-export const notifyDevotionalsOnWrite = functions.firestore
-  .document("devocionais/{devocionalId}")
+export const notifyDevotionalsOnWrite = functions
+  .region("europe-west3")
+  .firestore.document("devocionais/{devocionalId}")
   .onWrite(async (change, context) => {
     const devocionalId = context.params.devocionalId as string;
     const before = change.before.exists ? (change.before.data() as any) : null;
@@ -335,8 +412,9 @@ export const notifyDevotionalsOnWrite = functions.firestore
 /**
  * Notificações de aulas (disponível, pendente_reserva, reservada, publicada)
  */
-export const notifyLessonsOnWrite = functions.firestore
-  .document("aulas/{lessonId}")
+export const notifyLessonsOnWrite = functions
+  .region("europe-west3")
+  .firestore.document("aulas/{lessonId}")
   .onWrite(async (change, context) => {
     const lessonId = context.params.lessonId as string;
     const before = change.before.exists ? (change.before.data() as any) : null;

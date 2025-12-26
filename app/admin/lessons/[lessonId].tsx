@@ -218,7 +218,6 @@ export default function EditLessonScreen() {
           <RichTextEditor value={descricao} onChange={setDescricao} placeholder="Digite a descrição da aula..." />
           <AppButton title={submitting ? "Salvando..." : "Salvar edições"} variant="primary" onPress={() => handleSave()} disabled={submitting} />
           <AppButton title={submitting ? "Salvar rascunho..." : "Salvar como rascunho"} variant="secondary" onPress={() => handleSave("rascunho" as LessonStatus)} disabled={submitting} />
-          <AppButton title={submitting ? "Disponibilizando..." : "Disponibilizar"} variant="secondary" onPress={() => handleSave("disponivel" as LessonStatus)} disabled={submitting} />
           <AppButton title={submitting ? "Publicando..." : "Publicar agora"} variant="secondary" onPress={handlePublishNow} disabled={submitting} />
         </View>
       </ScrollView>

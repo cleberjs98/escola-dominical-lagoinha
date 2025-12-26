@@ -13,20 +13,13 @@ import {
 } from "react-native";
 import { useFocusEffect, useNavigation, useRouter } from "expo-router";
 import { HeaderBackButton } from "@react-navigation/elements";
-import {
-	collection,
-	deleteDoc,
-	doc,
-	FirestoreError,
-	onSnapshot,
-	getDocs,
-} from "firebase/firestore";
+import { collection, FirestoreError, onSnapshot, getDocs } from "firebase/firestore";
 
 import { AppBackground } from "../../components/layout/AppBackground";
 import { useAuth } from "../../hooks/useAuth";
 import { useTheme } from "../../hooks/useTheme";
 import { firebaseDb } from "../../lib/firebase";
-import { approveUser, updateUserRole } from "../../lib/users";
+import { approveUser, deleteUserEverywhere, updateUserRole } from "../../lib/users";
 import type { AppTheme } from "../../types/theme";
 import type { User, UserRole, UserStatus } from "../../types/user";
 import { withAlpha } from "../../theme/utils";
@@ -232,7 +225,7 @@ export default function ManageUsersScreen() {
 
 	const handleDeleteUser = useCallback(async (userId: string) => {
 		try {
-			await deleteDoc(doc(firebaseDb, "users", userId));
+			await deleteUserEverywhere(userId);
 			setUsers((prev) => prev.filter((u) => u.id !== userId));
 		} catch (error: any) {
 			console.error("[AdminUsers] Erro ao remover usuario:", error);

@@ -1,5 +1,5 @@
 export const options = {
-  title: "Usuários",
+  title: "Usuï¿½rios",
 };// app/admin/users.tsx
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -13,17 +13,11 @@ import {
   TextInput,
 } from "react-native";
 import { useRouter } from "expo-router";
-import {
-  collection,
-  deleteDoc,
-  doc,
-  FirestoreError,
-  onSnapshot,
-} from "firebase/firestore";
+import { collection, FirestoreError, onSnapshot } from "firebase/firestore";
 
 import { useAuth } from "../../hooks/useAuth";
 import { firebaseDb } from "../../lib/firebase";
-import { updateUserRole } from "../../lib/users";
+import { deleteUserEverywhere, updateUserRole } from "../../lib/users";
 import type { User, UserRole, UserStatus } from "../../types/user";
 
 type ManagedUser = Pick<
@@ -168,8 +162,8 @@ export default function AdminUsersScreen() {
           onPress: async () => {
             try {
               setActionLoadingId(target.id);
-              await deleteDoc(doc(firebaseDb, "users", target.id));
-              Alert.alert("Sucesso", "Usuario removido.");
+              await deleteUserEverywhere(target.id);
+              Alert.alert("Sucesso", "Usuario removido (Auth + Firestore).");
             } catch (error: any) {
               console.error("Erro ao remover usuario:", error);
               Alert.alert("Erro", error?.message || "Falha ao remover usuario.");

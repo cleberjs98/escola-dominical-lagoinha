@@ -2,6 +2,7 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import { getAuth, Auth } from "firebase/auth";
 import { getFirestore, initializeFirestore, Firestore } from "firebase/firestore";
+import { getFunctions, Functions } from "firebase/functions";
 import { getStorage, FirebaseStorage } from "firebase/storage";
 
 // ---------------------------------------------------------------------------
@@ -104,6 +105,9 @@ firebaseDb = requireFirebase(() => {
 
 const firebaseStorage: FirebaseStorage = requireFirebase(() => getStorage(app));
 
+// Functions (usar mesma região das Cloud Functions/Firestore: europe-west3)
+const firebaseFunctions: Functions = requireFirebase(() => getFunctions(app, "europe-west3"));
+
 // ---------------------------------------------------------------------------
 // Exports
 // ---------------------------------------------------------------------------
@@ -113,6 +117,7 @@ export {
   firebaseAuth, 
   firebaseDb, 
   firebaseStorage, 
+  firebaseFunctions,
   firebaseReady, 
   firebaseMissingMessage 
 };
