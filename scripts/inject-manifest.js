@@ -12,6 +12,16 @@ const FILES_TO_COPY = [
     label: 'manifest.json',
   },
   {
+    from: path.join(PUBLIC_DIR, 'favicon.png'),
+    to: path.join(DIST_DIR, 'favicon.png'),
+    label: 'favicon.png',
+  },
+  {
+    from: path.join(PUBLIC_DIR, 'favicon.ico'),
+    to: path.join(DIST_DIR, 'favicon.ico'),
+    label: 'favicon.ico',
+  },
+  {
     from: path.join(ROOT_DIR, 'assets', 'images', 'pwa-icon-192.png'),
     to: path.join(DIST_DIR, 'pwa-icon-192.png'),
     label: 'pwa-icon-192.png',
@@ -25,7 +35,8 @@ const FILES_TO_COPY = [
 
 const TAGS = [
   { test: 'rel="manifest"', tag: '<link rel="manifest" href="/manifest.json" />' },
-  { test: 'rel="icon"', tag: '<link rel="icon" href="/pwa-icon-192.png" />' },
+  { test: 'rel="icon" href="/favicon.png"', tag: '<link rel="icon" type="image/png" href="/favicon.png" />' },
+  { test: 'rel="icon" href="/pwa-icon-192.png"', tag: '<link rel="icon" sizes="192x192" href="/pwa-icon-192.png" />' },
   { test: 'rel="apple-touch-icon"', tag: '<link rel="apple-touch-icon" href="/pwa-icon-192.png" />' },
   { test: 'name="theme-color"', tag: '<meta name="theme-color" content="#7A1422" />' },
 ];
