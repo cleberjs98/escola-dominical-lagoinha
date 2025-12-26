@@ -1,7 +1,7 @@
 ﻿export const options = {
   title: "Dashboard",
 };
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -10,8 +10,9 @@ import {
   StyleSheet,
   Text,
   View,
+  RefreshControl,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { doc, getDoc } from "firebase/firestore";
 
 import { useAuth } from "../../hooks/useAuth";
@@ -80,6 +81,14 @@ export default function CoordinatorDashboardScreen() {
     void loadDashboard();
   }, [firebaseUser, isInitializing, isAllowed, router]);
 
+  useFocusEffect(
+    useCallback(() => {
+      if (firebaseUser && isAllowed) {
+        void loadDashboard();
+      }
+    }, [firebaseUser, isAllowed])
+  );
+
   async function loadDashboard() {
     try {
       setIsLoading(true);
@@ -124,7 +133,19 @@ export default function CoordinatorDashboardScreen() {
 
   return (
     <AppBackground>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={[styles.content, { flexGrow: 1 }]}
+        refreshControl={
+          <RefreshControl
+            refreshing={isLoading}
+            onRefresh={loadDashboard}
+            tintColor={theme.colors.accent}
+          />
+        }
+        alwaysBounceVertical
+        overScrollMode="always"
+        contentInsetAdjustmentBehavior="automatic">
         {orderedSections.map((section) => {
           if (section === "pendencias") return renderPendencias();
           if (section === "conteudos") return renderConteudos();

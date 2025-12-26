@@ -4,7 +4,7 @@ export const options = {
 // app/(tabs)/(home)/index.tsx - Home principal
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, ActivityIndicator, Pressable, ScrollView, RefreshControl } from "react-native";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 
 import { useAuth } from "../../../hooks/useAuth";
 import { getDevotionalOfTheDay, listAvailableAndPublishedForProfessor } from "../../../lib/devotionals";
@@ -156,6 +156,14 @@ export default function HomeScreen() {
     enabled: !!firebaseUser && !isInitializing,
   });
 
+  useFocusEffect(
+    useCallback(() => {
+      if (firebaseUser && !isInitializing) {
+        void refresh();
+      }
+    }, [firebaseUser, isInitializing, refresh])
+  );
+
   useEffect(() => {
     if (isInitializing) return;
     if (!firebaseUser) return;
@@ -227,8 +235,13 @@ export default function HomeScreen() {
     <AppBackground>
       <ScrollView
         style={styles.container}
-        contentContainerStyle={styles.contentContainer}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={theme.colors.accent} />}>
+        contentContainerStyle={[styles.contentContainer, { flexGrow: 1 }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={theme.colors.accent} />}
+        alwaysBounceVertical
+        bounces
+        overScrollMode="always"
+        contentInsetAdjustmentBehavior="automatic"
+        keyboardShouldPersistTaps="handled">
         <Header
           title={`Bem-vindo(a), ${primeiroNome}`}
           subtitle={bannerSubtitle()}

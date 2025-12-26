@@ -1,11 +1,5 @@
-import React from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  ViewStyle,
-} from "react-native";
+import React, { type ReactNode } from "react";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View, ViewStyle } from "react-native";
 import { useTheme } from "../../hooks/useTheme";
 
 type Variant = "primary" | "secondary" | "outline" | "danger";
@@ -19,6 +13,7 @@ type Props = {
   fullWidth?: boolean;
   style?: ViewStyle;
   stopPropagation?: boolean;
+  leftIcon?: ReactNode;
 };
 
 export function AppButton({
@@ -30,6 +25,7 @@ export function AppButton({
   fullWidth = true,
   style,
   stopPropagation = false,
+  leftIcon,
 }: Props) {
   const { theme } = useTheme();
   const primaryBg = theme.colors.buttons?.primaryBg || "#7A1422";
@@ -38,6 +34,13 @@ export function AppButton({
   const secondaryText = primaryText;
   const dangerBg = theme.colors.status?.dangerBg || "#9F1D2D";
   const dangerText = theme.colors.status?.dangerText || "#FFFFFF";
+
+  const contentColor =
+    variant === "primary" || variant === "danger" || variant === "outline"
+      ? variant === "danger"
+        ? dangerText
+        : primaryText
+      : secondaryText;
 
   const baseStyle: ViewStyle = {
     backgroundColor:
@@ -70,21 +73,10 @@ export function AppButton({
       {loading ? (
         <ActivityIndicator color={variant === "secondary" ? secondaryText : primaryText} />
       ) : (
-        <Text
-          style={[
-            styles.buttonText,
-            {
-              color:
-                variant === "primary" || variant === "danger" || variant === "outline"
-                  ? variant === "danger"
-                    ? dangerText
-                    : primaryText
-                  : secondaryText,
-            },
-          ]}
-        >
-          {title}
-        </Text>
+        <View style={styles.contentRow}>
+          {leftIcon ? <View style={styles.iconWrapper}>{leftIcon}</View> : null}
+          <Text style={[styles.buttonText, { color: contentColor }]}>{title}</Text>
+        </View>
       )}
     </Pressable>
   );
@@ -98,18 +90,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  contentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  iconWrapper: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
   buttonText: {
     fontWeight: "700",
     fontSize: 14,
   },
 });
-
-function withAlpha(color: string, alpha: number): string {
-  if (color.startsWith("#") && (color.length === 7 || color.length === 9)) {
-    const r = parseInt(color.slice(1, 3), 16);
-    const g = parseInt(color.slice(3, 5), 16);
-    const b = parseInt(color.slice(5, 7), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  }
-  return color;
-}
